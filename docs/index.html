@@ -121,6 +121,12 @@
             </svg>
             Deductions
         </button>
+        <button onclick="showPage('payments')" class="nav-item" data-page="payments">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            Payment Tracking
+        </button>
         <button onclick="showPage('opening')" class="nav-item" data-page="opening">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
@@ -1732,6 +1738,67 @@
                     </table>
                 </div>
                 <div id="deductionsPagination" class="pagination-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page: Payment Tracking -->
+    <div id="payments" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="mb-8 border-l-4 border-blue-600 pl-4">
+                <h2 class="text-3xl font-bold text-slate-900">Payment Tracking</h2>
+                <p class="text-slate-600 text-sm mt-1">Monitor all payments (purchase, sale &amp; ledger) in one place</p>
+            </div>
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+                <h3 class="text-xl font-semibold mb-4 text-primary">Filters</h3>
+                <div class="flex flex-wrap items-end gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Type</label>
+                        <select id="paymentsFilterType" onchange="loadPaymentsTracking()" class="p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">All</option>
+                            <option value="purchase">Purchase (to supplier)</option>
+                            <option value="sale">Sale (from customer)</option>
+                            <option value="ledger_payment">Ledger payment (to supplier)</option>
+                            <option value="ledger_receipt">Ledger receipt (from customer)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">From</label>
+                        <input type="date" id="paymentsDateFrom" onchange="loadPaymentsTracking()" class="p-2 border border-slate-300 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">To</label>
+                        <input type="date" id="paymentsDateTo" onchange="loadPaymentsTracking()" class="p-2 border border-slate-300 rounded-lg">
+                    </div>
+                    <button type="button" onclick="loadPaymentsTracking()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg font-medium">Apply</button>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <div class="flex flex-wrap justify-between items-center gap-4 mb-4">
+                    <h3 class="text-xl font-semibold text-primary">Payment History</h3>
+                    <button type="button" onclick="exportPaymentsToCsv()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportPaymentsBtn">Export to CSV</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto">
+                        <thead>
+                            <tr class="bg-slate-50 border-b-2 border-slate-200">
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Date</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Type</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Party</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Invoice / Ref</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-slate-700">Amount</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Mode</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody id="paymentsTableBody">
+                            <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Select filters and apply, or view all payments.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 flex flex-wrap justify-between items-center gap-2">
+                    <p class="text-sm text-slate-600" id="paymentsSummary">Total: 0 payments</p>
+                </div>
             </div>
         </div>
     </div>
