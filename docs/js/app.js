@@ -254,6 +254,9 @@ function loadData() {
                 console.log("   - openingBalances in Firebase:", savedData.openingBalances);
                 
                 appData = savedData;
+                // Ensure arrays exist (older Firestore docs may lack these keys)
+                appData.payments = appData.payments || [];
+                appData.openingBalances = appData.openingBalances || [];
 
                 // Refresh ALL UI sections now that data is loaded
                 updateDashboard();
@@ -518,6 +521,8 @@ function logout() {
                 populateDropdowns();
                 // Show history view by default
                 hideSalesForm();
+            } else if (pageId === 'payments') {
+                loadPaymentsTracking();
             } else if (pageId === 'opening') {
                 populateOpeningBalanceDropdowns();
                 updateOpeningBalanceHistory();
@@ -6824,6 +6829,115 @@ function exportLedgerStatement() {
             var a = document.createElement('a');
             a.href = url;
             a.download = 'Ledger_' + (ledgerData.entityName || 'export').replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        // Payment Tracking page: get all payment rows (from appData.payments or derived from purchases/sales)
+        function getPaymentsListForTracking() {
+            var payments = appData.payments || [];
+            if (payments.length > 0) return payments.slice();
+            // Fallback: derive from purchase paid amounts and sale received amounts (for older data or when no central payments)
+            var derived = [];
+            (appData.purchases || []).forEach(function(p) {
+                var paid = parseFloat(p.paid) || 0;
+                if (paid > 0) {
+                    derived.push({
+                        type: 'purchase',
+                        date: p.date || '',
+                        party: p.supplierName || '-',
+                        invoice: p.invoice || '-',
+                        amount: paid,
+                        mode: '-',
+                        remarks: 'From purchase record'
+                    });
+                }
+            });
+            (appData.sales || []).forEach(function(s) {
+                var received = parseFloat(s.received) || 0;
+                if (received > 0) {
+                    derived.push({
+                        type: 'sale',
+                        date: s.date || '',
+                        party: s.customerName || '-',
+                        invoice: s.invoice || '-',
+                        amount: received,
+                        mode: '-',
+                        remarks: 'From sale record'
+                    });
+                }
+            });
+            return derived;
+        }
+        function loadPaymentsTracking() {
+            var typeEl = document.getElementById('paymentsFilterType');
+            var fromEl = document.getElementById('paymentsDateFrom');
+            var toEl = document.getElementById('paymentsDateTo');
+            var tbody = document.getElementById('paymentsTableBody');
+            var summaryEl = document.getElementById('paymentsSummary');
+            if (!tbody) return;
+            var typeFilter = typeEl ? typeEl.value : '';
+            var fromVal = fromEl ? fromEl.value : '';
+            var toVal = toEl ? toEl.value : '';
+            var list = getPaymentsListForTracking().sort(function(a, b) {
+                var dA = (a.date || '').replace(/-/g, '');
+                var dB = (b.date || '').replace(/-/g, '');
+                return dB.localeCompare(dA);
+            });
+            if (typeFilter) list = list.filter(function(p) { return p.type === typeFilter; });
+            if (fromVal) list = list.filter(function(p) { return (p.date || '') >= fromVal; });
+            if (toVal) list = list.filter(function(p) { return (p.date || '') <= toVal; });
+            var typeLabels = { purchase: 'Purchase (to supplier)', sale: 'Sale (from customer)', ledger_payment: 'Ledger payment', ledger_receipt: 'Ledger receipt' };
+            var totalAmount = 0;
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No payments found. Try <strong>Type: All</strong> or leave date range empty to see all payments.</td></tr>';
+            } else {
+                tbody.innerHTML = list.map(function(p) {
+                    var amt = parseFloat(p.amount) || 0;
+                    totalAmount += amt;
+                    var typeLabel = typeLabels[p.type] || p.type || 'Payment';
+                    return '<tr class="border-b border-slate-200 hover:bg-slate-50">' +
+                        '<td class="px-4 py-3">' + escapeHtml(p.date || '-') + '</td>' +
+                        '<td class="px-4 py-3">' + escapeHtml(typeLabel) + '</td>' +
+                        '<td class="px-4 py-3">' + escapeHtml(p.party || '-') + '</td>' +
+                        '<td class="px-4 py-3">' + escapeHtml(p.invoice || '-') + '</td>' +
+                        '<td class="px-4 py-3 text-right font-semibold">' + RU + (amt.toFixed(2)) + '</td>' +
+                        '<td class="px-4 py-3">' + escapeHtml(p.mode || '-') + '</td>' +
+                        '<td class="px-4 py-3 text-slate-600">' + escapeHtml((p.remarks || '-').toString().slice(0, 50)) + '</td>' +
+                        '</tr>';
+                }).join('');
+            }
+            if (summaryEl) summaryEl.textContent = 'Total: ' + list.length + ' payment(s) | Amount: ' + RU + totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+        }
+        function exportPaymentsToCsv() {
+            var typeEl = document.getElementById('paymentsFilterType');
+            var fromEl = document.getElementById('paymentsDateFrom');
+            var toEl = document.getElementById('paymentsDateTo');
+            var typeFilter = typeEl ? typeEl.value : '';
+            var fromVal = fromEl ? fromEl.value : '';
+            var toVal = toEl ? toEl.value : '';
+            var list = getPaymentsListForTracking().sort(function(a, b) {
+                var dA = (a.date || '').replace(/-/g, '');
+                var dB = (b.date || '').replace(/-/g, '');
+                return dB.localeCompare(dA);
+            });
+            if (typeFilter) list = list.filter(function(p) { return p.type === typeFilter; });
+            if (fromVal) list = list.filter(function(p) { return (p.date || '') >= fromVal; });
+            if (toVal) list = list.filter(function(p) { return (p.date || '') <= toVal; });
+            var typeLabels = { purchase: 'Purchase', sale: 'Sale', ledger_payment: 'Ledger payment', ledger_receipt: 'Ledger receipt' };
+            var csv = '\uFEFFDate,Type,Party,Invoice/Ref,Amount,Mode,Remarks\n';
+            list.forEach(function(p) {
+                var amt = (parseFloat(p.amount) || 0).toFixed(2);
+                var typeLabel = typeLabels[p.type] || p.type || 'Payment';
+                csv += '"' + (p.date || '') + '","' + typeLabel + '","' + (p.party || '').replace(/"/g, '""') + '","' + (p.invoice || '').replace(/"/g, '""') + '",' + amt + ',"' + (p.mode || '').replace(/"/g, '""') + '","' + (p.remarks || '').toString().replace(/"/g, '""').slice(0, 100) + '"\n';
+            });
+            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'Payment_Tracking_' + new Date().toISOString().slice(0, 10) + '.csv';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
