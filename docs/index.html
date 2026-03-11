@@ -483,7 +483,13 @@
     <!-- Page 2: Master -->
     <div id="master" class="page-content hidden">
         <div class="max-w-7xl mx-auto px-4 py-8">
-            <div class="mb-8 border-l-4 border-blue-600 pl-4"><h2 class="text-3xl font-bold text-slate-900">Master Data Management</h2></div>
+            <div class="mb-6 border-l-4 border-blue-600 pl-4 flex flex-wrap items-center justify-between gap-4">
+                <h2 class="text-3xl font-bold text-slate-900">Master Data Management</h2>
+                <div class="flex items-center gap-2">
+                    <label for="masterDataSearch" class="text-sm text-slate-600 sr-only">Search masters</label>
+                    <input type="text" id="masterDataSearch" placeholder="Search Items, Suppliers, Customers, Brokers..." class="w-64 md:w-80 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm" oninput="applyMasterSearch()">
+                </div>
+            </div>
             
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <!-- Company Details -->
