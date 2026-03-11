@@ -481,7 +481,7 @@ function logout() {
 var deleteAllPendingAction = null;
 function getDeleteAllPassword() {
     appData.settings = appData.settings || {};
-    return (appData.settings.deleteAllPassword && String(appData.settings.deleteAllPassword).trim()) ? String(appData.settings.deleteAllPassword).trim() : 'admin';
+    return (appData.settings.deleteAllPassword && String(appData.settings.deleteAllPassword).trim()) ? String(appData.settings.deleteAllPassword).trim() : 'NFc@@1993jc';
 }
 function openDeleteAllModal(action) {
     deleteAllPendingAction = action;
