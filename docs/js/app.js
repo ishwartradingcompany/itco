@@ -4391,6 +4391,18 @@ function logout() {
             document.getElementById('totalCosts').textContent = `${RU}${(totalCosts + totalBrokerage).toFixed(2)}`;
             document.getElementById('netProfit').textContent = `${RU}${netProfit.toFixed(2)}`;
             
+            // Helper: total deduction amount for a sale (by linkedSale.saleId or invoice match)
+            function getDeductionsForSale(sale) {
+                if (!sale || !appData.deductions || !appData.deductions.length) return 0;
+                return appData.deductions
+                    .filter(function(d) {
+                        if (d.linkedSale && d.linkedSale.saleId === sale.id) return true;
+                        if (d.invoice && sale.invoice && String(d.invoice).trim() === String(sale.invoice).trim()) return true;
+                        return false;
+                    })
+                    .reduce(function(sum, d) { return sum + (parseFloat(d.amount) || parseFloat(d.lossAmount) || 0); }, 0);
+            }
+            
             // Create P&L rows based on linked purchases
             const pnlRows = [];
             
@@ -4399,8 +4411,10 @@ function logout() {
                 const saleTotal = sale.grandTotal || sale.total || 0;
                 const saleTruckAdvance = sale.truckAdvance || 0;
                 const saleNetAmount = saleTotal - saleTruckAdvance;
+                const totalDeductionForSale = getDeductionsForSale(sale);
                 
                 if (sale.linkedPurchases && sale.linkedPurchases.length > 0) {
+                    const totalSaleQty = sale.items ? sale.items.reduce((sum, item) => sum + item.grossWeight, 0) : 1;
                     // Sale has linked purchases - show each linked purchase
                     sale.linkedPurchases.forEach(link => {
                         const purchase = appData.purchases.find(p => p.id === link.purchaseId);
@@ -4411,10 +4425,10 @@ function logout() {
                             const proportionalPurchaseCost = totalPurchaseQty > 0 ? (purchaseTotal / totalPurchaseQty) * link.quantityUsed : 0;
                             
                             // Calculate proportional sale amount
-                            const totalSaleQty = sale.items ? sale.items.reduce((sum, item) => sum + item.grossWeight, 0) : 1;
                             const proportionalSaleAmount = totalSaleQty > 0 ? (saleNetAmount / totalSaleQty) * link.quantityUsed : 0;
-                            
-                            const profitLoss = proportionalSaleAmount - proportionalPurchaseCost;
+                            // Allocate deduction to this row by quantity share
+                            const deductionAllocation = totalSaleQty > 0 ? totalDeductionForSale * (link.quantityUsed / totalSaleQty) : (totalDeductionForSale / sale.linkedPurchases.length);
+                            const profitLoss = proportionalSaleAmount - proportionalPurchaseCost - deductionAllocation;
                             
                             pnlRows.push({
                                 purchaseDate: purchase.date,
@@ -4426,7 +4440,8 @@ function logout() {
                                 saleCustomer: sale.customerName,
                                 saleTotal: proportionalSaleAmount,
                                 profitLoss: profitLoss,
-                                quantityUsed: link.quantityUsed
+                                quantityUsed: link.quantityUsed,
+                                deductionsAmount: deductionAllocation
                             });
                         }
                     });
@@ -4441,8 +4456,9 @@ function logout() {
                         saleInvoice: sale.invoice,
                         saleCustomer: sale.customerName,
                         saleTotal: saleNetAmount,
-                        profitLoss: saleNetAmount,
-                        quantityUsed: null
+                        profitLoss: saleNetAmount - totalDeductionForSale,
+                        quantityUsed: null,
+                        deductionsAmount: totalDeductionForSale
                     });
                 }
             });
@@ -4470,7 +4486,8 @@ function logout() {
                         saleCustomer: null,
                         saleTotal: 0,
                         profitLoss: -purchaseTotal,
-                        quantityUsed: null
+                        quantityUsed: null,
+                        deductionsAmount: 0
                     });
                 }
             });
@@ -4523,15 +4540,17 @@ function logout() {
                     <td class="px-4 py-3 bg-amber-50/30 ${row.profitLoss >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}">
                         ${row.profitLoss >= 0 ? '+' : ''}${RU}${row.profitLoss.toFixed(2)}
                         ${row.quantityUsed ? `<br><small class="text-xs text-slate-500">(${row.quantityUsed} kg)</small>` : ''}
+                        ${(row.deductionsAmount || 0) > 0 ? `<br><small class="text-xs text-red-600">Ded: ${RU}${(row.deductionsAmount || 0).toFixed(2)}</small>` : ''}
                     </td>
                 `;
                 tbody.appendChild(tr);
             });
             
-            // Calculate totals from all data (not just paginated)
+            // Calculate totals from all data (not just paginated) - net profit is sum of row profit (already includes deductions)
             const totalCosts = pnlRows.reduce((sum, row) => sum + (row.purchaseTotal || 0), 0);
             const totalRevenue = pnlRows.reduce((sum, row) => sum + (row.saleTotal || 0), 0);
-            const netProfit = totalRevenue - totalCosts;
+            const totalDeductionsInRows = pnlRows.reduce((sum, row) => sum + (row.deductionsAmount || 0), 0);
+            const netProfit = pnlRows.reduce((sum, row) => sum + (row.profitLoss || 0), 0);
             
             // Add grand total row only on last page
             const totalPages = Math.ceil(pnlRows.length / pageSize);
