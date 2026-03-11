@@ -1,0 +1,2274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ITCO Trade Management - Business Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="js/config.js"></script>
+    <!-- Firebase v9 compat scripts (global firebase object) -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-storage-compat.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body class="bg-slate-100 font-sans min-h-screen antialiased">
+<!-- Styles loaded from css/main.css -->
+
+<!-- Authentication Loading Screen -->
+<div id="authLoadingScreen" class="fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 z-[10000] flex items-center justify-center">
+    <div class="text-center">
+        <div class="w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl mx-auto mb-8 flex items-center justify-center shadow-2xl">
+            <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
+            </svg>
+        </div>
+        <h2 class="text-2xl font-bold text-white mb-1 tracking-tight">ITCO TRADE MANAGEMENT</h2>
+        <p class="text-blue-400 font-medium text-sm uppercase tracking-widest">Enterprise Business Solutions</p>
+        <p class="text-slate-500 text-xs mt-6 uppercase tracking-wider">Authenticating</p>
+        <div class="mt-4">
+            <div class="w-48 h-1 bg-slate-700 rounded-full mx-auto overflow-hidden">
+                <div class="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full animate-loading-bar"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main App Content (Hidden until authenticated) -->
+<div id="mainAppContent" class="hidden">
+ <!-- ? Save confirmation message -->
+    <div id="save-message" 
+     class="hidden fixed top-4 right-4 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-strong z-[9999] font-semibold border border-emerald-500">
+  ? Data saved successfully!
+</div>
+
+    <!-- View Details Modal -->
+    <div id="viewModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div class="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-4 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-white" id="modalTitle">Details</h3>
+                <button onclick="closeViewModal()" class="text-white hover:text-slate-300 text-2xl font-bold">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[calc(90vh-80px)]" id="modalContent">
+                <!-- Content will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+<!-- Left Sidebar Navigation -->
+<div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <div class="sidebar-logo">
+            <div class="sidebar-logo-icon">
+                <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
+                </svg>
+            </div>
+            <div class="sidebar-logo-text">
+                <h1>ITCO</h1>
+                <p>Trade Management</p>
+            </div>
+        </div>
+        <button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+            </svg>
+        </button>
+    </div>
+    
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Main</div>
+        <button onclick="showPage('home')" class="nav-item active" data-page="home">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+            </svg>
+            Dashboard
+        </button>
+    </div>
+    
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Operations</div>
+        <button onclick="showPage('purchase')" class="nav-item" data-page="purchase">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            Purchase
+        </button>
+        <button onclick="showPage('sales')" class="nav-item" data-page="sales">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Sales
+        </button>
+        <button onclick="showPage('inventory')" class="nav-item" data-page="inventory">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+            </svg>
+            Inventory
+        </button>
+        <button onclick="showPage('broker')" class="nav-item" data-page="broker">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            Broker
+        </button>
+        <button onclick="showPage('deductions')" class="nav-item" data-page="deductions">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z"/>
+            </svg>
+            Deductions
+        </button>
+        <button onclick="showPage('opening')" class="nav-item" data-page="opening">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+            Opening Balance
+        </button>
+    </div>
+    
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Financial</div>
+        <button onclick="showPage('pnl')" class="nav-item" data-page="pnl">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+            Profit & Loss
+        </button>
+        <button onclick="showPage('ledger')" class="nav-item" data-page="ledger">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+            </svg>
+            Ledger
+        </button>
+        <button onclick="showPage('reports')" class="nav-item" data-page="reports">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            Reports
+        </button>
+    </div>
+    
+    <div class="sidebar-section" style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px;">
+        <button onclick="saveAsJSON()" class="nav-item">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Backup Data
+        </button>
+        <button onclick="restoreFromJSON()" class="nav-item">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+            </svg>
+            Restore Data
+        </button>
+    </div>
+</div>
+
+<!-- Main Content Wrapper -->
+<div class="main-wrapper" id="mainContent">
+    <!-- Top Header -->
+    <header class="top-header">
+        <div class="header-left">
+            <button class="sidebar-expand-btn" id="sidebarExpandBtn" onclick="toggleSidebar()" title="Show Sidebar" style="display: none;">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
+            <h2 class="header-title" id="pageTitle">Dashboard</h2>
+        </div>
+        <div class="header-right">
+            <button onclick="showPage('master')" class="header-icon-btn" title="Masters" data-page="master">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+            </button>
+            <div class="datetime-display" id="headerDateTime">
+                <span id="headerDate"></span> &nbsp; <span id="headerTime"></span>
+            </div>
+            <button onclick="manualSave()" class="header-btn btn-save">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+                </svg>
+                Save
+            </button>
+            <button onclick="logout()" class="header-btn btn-logout">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                </svg>
+                Logout
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <div class="main-content-area">
+    <!-- Page 1: Home -->
+    <div id="home" class="page-content">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <!-- Header Row -->
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
+                        <span class="text-2xl">??</span>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-slate-900">Ishwar Trading Company</h1>
+                        <p class="text-xs text-slate-500">Enterprise Dashboard ? Real-time Analytics</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="text-xs text-slate-400 uppercase tracking-wider">Last Updated</p>
+                    <p id="dashboardUpdateTime" class="text-sm font-semibold text-slate-600">--:--:--</p>
+                </div>
+            </div>
+
+            <!-- Key Metrics Row -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <!-- Net Receivables -->
+                <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Receivables</span>
+                        <div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                    </div>
+                    <p id="netReceivables" class="text-2xl font-bold">?0.00</p>
+                    <p class="text-xs opacity-75 mt-1">From customers</p>
+                </div>
+                
+                <!-- Net Payables -->
+                <div class="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Payables</span>
+                        <div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                        </div>
+                    </div>
+                    <p id="netPayables" class="text-2xl font-bold">?0.00</p>
+                    <p class="text-xs opacity-75 mt-1">To suppliers</p>
+                </div>
+                
+                <!-- Stock Value -->
+                <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Stock Value</span>
+                        <div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                        </div>
+                    </div>
+                    <p id="stockValue" class="text-2xl font-bold">?0.00</p>
+                    <p class="text-xs opacity-75 mt-1">Current inventory</p>
+                </div>
+                
+                <!-- Net Position -->
+                <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Net Position</span>
+                        <div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                        </div>
+                    </div>
+                    <p id="netPosition" class="text-2xl font-bold">?0.00</p>
+                    <p class="text-xs opacity-75 mt-1">Receivables - Payables</p>
+                </div>
+            </div>
+
+            <!-- Second Row: Charts and Quick Stats -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <!-- Sales vs Purchase Chart -->
+                <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Business Performance</h3>
+                        <select id="chartPeriod" class="text-xs border border-slate-200 rounded-lg px-2 py-1" onchange="updateDashboardCharts()">
+                            <option value="all" selected>All Time</option>
+                            <option value="7">Last 7 Days</option>
+                            <option value="30">Last 30 Days</option>
+                            <option value="90">Last 90 Days</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-4 gap-2 mb-3">
+                        <div class="text-center p-1.5 bg-green-50 rounded-lg">
+                            <p class="text-xs text-green-600 font-medium">Sales</p>
+                            <p id="chartTotalSales" class="text-sm font-bold text-green-700">?0</p>
+                        </div>
+                        <div class="text-center p-1.5 bg-red-50 rounded-lg">
+                            <p class="text-xs text-red-600 font-medium">Purchases</p>
+                            <p id="chartTotalPurchases" class="text-sm font-bold text-red-700">?0</p>
+                        </div>
+                        <div class="text-center p-1.5 bg-blue-50 rounded-lg">
+                            <p class="text-xs text-blue-600 font-medium">Net Profit</p>
+                            <p id="chartGrossProfit" class="text-sm font-bold text-blue-700">?0</p>
+                        </div>
+                        <div class="text-center p-1.5 bg-purple-50 rounded-lg">
+                            <p class="text-xs text-purple-600 font-medium">Txns</p>
+                            <p id="chartTransactions" class="text-sm font-bold text-purple-700">0</p>
+                        </div>
+                    </div>
+                    <div id="performanceChart" class="h-32 flex items-center justify-center gap-4 px-2 border-t border-slate-100 pt-2">
+                        <!-- Donut chart will be rendered here -->
+                        <div class="relative">
+                            <svg id="profitDonutChart" width="100" height="100" viewBox="0 0 160 160">
+                                <!-- Background circle -->
+                                <circle cx="80" cy="80" r="60" fill="none" stroke="#f1f5f9" stroke-width="20"/>
+                                <!-- Sales arc -->
+                                <circle id="salesArc" cx="80" cy="80" r="60" fill="none" stroke="#10b981" stroke-width="20" 
+                                    stroke-dasharray="0 377" stroke-dashoffset="94.25" transform="rotate(-90 80 80)"
+                                    style="transition: stroke-dasharray 0.8s ease;"/>
+                                <!-- Purchases arc -->
+                                <circle id="purchasesArc" cx="80" cy="80" r="60" fill="none" stroke="#ef4444" stroke-width="20" 
+                                    stroke-dasharray="0 377" stroke-dashoffset="94.25" transform="rotate(-90 80 80)"
+                                    style="transition: stroke-dasharray 0.8s ease;"/>
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <span class="text-xs text-slate-500 font-medium">PROFIT</span>
+                                <span id="donutCenterValue" class="text-sm font-bold text-slate-800">?0</span>
+                                <span id="donutProfitPercent" class="text-xs font-semibold text-green-600">0%</span>
+                            </div>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <div class="flex items-center gap-2">
+                                <div class="w-3 h-3 rounded-full bg-gradient-to-r from-green-500 to-emerald-500"></div>
+                                <div>
+                                    <p class="text-xs text-slate-500">Sales</p>
+                                    <p id="donutSalesValue" class="text-xs font-bold text-slate-700">?0</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-3 h-3 rounded-full bg-gradient-to-r from-red-500 to-rose-500"></div>
+                                <div>
+                                    <p class="text-xs text-slate-500">Purchases</p>
+                                    <p id="donutPurchasesValue" class="text-xs font-bold text-slate-700">?0</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-3 h-3 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+                                <div>
+                                    <p class="text-xs text-slate-500">Margin</p>
+                                    <p id="donutMarginValue" class="text-xs font-bold text-slate-700">0%</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-3">
+                    <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-2">Quick Actions</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="showPage('purchase'); showPurchaseForm();" class="flex flex-col items-center gap-1 p-2 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg hover:from-blue-50 hover:to-blue-100 transition-all group">
+                            <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                            </div>
+                            <span class="text-xs font-medium text-slate-600">New Purchase</span>
+                        </button>
+                        <button onclick="showPage('sales'); showSalesForm();" class="flex flex-col items-center gap-1 p-2 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg hover:from-green-50 hover:to-green-100 transition-all group">
+                            <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            </div>
+                            <span class="text-xs font-medium text-slate-600">New Sale</span>
+                        </button>
+                        <button onclick="showPage('pnl');" class="flex flex-col items-center gap-1 p-2 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg hover:from-purple-50 hover:to-purple-100 transition-all group">
+                            <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                                <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            </div>
+                            <span class="text-xs font-medium text-slate-600">P&L Report</span>
+                        </button>
+                        <button onclick="showPage('ledger');" class="flex flex-col items-center gap-1 p-2 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg hover:from-amber-50 hover:to-amber-100 transition-all group">
+                            <div class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center group-hover:bg-amber-200 transition-colors">
+                                <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                            </div>
+                            <span class="text-xs font-medium text-slate-600">Ledger</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Third Row: Top Suppliers & Customers -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <!-- Top Suppliers -->
+                <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Top Suppliers</h3>
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    </div>
+                    <div id="topSuppliers" class="space-y-2">
+                        <div class="text-xs text-slate-400 italic text-center py-4">No purchase data</div>
+                    </div>
+                </div>
+
+                <!-- Top Customers -->
+                <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Top Customers</h3>
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    </div>
+                    <div id="topCustomers" class="space-y-2">
+                        <div class="text-xs text-slate-400 italic text-center py-4">No sales data</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fourth Row: Recent Activity & Alerts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <!-- Recent Transactions -->
+                <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Recent Transactions</h3>
+                        <button onclick="showPage('purchase');" class="text-xs text-blue-600 hover:text-blue-800 font-medium">View All ?</button>
+                    </div>
+                    <div id="recentTransactions" class="space-y-2 max-h-52 overflow-y-auto">
+                        <div class="text-xs text-slate-400 italic text-center py-4">No recent transactions</div>
+                    </div>
+                </div>
+
+                <!-- Payment Alerts -->
+                <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Payment Alerts</h3>
+                        <span id="paymentAlertsCount" class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-medium">0 pending</span>
+                    </div>
+                    <div id="paymentAlerts" class="space-y-2 max-h-52 overflow-y-auto">
+                        <div class="text-xs text-slate-400 italic text-center py-4">No payment alerts</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Business Summary Footer -->
+            <div class="mt-6 bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl p-4 text-white">
+                <div class="grid grid-cols-2 md:grid-cols-6 gap-4 text-center">
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase">Total Items</p>
+                        <p id="summaryItems" class="text-lg font-bold">0</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase">Suppliers</p>
+                        <p id="summarySuppliers" class="text-lg font-bold">0</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase">Customers</p>
+                        <p id="summaryCustomers" class="text-lg font-bold">0</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase">Purchases</p>
+                        <p id="summaryPurchases" class="text-lg font-bold">0</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase">Sales</p>
+                        <p id="summarySales" class="text-lg font-bold">0</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase">Brokers</p>
+                        <p id="summaryBrokers" class="text-lg font-bold">0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 2: Master -->
+    <div id="master" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="mb-8 border-l-4 border-blue-600 pl-4"><h2 class="text-3xl font-bold text-slate-900">Master Data Management</h2></div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Company Details -->
+                <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                    <h3 class="text-xl font-semibold mb-4 text-primary">Company Details</h3>
+                    <div class="space-y-4">
+                        <input type="text" id="companyName" placeholder="Company Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="bankName1" placeholder="Bank 1 Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="bankAccount1" placeholder="Bank 1 Account Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="ifsc1" placeholder="Bank 1 IFSC Code" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="bankName2" placeholder="Bank 2 Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="bankAccount2" placeholder="Bank 2 Account Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="ifsc2" placeholder="Bank 2 IFSC Code" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="upiNumber" placeholder="UPI Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <button onclick="saveCompanyDetails()" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors">Save Company Details</button>
+                    </div>
+                </div>
+
+                <!-- Items & Categories -->
+                <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                    <h3 class="text-xl font-semibold mb-4 text-primary">Items & Categories</h3>
+                    <div class="space-y-4">
+                        <input type="text" id="itemName" placeholder="Item Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <select id="itemCategory" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Category</option>
+                            <option value="Vegetables">Vegetables</option>
+                            <option value="Fruits">Fruits</option>
+                            <option value="Grains">Grains</option>
+                            <option value="Spices">Spices</option>
+                        </select>
+                        <select id="itemUnit" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Unit</option>
+                            <option value="kg">Kilogram (kg)</option>
+                            <option value="qty">Quantity (qty)</option>
+                            <option value="ton">Ton</option>
+                            <option value="box">Box</option>
+                        </select>
+                        <button onclick="addItem()" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors">Add Item</button>
+                        <div id="itemsList" class="mt-4 space-y-2 max-h-40 overflow-y-auto"></div>
+                    </div>
+                </div>
+
+                <!-- Suppliers -->
+                <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-primary">Suppliers</h3>
+                        <button onclick="showSupplierForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+                            <span>?</span>
+                            <span>Add Supplier</span>
+                        </button>
+                    </div>
+                    <!-- Suppliers List View -->
+                    <div id="suppliersListView">
+                        <div id="suppliersList" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                    </div>
+                    <!-- Supplier Form (Hidden by default) -->
+                    <div id="supplierFormView" class="hidden space-y-4">
+                        <input type="text" id="supplierName" placeholder="Supplier Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="tel" id="supplierMobile" placeholder="Mobile Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <textarea id="supplierAddress" placeholder="Supplier Address" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" rows="3"></textarea>
+                        <input type="text" id="supplierAccount" placeholder="Account Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="supplierIFSC" placeholder="IFSC Code" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <div class="flex space-x-2">
+                            <button onclick="addSupplier()" class="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors">Save Supplier</button>
+                            <button onclick="hideSupplierForm()" class="flex-1 bg-gray-500 text-white py-3 rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Customers -->
+                <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-primary">Customers</h3>
+                        <button onclick="showCustomerForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+                            <span>?</span>
+                            <span>Add Customer</span>
+                        </button>
+                    </div>
+                    <!-- Customers List View -->
+                    <div id="customersListView">
+                        <div id="customersList" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                    </div>
+                    <!-- Customer Form (Hidden by default) -->
+                    <div id="customerFormView" class="hidden space-y-4">
+                        <input type="text" id="customerName" placeholder="Customer Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="tel" id="customerMobile" placeholder="Mobile Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <textarea id="customerAddress" placeholder="Customer Address" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" rows="3"></textarea>
+                        <input type="text" id="customerAccount" placeholder="Account Details" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <div class="flex space-x-2">
+                            <button onclick="addCustomer()" class="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors">Save Customer</button>
+                            <button onclick="hideCustomerForm()" class="flex-1 bg-gray-500 text-white py-3 rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Brokers -->
+                <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-primary">Brokers</h3>
+                        <button onclick="showBrokerForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+                            <span>?</span>
+                            <span>Add Broker</span>
+                        </button>
+                    </div>
+                    <!-- Brokers List View -->
+                    <div id="brokersListView">
+                        <div id="brokersList" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                    </div>
+                    <!-- Broker Form (Hidden by default) -->
+                    <div id="brokerFormView" class="hidden space-y-4">
+                        <input type="text" id="brokerName" placeholder="Broker Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="tel" id="brokerMobile" placeholder="Mobile Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <textarea id="brokerDetails" placeholder="Broker Details" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" rows="3"></textarea>
+                        <input type="text" id="brokerAccount" placeholder="Account Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <div class="flex space-x-2">
+                            <button onclick="addBroker()" class="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors">Save Broker</button>
+                            <button onclick="hideBrokerForm()" class="flex-1 bg-gray-500 text-white py-3 rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 3: Purchase -->
+    <div id="purchase" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="flex justify-between items-center mb-8 border-l-4 border-blue-600 pl-4">
+                <h2 class="text-3xl font-bold text-slate-900">Purchase Management</h2>
+                <button onclick="showPurchaseForm()" id="addPurchaseBtn" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 shadow-md">
+                    <span>?</span>
+                    <span>Add Purchase</span>
+                </button>
+            </div>
+            
+            <!-- Purchase History (Shown by default) -->
+            <div id="purchaseHistoryView" class="space-y-4">
+                <!-- Header Section with Stats -->
+                <div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-5 text-white shadow-lg">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <div>
+                            <h3 class="text-xl font-bold flex items-center gap-2">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                </svg>
+                                Purchase History
+                            </h3>
+                            <p class="text-blue-100 text-sm mt-1">Manage and track all your purchase invoices</p>
+                        </div>
+                        <div class="flex gap-3">
+                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                                <p class="text-2xl font-bold" id="purchaseTotalCount">0</p>
+                                <p class="text-xs text-blue-100">Total Invoices</p>
+                            </div>
+                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                                <p class="text-2xl font-bold" id="purchaseTotalAmount">?0</p>
+                                <p class="text-xs text-blue-100">Total Value</p>
+                            </div>
+                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                                <p class="text-2xl font-bold" id="purchasePendingAmount">?0</p>
+                                <p class="text-xs text-blue-100">Pending</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Filter Section -->
+                <div class="bg-white rounded-xl shadow-md border border-slate-200 p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                            </svg>
+                            Filters & Search
+                        </h4>
+                        <button onclick="clearPurchaseFilters()" class="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                            Clear All
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                        <div class="col-span-2 md:col-span-1">
+                            <div class="relative">
+                                <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                </svg>
+                                <input type="text" id="purchaseSearch" placeholder="Search..." 
+                                    class="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50"
+                                    onkeyup="filterPurchases()">
+                            </div>
+                        </div>
+                        <div>
+                            <select id="purchaseFilterSupplier" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()">
+                                <option value="">All Suppliers</option>
+                            </select>
+                        </div>
+                        <div>
+                            <input type="date" id="purchaseDateFrom" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()" title="From Date">
+                        </div>
+                        <div>
+                            <input type="date" id="purchaseDateTo" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()" title="To Date">
+                        </div>
+                        <div>
+                            <select id="purchaseSort" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()">
+                                <option value="date-desc">Newest First</option>
+                                <option value="date-asc">Oldest First</option>
+                                <option value="amount-desc">Amount ?</option>
+                                <option value="amount-asc">Amount ?</option>
+                                <option value="supplier-asc">Supplier A-Z</option>
+                                <option value="balance-desc">Balance ?</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center">
+                            <span id="purchaseFilterCount" class="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">All</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Table Section -->
+                <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Invoice</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Supplier</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Truck</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Items</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Amount</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Paid</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Balance</th>
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="purchaseHistory" class="divide-y divide-slate-100">
+                                <tr>
+                                    <td colspan="9" class="px-4 py-12 text-center">
+                                        <div class="flex flex-col items-center text-slate-400">
+                                            <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                                            </svg>
+                                            <p class="font-medium">No purchases recorded yet</p>
+                                            <p class="text-sm">Start by adding your first purchase invoice</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="purchasePagination" class="pagination-container border-t border-slate-100"></div>
+                </div>
+            </div>
+
+            <!-- Purchase Entry Form (Hidden by default) -->
+            <div id="purchaseEntryView" class="hidden bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <h3 class="text-xl font-semibold mb-6 text-primary">New Purchase Entry</h3>
+                
+                <!-- Invoice Header -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 p-4 bg-gray-50 rounded-lg">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Purchase Date</label>
+                        <input type="date" id="purchaseDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Invoice Number <span class="text-xs text-green-600">(Auto)</span></label>
+                        <input type="text" id="purchaseInvoice" placeholder="PUR-2025-001" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-slate-100 font-bold text-slate-800" readonly>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Supplier</label>
+                        <select id="purchaseSupplier" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Supplier</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Truck Number</label>
+                        <input type="text" id="purchaseTruck" placeholder="Truck Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                </div>
+
+                <!-- Item Entry Form -->
+                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 mb-6">
+                    <h4 class="text-lg font-semibold mb-4 text-slate-700">Add Item to Invoice</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Item</label>
+                            <select id="purchaseItem" onchange="updatePurchaseInputs()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <option value="">Select Item</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Gross Weight (kg)</label>
+                            <input type="number" id="purchaseQuantity" placeholder="Gross Weight" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500" id="purchaseUnitDisplay">Select item first</small>
+                        </div>
+                        <div id="purchaseBagsContainer">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Number of Bags</label>
+                            <input type="number" id="purchaseBags" placeholder="Number of Bags" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Bags weight will be deducted</small>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Net Weight</label>
+                            <input type="number" id="purchaseNetWeight" placeholder="Net Weight" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-gray-100">
+                            <small class="text-slate-500">Auto-calculated (Gross - Bags)</small>
+                        </div>
+                        <div id="purchaseDiscountQtyContainer" style="display: none;">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Discount Quantity (For Invoice Only)</label>
+                            <input type="number" id="purchaseDiscountQty" placeholder="Discount Quantity" value="0" class="w-full p-3 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent bg-yellow-50">
+                            <small class="text-slate-500">Deducted from invoice amount only, not from inventory</small>
+                        </div>
+                        <div id="purchaseRateContainer">
+                            <label class="block text-sm font-medium text-slate-700 mb-2" id="purchaseRateLabel">Rate per kg</label>
+                            <input type="number" id="purchaseRate" placeholder="Rate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500" id="purchaseRateHelp">Enter rate per kg</small>
+                        </div>
+                        <div id="purchaseAmountContainer" style="display: none;">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Total Amount</label>
+                            <input type="number" id="purchaseAmount" placeholder="Total Amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Enter total amount for this quantity</small>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Item Total</label>
+                            <input type="number" id="purchaseItemTotal" placeholder="Item Total" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-gray-100">
+                            <small class="text-slate-500">Auto-calculated</small>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <button onclick="addItemToPurchase()" class="bg-secondary text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">Add Item to Invoice</button>
+                    </div>
+                </div>
+
+                <!-- Items List -->
+                <div class="mb-6">
+                    <h4 class="text-lg font-semibold mb-4 text-slate-700">Items in Current Invoice</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-auto border border-slate-200 rounded-lg">
+                            <thead>
+                                <tr class="bg-slate-50">
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Item</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Gross Weight</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Bags/Discount</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Net Weight</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Rate</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Amount</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="currentPurchaseItems">
+                                <tr>
+                                    <td colspan="7" class="px-4 py-8 text-center text-slate-500">No items added yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Invoice Totals -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Hammali (Loading/Unloading)</label>
+                        <input type="number" id="purchaseHammali" placeholder="Hammali Amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Advance Given</label>
+                        <input type="number" id="purchaseAdvance" placeholder="Advance Amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                </div>
+
+                <!-- Others Section -->
+                <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-lg font-semibold text-slate-700">Others (Additional Charges/Deductions)</h4>
+                        <button type="button" onclick="addPurchaseOthersRow()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">
+                            + Add More
+                        </button>
+                    </div>
+                    <div id="purchaseOthersContainer">
+                        <!-- First row (always present) -->
+                        <div class="purchase-others-row grid grid-cols-1 md:grid-cols-3 gap-4 mb-3" data-index="0">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Reason/Description</label>
+                                <input type="text" class="purchase-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason (e.g., Transport, Commission)">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
+                                <input type="number" class="purchase-others-amount w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter amount">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Operation</label>
+                                <select class="purchase-others-operation w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    <option value="add">Add (+)</option>
+                                    <option value="reduce">Reduce (-)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-6 rounded-lg">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-lg font-semibold">
+                        <div>Items Total: ?<span id="purchaseItemsTotal">0</span></div>
+                        <div>+ Hammali: ?<span id="purchaseHammaliDisplay">0</span></div>
+                        <div>- Advance: ?<span id="purchaseAdvanceDisplay">0</span></div>
+                        <div id="purchaseOthersDisplayContainer" style="display: none;">
+                            <span id="purchaseOthersSign">?</span> Others: ?<span id="purchaseOthersDisplay">0</span>
+                        </div>
+                    </div>
+                    <div class="mt-4 text-xl font-bold text-primary">
+                        Grand Total: ?<span id="purchaseGrandTotal">0</span>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end space-x-4">
+                    <button id="cancelPurchaseEdit" onclick="cancelPurchaseEdit()" class="bg-gray-500 text-white px-8 py-3 rounded-lg hover:bg-gray-600 transition-colors text-lg font-semibold">Cancel</button>
+                    <button onclick="savePurchaseInvoice()" class="bg-primary text-white px-8 py-3 rounded-lg hover:bg-green-700 transition-colors text-lg font-semibold">Save Purchase Invoice</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 4: Inventory -->
+    <div id="inventory" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <div class="mb-6 border-l-4 border-blue-600 pl-4"><h2 class="text-3xl font-bold text-slate-900">Inventory Management</h2></div>
+            
+            <!-- Inventory Summary Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Total Items</span>
+                        <svg class="w-5 h-5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                    </div>
+                    <p id="invTotalItems" class="text-2xl font-bold">0</p>
+                    <p class="text-xs opacity-75">Unique products</p>
+                </div>
+                <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Total Quantity</span>
+                        <svg class="w-5 h-5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+                    </div>
+                    <p id="invTotalQty" class="text-2xl font-bold">0</p>
+                    <p class="text-xs opacity-75">Units in stock</p>
+                </div>
+                <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Stock Value</span>
+                        <svg class="w-5 h-5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <p id="invTotalValue" class="text-2xl font-bold">?0</p>
+                    <p class="text-xs opacity-75">Current value</p>
+                </div>
+                <div class="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Movements</span>
+                        <svg class="w-5 h-5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                    </div>
+                    <p id="invTotalMovements" class="text-2xl font-bold">0</p>
+                    <p class="text-xs opacity-75">Total transactions</p>
+                </div>
+            </div>
+            
+            <!-- Current Stock Section -->
+            <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-800">Current Stock</h3>
+                            <p class="text-xs text-slate-500">Real-time inventory levels</p>
+                        </div>
+                    </div>
+                    <button onclick="refreshInventory()" class="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        Refresh
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="inventoryGrid">
+                    <div class="text-center text-slate-500 col-span-full py-8">
+                        <svg class="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                        <p>No inventory items found</p>
+                        <p class="text-xs text-slate-400 mt-1">Add some purchases to see inventory</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stock Movement Section -->
+            <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-6">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800">Stock Movement</h3>
+                        <p class="text-xs text-slate-500">Track all inventory transactions</p>
+                    </div>
+                </div>
+                
+                <!-- Filter Controls -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Search</label>
+                        <input type="text" id="stockMovementSearch" placeholder="Search items..." 
+                            class="w-full p-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                            onkeyup="filterStockMovement()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Item</label>
+                        <select id="stockMovementFilterItem" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterStockMovement()">
+                            <option value="">All Items</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Type</label>
+                        <select id="stockMovementFilterType" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterStockMovement()">
+                            <option value="">All Types</option>
+                            <option value="Purchase">Purchases (IN)</option>
+                            <option value="Sale">Sales (OUT)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Date From</label>
+                        <input type="date" id="stockMovementDateFrom" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterStockMovement()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Sort By</label>
+                        <select id="stockMovementSort" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterStockMovement()">
+                            <option value="date-desc">Date (Newest)</option>
+                            <option value="date-asc">Date (Oldest)</option>
+                            <option value="qty-desc">Quantity (High-Low)</option>
+                            <option value="qty-asc">Quantity (Low-High)</option>
+                            <option value="item-asc">Item (A-Z)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center mb-4">
+                    <span id="stockMovementFilterCount" class="text-sm text-slate-500">Showing all movements</span>
+                    <button onclick="clearStockMovementFilters()" class="text-sm text-purple-600 hover:text-purple-800 font-medium">Clear Filters</button>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto">
+                        <thead>
+                            <tr class="bg-gradient-to-r from-slate-100 to-slate-50">
+                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Date</th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Item</th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Type</th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Reference</th>
+                                <th class="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Quantity</th>
+                                <th class="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Running Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stockMovement">
+                            <tr>
+                                <td colspan="6" class="px-4 py-12 text-center text-slate-500">
+                                    <svg class="w-10 h-10 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                                    No stock movements recorded yet
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="stockMovementPagination" class="pagination-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 5: Sales -->
+    <div id="sales" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="flex justify-between items-center mb-8 border-l-4 border-blue-600 pl-4">
+                <h2 class="text-3xl font-bold text-slate-900">Sales Management</h2>
+                <button onclick="showSalesForm()" id="addSalesBtn" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 shadow-md">
+                    <span>?</span>
+                    <span>Add Sale</span>
+                </button>
+            </div>
+            
+            <!-- Sales History (Shown by default) -->
+            <div id="salesHistoryView" class="space-y-4">
+                <!-- Header Section with Stats -->
+                <div class="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-5 text-white shadow-lg">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <div>
+                            <h3 class="text-xl font-bold flex items-center gap-2">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                Sales History
+                            </h3>
+                            <p class="text-green-100 text-sm mt-1">Manage and track all your sales invoices</p>
+                        </div>
+                        <div class="flex gap-3">
+                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                                <p class="text-2xl font-bold" id="salesTotalCount">0</p>
+                                <p class="text-xs text-green-100">Total Invoices</p>
+                            </div>
+                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                                <p class="text-2xl font-bold" id="salesTotalAmount">?0</p>
+                                <p class="text-xs text-green-100">Total Value</p>
+                            </div>
+                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                                <p class="text-2xl font-bold" id="salesPendingAmount">?0</p>
+                                <p class="text-xs text-green-100">Receivable</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Filter Section -->
+                <div class="bg-white rounded-xl shadow-md border border-slate-200 p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                            </svg>
+                            Filters & Search
+                        </h4>
+                        <button onclick="clearSalesFilters()" class="text-xs text-green-600 hover:text-green-800 font-medium flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                            Clear All
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                        <div class="col-span-2 md:col-span-1">
+                            <div class="relative">
+                                <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                </svg>
+                                <input type="text" id="salesSearch" placeholder="Search..." 
+                                    class="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-slate-50"
+                                    onkeyup="filterSales()">
+                            </div>
+                        </div>
+                        <div>
+                            <select id="salesFilterCustomer" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()">
+                                <option value="">All Customers</option>
+                            </select>
+                        </div>
+                        <div>
+                            <input type="date" id="salesDateFrom" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()" title="From Date">
+                        </div>
+                        <div>
+                            <input type="date" id="salesDateTo" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()" title="To Date">
+                        </div>
+                        <div>
+                            <select id="salesSort" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()">
+                                <option value="date-desc">Newest First</option>
+                                <option value="date-asc">Oldest First</option>
+                                <option value="amount-desc">Amount ?</option>
+                                <option value="amount-asc">Amount ?</option>
+                                <option value="customer-asc">Customer A-Z</option>
+                                <option value="balance-desc">Balance ?</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center">
+                            <span id="salesFilterCount" class="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">All</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Table Section -->
+                <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Invoice</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Customer</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Truck</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Items</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Amount</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Received</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Balance</th>
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="salesHistory" class="divide-y divide-slate-100">
+                                <tr>
+                                    <td colspan="9" class="px-4 py-12 text-center">
+                                        <div class="flex flex-col items-center text-slate-400">
+                                            <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                                            </svg>
+                                            <p class="font-medium">No sales recorded yet</p>
+                                            <p class="text-sm">Start by adding your first sales invoice</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="salesPagination" class="pagination-container border-t border-slate-100"></div>
+                </div>
+            </div>
+
+            <!-- Sales Entry Form (Hidden by default) -->
+            <div id="salesEntryView" class="hidden bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <h3 class="text-xl font-semibold mb-6 text-primary">New Sale Entry</h3>
+                
+                <!-- Purchase Linking Section (NEW) -->
+                <div class="bg-blue-50 border-2 border-blue-300 rounded-lg p-6 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-lg font-semibold text-slate-800">?? Link to Purchase Invoice(s)</h4>
+                        <button type="button" onclick="showPurchaseLinkingModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                            + Link Purchase
+                        </button>
+                    </div>
+                    <p class="text-sm text-slate-600 mb-3">Link this sale to purchase invoice(s) to track inventory flow and calculate accurate profit/loss</p>
+                    <div id="linkedPurchasesList" class="space-y-2">
+                        <p class="text-slate-500 text-sm italic">No purchases linked yet. Click "Link Purchase" to add.</p>
+                    </div>
+                </div>
+                
+                <!-- Invoice Header -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 p-4 bg-gray-50 rounded-lg">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Sale Date</label>
+                        <input type="date" id="saleDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Invoice Number <span class="text-xs text-green-600">(Auto)</span></label>
+                        <input type="text" id="saleInvoice" placeholder="SALE-2025-001" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-slate-100 font-bold text-slate-800" readonly>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Customer</label>
+                        <select id="saleCustomer" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Customer</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Truck Number</label>
+                        <input type="text" id="saleTruck" placeholder="Truck Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">LR Number</label>
+                        <input type="text" id="saleLRNumber" placeholder="LR Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                </div>
+
+                <!-- Item Entry Form -->
+                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 mb-6">
+                    <h4 class="text-lg font-semibold mb-4 text-slate-700">Add Item to Invoice</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Item</label>
+                            <select id="saleItem" onchange="updateAvailableStock()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <option value="">Select Item</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Gross Weight (kg)</label>
+                            <input type="number" id="saleQuantity" placeholder="Gross Weight" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500" id="availableStock">Available: 0</small>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Number of Bags</label>
+                            <input type="number" id="saleBags" placeholder="Number of Bags" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Bags weight will be deducted</small>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Net Weight</label>
+                            <input type="number" id="saleNetWeight" placeholder="Net Weight" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-gray-100">
+                            <small class="text-slate-500">Auto-calculated (Gross - Bags)</small>
+                        </div>
+                        <div id="saleDiscountQtyContainer" style="display: none;">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Discount Quantity (For Invoice Only)</label>
+                            <input type="number" id="saleDiscountQty" placeholder="Discount Quantity" value="0" class="w-full p-3 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent bg-yellow-50">
+                            <small class="text-slate-500">Deducted from invoice amount only, not from inventory</small>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Rate per kg</label>
+                            <input type="number" id="saleRate" placeholder="Rate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Item Total</label>
+                            <input type="number" id="saleItemTotal" placeholder="Item Total" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-gray-100">
+                            <small class="text-slate-500">Auto-calculated</small>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <button onclick="addItemToSale()" class="bg-secondary text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">Add Item to Invoice</button>
+                    </div>
+                </div>
+
+                <!-- Items List -->
+                <div class="mb-6">
+                    <h4 class="text-lg font-semibold mb-4 text-slate-700">Items in Current Invoice</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-auto border border-slate-200 rounded-lg">
+                            <thead>
+                                <tr class="bg-slate-50">
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Item</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Gross Weight</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Bags/Discount</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Net Weight</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Rate</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Amount</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="currentSaleItems">
+                                <tr>
+                                    <td colspan="7" class="px-4 py-8 text-center text-slate-500">No items added yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Invoice Totals -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Hammali (Loading/Unloading)</label>
+                        <input type="number" id="saleHammali" placeholder="Hammali Amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Advance Received</label>
+                        <input type="number" id="saleAdvance" placeholder="Advance Amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Truck Advance Paid</label>
+                        <input type="number" id="saleTruckAdvance" placeholder="Truck Advance Paid" class="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-orange-50">
+                        <small class="text-orange-600 font-medium">?? Included in invoice but NOT in profit calculation</small>
+                    </div>
+                </div>
+
+                <!-- Others Section -->
+                <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-lg font-semibold text-slate-700">Others (Additional Charges/Deductions)</h4>
+                        <button type="button" onclick="addSaleOthersRow()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">
+                            + Add More
+                        </button>
+                    </div>
+                    <div id="saleOthersContainer">
+                        <!-- First row (always present) -->
+                        <div class="sale-others-row grid grid-cols-1 md:grid-cols-3 gap-4 mb-3" data-index="0">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Reason/Description</label>
+                                <input type="text" class="sale-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason (e.g., Transport, Commission)">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
+                                <input type="number" class="sale-others-amount w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter amount">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Operation</label>
+                                <select class="sale-others-operation w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    <option value="add">Add (+)</option>
+                                    <option value="reduce">Reduce (-)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-6 rounded-lg">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-lg font-semibold">
+                        <div>Items Total: ?<span id="saleItemsTotal">0</span></div>
+                        <div>+ Hammali: ?<span id="saleHammaliDisplay">0</span></div>
+                        <div>- Advance: ?<span id="saleAdvanceDisplay">0</span></div>
+                        <div class="text-orange-600">+ Truck Adv: ?<span id="saleTruckAdvanceDisplay">0</span></div>
+                        <div id="saleOthersDisplayContainer" style="display: none;">
+                            <span id="saleOthersSign">?</span> Others: ?<span id="saleOthersDisplay">0</span>
+                        </div>
+                    </div>
+                    <div class="mt-4 text-xl font-bold text-primary">
+                        Grand Total: ?<span id="saleGrandTotal">0</span>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end space-x-4">
+                    <button id="cancelSaleEdit" onclick="cancelSaleEdit()" class="bg-gray-500 text-white px-8 py-3 rounded-lg hover:bg-gray-600 transition-colors text-lg font-semibold">Cancel</button>
+                    <button onclick="saveSaleInvoice()" class="bg-primary text-white px-8 py-3 rounded-lg hover:bg-green-700 transition-colors text-lg font-semibold">Save Sale Invoice</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Purchase Linking Modal -->
+    <div id="purchaseLinkingModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-white">Link Purchase Invoice(s)</h3>
+                <button onclick="closePurchaseLinkingModal()" class="text-white hover:text-slate-200 text-2xl font-bold">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                <p class="text-slate-600 mb-4">Select purchase invoice(s) that this sale is linked to. You can link multiple purchases.</p>
+                
+                <div id="availablePurchasesList" class="space-y-3">
+                    <!-- Purchase invoices will be listed here -->
+                </div>
+            </div>
+            <div class="bg-slate-50 px-6 py-4 flex justify-end space-x-3">
+                <button onclick="closePurchaseLinkingModal()" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+                <button onclick="confirmPurchaseLinking()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Confirm Linking</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deduction Purchase Linking Modal -->
+    <div id="deductionPurchaseLinkingModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div class="bg-gradient-to-r from-orange-600 to-orange-700 px-6 py-4 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-white">Link Purchase Invoice</h3>
+                <button onclick="closeDeductionPurchaseLinkingModal()" class="text-white hover:text-slate-200 text-2xl font-bold">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                <p class="text-slate-600 mb-4">Select a purchase invoice that this deduction is related to.</p>
+                
+                <div id="deductionAvailablePurchasesList" class="space-y-3">
+                    <!-- Purchase invoices will be listed here -->
+                </div>
+            </div>
+            <div class="bg-slate-50 px-6 py-4 flex justify-end space-x-3">
+                <button onclick="closeDeductionPurchaseLinkingModal()" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+                <button onclick="confirmDeductionPurchaseLinking()" class="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">Confirm Linking</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deduction Sale Linking Modal -->
+    <div id="deductionSaleLinkingModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-white">Link Sale Invoice</h3>
+                <button onclick="closeDeductionSaleLinkingModal()" class="text-white hover:text-slate-200 text-2xl font-bold">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                <p class="text-slate-600 mb-4">Select a sale invoice that this deduction is related to.</p>
+                
+                <div id="deductionAvailableSalesList" class="space-y-3">
+                    <!-- Sale invoices will be listed here -->
+                </div>
+            </div>
+            <div class="bg-slate-50 px-6 py-4 flex justify-end space-x-3">
+                <button onclick="closeDeductionSaleLinkingModal()" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+                <button onclick="confirmDeductionSaleLinking()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Confirm Linking</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 6: Broker -->
+    <div id="broker" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="mb-8 border-l-4 border-blue-600 pl-4"><h2 class="text-3xl font-bold text-slate-900">Broker Management</h2></div>
+            
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <h3 class="text-xl font-semibold mb-6 text-primary">Brokerage Entry</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Date</label>
+                        <input type="date" id="brokerageDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Broker</label>
+                        <select id="brokeragebroker" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Broker</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Item</label>
+                        <select id="brokerageItem" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Item</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Transaction Type</label>
+                        <select id="brokerageType" onchange="updateBrokerageInvoices()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Type</option>
+                            <option value="Purchase">Purchase Brokerage</option>
+                            <option value="Sale">Sale Commission</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
+                        <input type="number" id="brokerageAmount" placeholder="Brokerage Amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Reference Invoice</label>
+                        <select id="brokerageReference" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Invoice</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-6">
+                    <button onclick="addBrokerage()" class="bg-primary text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors">Add Brokerage</button>
+                </div>
+            </div>
+
+            <div class="mt-8 bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-xl font-semibold mb-4 text-primary">Brokerage History</h3>
+                
+                <!-- Filter, Search, Sort Controls -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Search</label>
+                        <input type="text" id="brokerageSearch" placeholder="Broker, Item, Reference..." 
+                            class="w-full p-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            onkeyup="filterBrokerage()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Broker</label>
+                        <select id="brokerageFilterBroker" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterBrokerage()">
+                            <option value="">All Brokers</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Type</label>
+                        <select id="brokerageFilterType" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterBrokerage()">
+                            <option value="">All Types</option>
+                            <option value="purchase">Purchase</option>
+                            <option value="sale">Sale</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Date From</label>
+                        <input type="date" id="brokerageDateFrom" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterBrokerage()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Sort By</label>
+                        <select id="brokerageSort" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterBrokerage()">
+                            <option value="date-desc">Date (Newest)</option>
+                            <option value="date-asc">Date (Oldest)</option>
+                            <option value="amount-desc">Amount (High-Low)</option>
+                            <option value="amount-asc">Amount (Low-High)</option>
+                            <option value="broker-asc">Broker (A-Z)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center mb-4">
+                    <span id="brokerageFilterCount" class="text-sm text-slate-500">Showing all entries</span>
+                    <button onclick="clearBrokerageFilters()" class="text-sm text-blue-600 hover:text-blue-800 font-medium">Clear Filters</button>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto">
+                        <thead>
+                            <tr class="bg-slate-50">
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Date</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Broker</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Item</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Type</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Amount</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Reference</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="brokerageHistory">
+                            <tr>
+                                <td colspan="7" class="px-4 py-8 text-center text-slate-500">No brokerage entries recorded yet</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="brokeragePagination" class="pagination-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 7: Deductions -->
+    <div id="deductions" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="mb-8 border-l-4 border-blue-600 pl-4"><h2 class="text-3xl font-bold text-slate-900">Deductions Management</h2></div>
+            
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <h3 class="text-xl font-semibold mb-6 text-primary">New Deduction Entry</h3>
+                
+                <!-- Transaction Linking Section (NEW) -->
+                <div class="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-6 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-lg font-semibold text-slate-800">?? Link to Transactions</h4>
+                        <div class="space-x-2">
+                            <button type="button" onclick="showDeductionPurchaseLinkingModal()" class="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium">
+                                + Link Purchase
+                            </button>
+                            <button type="button" onclick="showDeductionSaleLinkingModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                                + Link Sale
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-sm text-slate-600 mb-3">Link this deduction to specific purchase and/or sale transactions</p>
+                    <div id="deductionLinkedTransactionsList" class="space-y-2">
+                        <p class="text-slate-500 text-sm italic">No transactions linked yet.</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Date</label>
+                        <input type="date" id="deductionDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Customer</label>
+                        <select id="deductionCustomer" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Customer</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Invoice Reference</label>
+                        <select id="deductionInvoice" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Sales Invoice</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Deduction Amount</label>
+                        <input type="number" id="deductionAmount" placeholder="Amount Deducted" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Reason</label>
+                        <input type="text" id="deductionReason" placeholder="Reason for Deduction" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Adjustment Type</label>
+                        <select id="adjustmentType" onchange="showAdjustmentFields()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Adjustment</option>
+                            <option value="Broker">Adjust with Broker</option>
+                            <option value="Supplier">Adjust with Supplier</option>
+                            <option value="Split">Split Adjustment (Broker + Supplier)</option>
+                            <option value="Loss">Record as Loss</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Adjustment Fields (Hidden by default) -->
+                <div id="adjustmentFields" class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6" style="display: none;">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2" id="adjustmentEntityLabel">Select Entity</label>
+                        <select id="adjustmentEntity" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Entity</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Adjustment Amount</label>
+                        <input type="number" id="adjustmentAmount" placeholder="Amount to adjust" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <small class="text-slate-500" id="adjustmentAmountHelp">Enter amount to adjust with selected entity</small>
+                    </div>
+                </div>
+                
+                <!-- Split Adjustment Fields (Hidden by default) -->
+                <div id="splitAdjustmentFields" class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6" style="display: none;">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Select Broker</label>
+                        <select id="splitBroker" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Broker</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Broker Adjustment Amount</label>
+                        <input type="number" id="splitBrokerAmount" placeholder="Amount to adjust with broker" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Select Supplier</label>
+                        <select id="splitSupplier" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Supplier</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Supplier Adjustment Amount</label>
+                        <input type="number" id="splitSupplierAmount" placeholder="Amount to adjust with supplier" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                </div>
+                <div class="mt-6">
+                    <button onclick="addDeduction()" class="bg-primary text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors">Add Deduction</button>
+                </div>
+            </div>
+
+            <div class="mt-8 bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-xl font-semibold mb-4 text-primary">Deductions History</h3>
+                
+                <!-- Filter, Search, Sort Controls -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Search</label>
+                        <input type="text" id="deductionsSearch" placeholder="Customer, Invoice, Reason..." 
+                            class="w-full p-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            onkeyup="filterDeductions()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Customer</label>
+                        <select id="deductionsFilterCustomer" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterDeductions()">
+                            <option value="">All Customers</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Date From</label>
+                        <input type="date" id="deductionsDateFrom" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterDeductions()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Date To</label>
+                        <input type="date" id="deductionsDateTo" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterDeductions()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Sort By</label>
+                        <select id="deductionsSort" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterDeductions()">
+                            <option value="date-desc">Date (Newest)</option>
+                            <option value="date-asc">Date (Oldest)</option>
+                            <option value="amount-desc">Amount (High-Low)</option>
+                            <option value="amount-asc">Amount (Low-High)</option>
+                            <option value="customer-asc">Customer (A-Z)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center mb-4">
+                    <span id="deductionsFilterCount" class="text-sm text-slate-500">Showing all deductions</span>
+                    <button onclick="clearDeductionsFilters()" class="text-sm text-blue-600 hover:text-blue-800 font-medium">Clear Filters</button>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto">
+                        <thead>
+                            <tr class="bg-slate-50">
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Date</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Customer</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Invoice</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Amount</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Reason</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Adjustment</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Loss Amount</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deductionsHistory">
+                            <tr>
+                                <td colspan="8" class="px-4 py-8 text-center text-slate-500">No deductions recorded yet</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="deductionsPagination" class="pagination-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 8: Profit & Loss -->
+    <div id="pnl" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="mb-8 border-l-4 border-blue-600 pl-4"><h2 class="text-3xl font-bold text-slate-900">Profit & Loss Statement</h2></div>
+            
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+                <h3 class="text-xl font-semibold mb-6 text-primary">Filters</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                   <select id="pnlFilterType" onchange="onPnLFilterChange()" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+  <option value="all">All Transactions</option>
+  <option value="thismonth">This Month</option>
+  <option value="last30days">Last 30 Days</option>
+  <option value="last3months">Last 3 Months</option>
+  <option value="last6months">Last 6 Months</option>
+  <option value="custom">Custom Date Range</option>
+</select>
+                    <button onclick="generatePnL()" class="bg-primary text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors">Generate Report</button>
+                </div>
+            </div>
+<div id="customDateRange" style="display:none; margin-top:8px; gap:10px;">
+  <label>From: <input type="date" id="pnlStartDate"></label>
+  <label>To: <input type="date" id="pnlEndDate"></label>
+  <button type="button" onclick="generatePnL()">Apply</button>
+</div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
+                    <h4 class="text-lg font-semibold text-slate-700 mb-2">Total Revenue</h4>
+                    <p class="text-2xl font-bold text-green-500" id="totalRevenue">?0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-red-500">
+                    <h4 class="text-lg font-semibold text-slate-700 mb-2">Total Costs</h4>
+                    <p class="text-2xl font-bold text-red-500" id="totalCosts">?0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
+                    <h4 class="text-lg font-semibold text-slate-700 mb-2">Net Profit</h4>
+                    <p class="text-2xl font-bold text-blue-500" id="netProfit">?0</p>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold text-primary">Detailed P&L Statement</h3>
+                    <button onclick="exportPnLReport()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportPnLBtn" style="display: none;">Export to CSV</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto">
+                        <thead>
+                            <tr class="bg-slate-50">
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-blue-50 border-b-2 border-blue-200">Purchase Date</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-blue-50 border-b-2 border-blue-200">Purchase Invoice</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-blue-50 border-b-2 border-blue-200">Supplier</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-blue-50 border-b-2 border-blue-200 border-r-2 border-r-slate-400">Purchase Total</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-green-50 border-b-2 border-green-200">Sale Date</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-green-50 border-b-2 border-green-200">Sale Invoice</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-green-50 border-b-2 border-green-200">Customer</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-green-50 border-b-2 border-green-200 border-r-2 border-r-slate-400">Sale Total</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-amber-50 border-b-2 border-amber-200">Profit/Loss</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pnlDetails">
+                            <tr>
+                                <td colspan="9" class="px-4 py-8 text-center text-slate-500">Generate a report to view P&L details</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="pnlPagination" class="pagination-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 9: Ledger -->
+    <div id="ledger" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="mb-8 border-l-4 border-blue-600 pl-4"><h2 class="text-3xl font-bold text-slate-900">Ledger Management</h2></div>
+            
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+                <h3 class="text-xl font-semibold mb-6 text-primary">Ledger Filters</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <select id="ledgerType" onchange="updateLedgerOptions()" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="">Select Ledger Type</option>
+                        <option value="supplier">Supplier Ledger</option>
+                        <option value="customer">Customer Ledger</option>
+                        <option value="broker">Broker Ledger</option>
+                    </select>
+                    <select id="ledgerEntity" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="">Select Entity</option>
+                    </select>
+                    <button onclick="generateLedger()" class="bg-primary text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors">Generate Ledger</button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold text-primary">Ledger Statement</h3>
+                    <button onclick="exportLedgerStatement()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportLedgerBtn" style="display: none;">Export to CSV</button>
+                </div>
+                
+                <!-- Balance Display Section -->
+                <div id="ledgerBalanceSection" class="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200" style="display: none;">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center space-x-4">
+                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 class="text-lg font-semibold text-gray-800" id="ledgerEntityName">Entity Name</h4>
+                                <p class="text-2xl font-bold text-blue-600" id="ledgerBalance">?0.00</p>
+                                <p class="text-sm text-slate-500" id="ledgerBalanceType">Current Balance</p>
+                            </div>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button id="ledgerPayButton" onclick="payFromLedger()" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors font-medium" style="display: none;">
+                                Pay
+                            </button>
+                            <button id="ledgerReceiveButton" onclick="receiveFromLedger()" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors font-medium" style="display: none;">
+                                Receive
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto">
+                        <thead>
+                            <tr class="bg-slate-50">
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Date</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Description</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Invoice</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Debit</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Credit</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Balance</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ledgerEntries">
+                            <tr>
+                                <td colspan="6" class="px-4 py-8 text-center text-slate-500">Select filters and generate ledger to view entries</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="ledgerPagination" class="pagination-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 10: Opening Balance Entry -->
+    <div id="opening" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-6 py-8">
+            <div class="mb-8">
+                <h2 class="text-4xl font-bold bg-gradient-to-r from-dark to-primary bg-clip-text text-transparent mb-2">Opening Balance Entry</h2></div>
+                <p class="text-slate-600 font-medium">Add old pending balances (receivables & payables) when migrating to this system</p>
+            </div>
+
+            <!-- Info Card -->
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-lg mb-8">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <svg class="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-lg font-semibold text-blue-800 mb-2">How to Use Opening Balance</h3>
+                        <ul class="text-blue-700 text-sm space-y-1 list-disc list-inside">
+                            <li><strong>Receivables:</strong> Money that customers owe you from old sales</li>
+                            <li><strong>Payables:</strong> Money that you owe to suppliers from old purchases</li>
+                            <li>These entries will appear in ledger accounts as "Opening Balance"</li>
+                            <li>Use the date when you're starting to use this system (or your financial year start date)</li>
+                            <li>These entries won't affect inventory or sales/purchase statistics</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Two Column Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Receivables Section -->
+                <div class="bg-white rounded-xl shadow-soft p-8">
+                    <div class="flex items-center mb-6">
+                        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
+                            <span class="text-2xl">??</span>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">Receivables</h3>
+                            <p class="text-sm text-slate-600">Old sales pending collection</p>
+                        </div>
+                    </div>
+
+                    <form id="receivableForm" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Date</label>
+                            <input type="date" id="receivableDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" required>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Customer</label>
+                            <select id="receivableCustomer" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" required>
+                                <option value="">Select Customer</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Amount (?)</label>
+                            <input type="number" id="receivableAmount" step="0.01" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Enter pending amount" required>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Reference/Invoice No.</label>
+                            <input type="text" id="receivableReference" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Old invoice or reference">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Description</label>
+                            <textarea id="receivableDescription" rows="2" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Notes about this old balance"></textarea>
+                        </div>
+
+                        <button type="submit" class="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors font-medium shadow-md">
+                            Add Receivable Entry
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Payables Section -->
+                <div class="bg-white rounded-xl shadow-soft p-8">
+                    <div class="flex items-center mb-6">
+                        <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mr-4">
+                            <span class="text-2xl">??</span>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">Payables</h3>
+                            <p class="text-sm text-slate-600">Old purchases pending payment</p>
+                        </div>
+                    </div>
+
+                    <form id="payableForm" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Date</label>
+                            <input type="date" id="payableDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" required>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Supplier</label>
+                            <select id="payableSupplier" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" required>
+                                <option value="">Select Supplier</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Amount (?)</label>
+                            <input type="number" id="payableAmount" step="0.01" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" placeholder="Enter pending amount" required>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Reference/Invoice No.</label>
+                            <input type="text" id="payableReference" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" placeholder="Old invoice or reference">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Description</label>
+                            <textarea id="payableDescription" rows="2" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" placeholder="Notes about this old balance"></textarea>
+                        </div>
+
+                        <button type="submit" class="w-full bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 transition-colors font-medium shadow-md">
+                            Add Payable Entry
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Opening Balance History -->
+            <div class="mt-12 bg-white rounded-xl shadow-soft overflow-hidden">
+                <div class="bg-gradient-to-r from-primary to-secondary p-6">
+                    <h3 class="text-2xl font-bold text-white">Opening Balance History</h3>
+                    <p class="text-blue-100 text-sm mt-1">All opening balance entries added to the system</p>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">Date</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">Type</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">Entity</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">Amount</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">Reference</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">Description</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="openingBalanceHistory" class="divide-y divide-gray-200">
+                            <!-- Will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="openingBalancePagination" class="pagination-container" style="padding: 16px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 11: Reports -->
+    <div id="reports" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-2">
+            <div class="mb-4 border-l-4 border-blue-600 pl-3"><h2 class="text-xl font-bold text-slate-900">Reports</h2></div>
+            
+            <!-- Business Metrics Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="group bg-white rounded-lg shadow-medium hover:shadow-strong transition-all duration-300 p-6 border border-slate-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Net Payables</p>
+                            <p class="text-3xl font-bold text-red-600 mt-2" id="netPayables">?0</p>
+                            <div class="flex items-center mt-3">
+                                <span class="text-xs font-medium text-red-600 bg-red-50 px-3 py-1 rounded-full border border-red-200">To Pay</span>
+                            </div>
+                        </div>
+                        <div class="w-14 h-14 bg-gradient-to-br from-red-500 to-red-600 rounded-lg flex items-center justify-center shadow-md">
+                            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="group bg-white rounded-lg shadow-medium hover:shadow-strong transition-all duration-300 p-6 border border-slate-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Net Receivables</p>
+                            <p class="text-3xl font-bold text-blue-600 mt-2" id="netReceivables">?0</p>
+                            <div class="flex items-center mt-3">
+                                <span class="text-xs font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">To Receive</span>
+                            </div>
+                        </div>
+                        <div class="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-md">
+                            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="group bg-white rounded-lg shadow-medium hover:shadow-strong transition-all duration-300 p-6 border border-slate-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Stock Value</p>
+                            <p class="text-3xl font-bold text-amber-600 mt-2" id="stockValue">?0</p>
+                        </div>
+                        <div class="w-14 h-14 bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg flex items-center justify-center shadow-md">
+                            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div id="stockDetails" class="mt-3 space-y-2 max-h-24 overflow-y-auto border-t border-slate-100 pt-3">
+                        <div class="text-xs text-slate-500">Loading...</div>
+                    </div>
+                </div>
+
+                <div class="group bg-white rounded-lg shadow-medium hover:shadow-strong transition-all duration-300 p-6 border border-slate-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Payment Alerts</p>
+                            <p class="text-3xl font-bold text-orange-600 mt-2" id="paymentAlertsCount">0</p>
+                            <div class="flex items-center mt-3">
+                                <span class="text-xs font-medium text-orange-600 bg-orange-50 px-3 py-1 rounded-full border border-orange-200">Pending</span>
+                            </div>
+                        </div>
+                        <div class="w-14 h-14 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center shadow-md">
+                            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Reminders Section -->
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6 mb-8">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h3 class="text-2xl font-bold text-danger">Payment Reminders</h3>
+                        <p class="text-slate-500 text-sm mt-1">Customers with outstanding balances requiring attention</p>
+                    </div>
+                    <div class="w-12 h-12 bg-gradient-to-br from-danger/20 to-danger/10 rounded-xl flex items-center justify-center">
+                        <svg class="w-6 h-6 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="space-y-3" id="paymentReminders">
+                    <div class="flex justify-between items-center p-4 bg-gray-50/50 rounded-xl border border-gray-100">
+                        <span class="text-slate-600 font-medium">No payment reminders</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow" onclick="showReport('purchases')">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <span class="text-blue-500 text-xl">??</span>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">Purchase Report</h3>
+                            <p class="text-slate-600 text-sm">View all purchase transactions</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow" onclick="showReport('sales')">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                            <span class="text-green-500 text-xl">??</span>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">Sales Report</h3>
+                            <p class="text-slate-600 text-sm">View all sales transactions</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow" onclick="showReport('inventory')">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                            <span class="text-orange-500 text-xl">??</span>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">Inventory Report</h3>
+                            <p class="text-slate-600 text-sm">Current stock status</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow" onclick="showReport('brokerage')">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                            <span class="text-purple-500 text-xl">??</span>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">Brokerage Report</h3>
+                            <p class="text-slate-600 text-sm">Broker commissions and fees</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow" onclick="showReport('deductions')">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                            <span class="text-red-500 text-xl">??</span>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">Deductions Report</h3>
+                            <p class="text-slate-600 text-sm">Customer deductions and adjustments</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow" onclick="showReport('summary')">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+                            <span class="text-indigo-500 text-xl">??</span>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">Summary Report</h3>
+                            <p class="text-slate-600 text-sm">Overall business summary</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold text-primary" id="reportTitle">Select a Report Category</h3>
+                    <button onclick="exportReport()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportBtn" style="display: none;">Export to CSV</button>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto" id="reportTable">
+                        <thead id="reportTableHead">
+                        </thead>
+                        <tbody id="reportTableBody">
+                            <tr>
+                                <td class="px-4 py-8 text-center text-slate-500">Select a report category to view data</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Modal -->
+    <div id="paymentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-semibold text-gray-800" id="paymentModalTitle">Record Payment</h3>
+                <button onclick="closePaymentModal()" class="text-gray-400 hover:text-slate-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
+                    <input type="number" id="paymentAmount" placeholder="Enter amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    <small class="text-slate-500" id="balanceDisplay">Balance: ?0</small>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Payment Mode</label>
+                    <select id="paymentMode" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="">Select Payment Mode</option>
+                        <option value="cash">Cash</option>
+                        <option value="upi">UPI</option>
+                        <option value="bank">Bank Transfer</option>
+                        <option value="cheque">Cheque</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Paid Through</label>
+                    <input type="text" id="paidThrough" placeholder="Person name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Remarks</label>
+                    <textarea id="paymentRemarks" placeholder="Add remarks (optional)" rows="3" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"></textarea>
+                </div>
+            </div>
+            
+            <div class="flex justify-end space-x-3 mt-6">
+                <button onclick="closePaymentModal()" class="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                <button onclick="savePayment()" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-green-700">Save Payment</button>
+            </div>
+        </div>
+    </div>
+
+
+    </div>
+    <!-- End of main-content-area -->
+</div>
+<!-- End of main-wrapper -->
+</div>
+<!-- End of mainAppContent -->
+
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/auth.js"></script>
+
+
+</body>
+</html>
