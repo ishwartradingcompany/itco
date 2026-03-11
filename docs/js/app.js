@@ -850,16 +850,31 @@ function deleteAllMasters() {
             populateDropdowns();
         }
 
+        function normalizedName(str) { return (String(str || '').trim().toLowerCase()); }
+        function isDuplicateSupplierName(name, excludeId) {
+            var n = normalizedName(name);
+            return (appData.suppliers || []).some(function(s) { return (s.id !== excludeId) && normalizedName(s.name) === n; });
+        }
+        function isDuplicateCustomerName(name, excludeId) {
+            var n = normalizedName(name);
+            return (appData.customers || []).some(function(c) { return (c.id !== excludeId) && normalizedName(c.name) === n; });
+        }
+        function isDuplicateBrokerName(name, excludeId) {
+            var n = normalizedName(name);
+            return (appData.brokers || []).some(function(b) { return (b.id !== excludeId) && normalizedName(b.name) === n; });
+        }
         function addSupplier() {
-            const name = document.getElementById('supplierName').value;
-            const mobile = document.getElementById('supplierMobile').value;
-            const address = document.getElementById('supplierAddress').value;
-            const account = document.getElementById('supplierAccount').value;
-            const ifsc = document.getElementById('supplierIFSC').value;
+            var rawName = document.getElementById('supplierName').value;
+            const name = rawName ? String(rawName).trim() : '';
+            const mobile = (document.getElementById('supplierMobile').value || '').trim();
+            const address = (document.getElementById('supplierAddress').value || '').trim();
+            const account = (document.getElementById('supplierAccount').value || '').trim();
+            const ifsc = (document.getElementById('supplierIFSC').value || '').trim();
             var gstinEl = document.getElementById('supplierGSTIN');
-            const gstin = gstinEl ? gstinEl.value : '';
+            const gstin = gstinEl ? (gstinEl.value || '').trim() : '';
             if (name && address) {
                 if (editingSupplierId) {
+                    if (isDuplicateSupplierName(name, editingSupplierId)) { alert('Another supplier with this name already exists (including with different spaces).'); return; }
                     const supplier = appData.suppliers.find(s => s.id === editingSupplierId);
                     if (supplier) {
                         supplier.name = name;
@@ -871,6 +886,7 @@ function deleteAllMasters() {
                     }
                     editingSupplierId = null;
                 } else {
+                    if (isDuplicateSupplierName(name)) { alert('Supplier with this name already exists (including with different spaces).'); return; }
                     const supplier = {
                         id: Date.now(),
                         name: name,
@@ -966,14 +982,16 @@ function deleteAllMasters() {
         }
 
         function addCustomer() {
-            const name = document.getElementById('customerName').value;
-            const mobile = document.getElementById('customerMobile').value;
-            const address = document.getElementById('customerAddress').value;
-            const account = document.getElementById('customerAccount').value;
+            var rawName = document.getElementById('customerName').value;
+            const name = rawName ? String(rawName).trim() : '';
+            const mobile = (document.getElementById('customerMobile').value || '').trim();
+            const address = (document.getElementById('customerAddress').value || '').trim();
+            const account = (document.getElementById('customerAccount').value || '').trim();
             var custGstinEl = document.getElementById('customerGSTIN');
-            const custGstin = custGstinEl ? custGstinEl.value : '';
+            const custGstin = custGstinEl ? (custGstinEl.value || '').trim() : '';
             if (name && address) {
                 if (editingCustomerId) {
+                    if (isDuplicateCustomerName(name, editingCustomerId)) { alert('Another customer with this name already exists (including with different spaces).'); return; }
                     const customer = appData.customers.find(c => c.id === editingCustomerId);
                     if (customer) {
                         customer.name = name;
@@ -984,6 +1002,7 @@ function deleteAllMasters() {
                     }
                     editingCustomerId = null;
                 } else {
+                    if (isDuplicateCustomerName(name)) { alert('Customer with this name already exists (including with different spaces).'); return; }
                     const customer = {
                         id: Date.now(),
                         name: name,
@@ -1075,14 +1094,14 @@ function deleteAllMasters() {
         }
 
         function addBroker() {
-            const name = document.getElementById('brokerName').value;
-            const mobile = document.getElementById('brokerMobile').value;
-            const details = document.getElementById('brokerDetails').value;
-            const account = document.getElementById('brokerAccount').value;
-            
+            var rawName = document.getElementById('brokerName').value;
+            const name = rawName ? String(rawName).trim() : '';
+            const mobile = (document.getElementById('brokerMobile').value || '').trim();
+            const details = (document.getElementById('brokerDetails').value || '').trim();
+            const account = (document.getElementById('brokerAccount').value || '').trim();
             if (name && details) {
                 if (editingBrokerId) {
-                    // Edit existing broker
+                    if (isDuplicateBrokerName(name, editingBrokerId)) { alert('Another broker with this name already exists (including with different spaces).'); return; }
                     const broker = appData.brokers.find(b => b.id === editingBrokerId);
                     if (broker) {
                         broker.name = name;
@@ -1092,6 +1111,7 @@ function deleteAllMasters() {
                     }
                     editingBrokerId = null;
                 } else {
+                    if (isDuplicateBrokerName(name)) { alert('Broker with this name already exists (including with different spaces).'); return; }
                     const broker = {
                         id: Date.now(),
                         name: name,
@@ -1258,6 +1278,151 @@ function deleteAllMasters() {
             
             // Opening balance dropdowns
             populateOpeningBalanceDropdowns();
+            syncPurchaseSupplierDisplay();
+            syncSaleCustomerDisplay();
+            initPurchaseSupplierSearch();
+            initSaleCustomerSearch();
+        }
+
+        function syncPurchaseSupplierDisplay() {
+            var sel = document.getElementById('purchaseSupplier');
+            var inp = document.getElementById('purchaseSupplierInput');
+            if (sel && inp) { var opt = sel.options[sel.selectedIndex]; inp.value = (opt && opt.value) ? (opt.text || '') : ''; }
+        }
+        function syncSaleCustomerDisplay() {
+            var sel = document.getElementById('saleCustomer');
+            var inp = document.getElementById('saleCustomerInput');
+            if (sel && inp) { var opt = sel.options[sel.selectedIndex]; inp.value = (opt && opt.value) ? (opt.text || '') : ''; }
+        }
+        function renderPurchaseSupplierDropdown(filter) {
+            var list = (appData.suppliers || []).filter(function(s){ return s.active !== false; });
+            if (filter) { var f = String(filter).trim().toLowerCase(); list = list.filter(function(s) { return (s.name || '').toLowerCase().indexOf(f) >= 0; }); }
+            var dd = document.getElementById('purchaseSupplierDropdown');
+            if (!dd) return;
+            dd.innerHTML = list.map(function(s){ return '<div class="px-3 py-2 cursor-pointer hover:bg-slate-100 border-b border-slate-100 last:border-0" data-id="'+s.id+'">'+escapeHtml(s.name||'')+'</div>'; }).join('');
+            dd.classList.remove('hidden');
+        }
+        function renderSaleCustomerDropdown(filter) {
+            var list = (appData.customers || []).filter(function(c){ return c.active !== false; });
+            if (filter) { var f = String(filter).trim().toLowerCase(); list = list.filter(function(c) { return (c.name || '').toLowerCase().indexOf(f) >= 0; }); }
+            var dd = document.getElementById('saleCustomerDropdown');
+            if (!dd) return;
+            dd.innerHTML = list.map(function(c){ return '<div class="px-3 py-2 cursor-pointer hover:bg-slate-100 border-b border-slate-100 last:border-0" data-id="'+c.id+'">'+escapeHtml(c.name||'')+'</div>'; }).join('');
+            dd.classList.remove('hidden');
+        }
+        function initPurchaseSupplierSearch() {
+            var inp = document.getElementById('purchaseSupplierInput');
+            var dd = document.getElementById('purchaseSupplierDropdown');
+            if (!inp || !dd || inp._searchInited) return;
+            inp._searchInited = true;
+            inp.addEventListener('focus', function(){ renderPurchaseSupplierDropdown(inp.value); });
+            inp.addEventListener('input', function(){ renderPurchaseSupplierDropdown(inp.value); });
+            inp.addEventListener('keyup', function(){ renderPurchaseSupplierDropdown(inp.value); });
+            inp.addEventListener('blur', function(){ setTimeout(function(){ dd.classList.add('hidden'); }, 200); });
+            dd.addEventListener('click', function(e){
+                var row = e.target.closest('[data-id]');
+                if (row) {
+                    var id = row.getAttribute('data-id');
+                    var name = row.textContent;
+                    var sel = document.getElementById('purchaseSupplier');
+                    if (sel) sel.value = id;
+                    inp.value = name;
+                    dd.classList.add('hidden');
+                }
+            });
+        }
+        function initSaleCustomerSearch() {
+            var inp = document.getElementById('saleCustomerInput');
+            var dd = document.getElementById('saleCustomerDropdown');
+            if (!inp || !dd || inp._searchInited) return;
+            inp._searchInited = true;
+            inp.addEventListener('focus', function(){ renderSaleCustomerDropdown(inp.value); });
+            inp.addEventListener('input', function(){ renderSaleCustomerDropdown(inp.value); });
+            inp.addEventListener('keyup', function(){ renderSaleCustomerDropdown(inp.value); });
+            inp.addEventListener('blur', function(){ setTimeout(function(){ dd.classList.add('hidden'); }, 200); });
+            dd.addEventListener('click', function(e){
+                var row = e.target.closest('[data-id]');
+                if (row) {
+                    var id = row.getAttribute('data-id');
+                    var name = row.textContent;
+                    var sel = document.getElementById('saleCustomer');
+                    if (sel) sel.value = id;
+                    inp.value = name;
+                    dd.classList.add('hidden');
+                }
+            });
+        }
+        function openAddSupplierModalFromPurchase() {
+            document.getElementById('quickSupplierName').value = '';
+            document.getElementById('quickSupplierMobile').value = '';
+            document.getElementById('quickSupplierAddress').value = '';
+            document.getElementById('quickSupplierAccount').value = '';
+            document.getElementById('quickSupplierIFSC').value = '';
+            document.getElementById('quickSupplierGSTIN').value = '';
+            document.getElementById('quickAddSupplierModal').classList.remove('hidden');
+        }
+        function closeQuickAddSupplierModal() {
+            document.getElementById('quickAddSupplierModal').classList.add('hidden');
+        }
+        function saveQuickAddSupplier() {
+            var name = (document.getElementById('quickSupplierName').value || '').trim();
+            var address = (document.getElementById('quickSupplierAddress').value || '').trim();
+            if (!name || !address) { alert('Name and Address are required.'); return; }
+            if (isDuplicateSupplierName(name)) { alert('Supplier with this name already exists (including with different spaces).'); return; }
+            var supplier = {
+                id: Date.now(),
+                name: name,
+                mobile: (document.getElementById('quickSupplierMobile').value || '').trim(),
+                address: address,
+                account: (document.getElementById('quickSupplierAccount').value || '').trim(),
+                ifsc: (document.getElementById('quickSupplierIFSC').value || '').trim(),
+                gstin: (document.getElementById('quickSupplierGSTIN').value || '').trim(),
+                active: true
+            };
+            appData.suppliers = appData.suppliers || [];
+            appData.suppliers.push(supplier);
+            saveData();
+            updateSuppliersList();
+            populateDropdowns();
+            document.getElementById('purchaseSupplier').value = supplier.id;
+            document.getElementById('purchaseSupplierInput').value = supplier.name;
+            closeQuickAddSupplierModal();
+            alert('Supplier added to masters and selected.');
+        }
+        function openAddCustomerModalFromSale() {
+            document.getElementById('quickCustomerName').value = '';
+            document.getElementById('quickCustomerMobile').value = '';
+            document.getElementById('quickCustomerAddress').value = '';
+            document.getElementById('quickCustomerAccount').value = '';
+            document.getElementById('quickCustomerGSTIN').value = '';
+            document.getElementById('quickAddCustomerModal').classList.remove('hidden');
+        }
+        function closeQuickAddCustomerModal() {
+            document.getElementById('quickAddCustomerModal').classList.add('hidden');
+        }
+        function saveQuickAddCustomer() {
+            var name = (document.getElementById('quickCustomerName').value || '').trim();
+            var address = (document.getElementById('quickCustomerAddress').value || '').trim();
+            if (!name || !address) { alert('Name and Address are required.'); return; }
+            if (isDuplicateCustomerName(name)) { alert('Customer with this name already exists (including with different spaces).'); return; }
+            var customer = {
+                id: Date.now(),
+                name: name,
+                mobile: (document.getElementById('quickCustomerMobile').value || '').trim(),
+                address: address,
+                account: (document.getElementById('quickCustomerAccount').value || '').trim(),
+                gstin: (document.getElementById('quickCustomerGSTIN').value || '').trim(),
+                active: true
+            };
+            appData.customers = appData.customers || [];
+            appData.customers.push(customer);
+            saveData();
+            updateCustomersList();
+            populateDropdowns();
+            document.getElementById('saleCustomer').value = customer.id;
+            document.getElementById('saleCustomerInput').value = customer.name;
+            closeQuickAddCustomerModal();
+            alert('Customer added to masters and selected.');
         }
 
         // Purchase functions
@@ -1729,6 +1894,10 @@ function deleteAllMasters() {
             document.getElementById('purchaseDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('purchaseInvoice').value = '';
             document.getElementById('purchaseSupplier').value = '';
+            var psi = document.getElementById('purchaseSupplierInput');
+            if (psi) psi.value = '';
+            var psd = document.getElementById('purchaseSupplierDropdown');
+            if (psd) psd.classList.add('hidden');
             document.getElementById('purchaseTruck').value = '';
             document.getElementById('purchaseHammali').value = '';
             document.getElementById('purchaseAdvance').value = '';
@@ -2821,6 +2990,10 @@ function deleteAllMasters() {
             document.getElementById('saleDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('saleInvoice').value = '';
             document.getElementById('saleCustomer').value = '';
+            var sci = document.getElementById('saleCustomerInput');
+            if (sci) sci.value = '';
+            var scd = document.getElementById('saleCustomerDropdown');
+            if (scd) scd.classList.add('hidden');
             document.getElementById('saleTruck').value = '';
             document.getElementById('saleLRNumber').value = '';
             document.getElementById('saleHammali').value = '';
@@ -6265,6 +6438,7 @@ function onPnLFilterChange() {
             document.getElementById('purchaseDate').value = purchase.date;
             document.getElementById('purchaseInvoice').value = purchase.invoice;
             document.getElementById('purchaseSupplier').value = purchase.supplierId;
+            syncPurchaseSupplierDisplay();
             document.getElementById('purchaseTruck').value = purchase.truck || '';
             document.getElementById('purchaseHammali').value = purchase.hammali || 0;
             document.getElementById('purchaseAdvance').value = purchase.advance || 0;
@@ -6298,6 +6472,10 @@ function onPnLFilterChange() {
             document.getElementById('purchaseDate').value = '';
             document.getElementById('purchaseInvoice').value = '';
             document.getElementById('purchaseSupplier').value = '';
+            var psi = document.getElementById('purchaseSupplierInput');
+            if (psi) psi.value = '';
+            var psd = document.getElementById('purchaseSupplierDropdown');
+            if (psd) psd.classList.add('hidden');
             document.getElementById('purchaseTruck').value = '';
             document.getElementById('purchaseHammali').value = '';
             document.getElementById('purchaseAdvance').value = '';
@@ -6476,6 +6654,7 @@ function onPnLFilterChange() {
             document.getElementById('saleDate').value = sale.date;
             document.getElementById('saleInvoice').value = sale.invoice;
             document.getElementById('saleCustomer').value = sale.customerId;
+            syncSaleCustomerDisplay();
             document.getElementById('saleTruck').value = sale.truck || '';
             document.getElementById('saleHammali').value = sale.hammali || 0;
             document.getElementById('saleAdvance').value = sale.advance || 0;
@@ -6513,6 +6692,10 @@ function onPnLFilterChange() {
             document.getElementById('saleDate').value = '';
             document.getElementById('saleInvoice').value = '';
             document.getElementById('saleCustomer').value = '';
+            var sci = document.getElementById('saleCustomerInput');
+            if (sci) sci.value = '';
+            var scd = document.getElementById('saleCustomerDropdown');
+            if (scd) scd.classList.add('hidden');
             document.getElementById('saleTruck').value = '';
             document.getElementById('saleLRNumber').value = '';
             document.getElementById('saleHammali').value = '';
