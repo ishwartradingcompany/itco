@@ -7181,14 +7181,27 @@ function exportLedgerStatement() {
             var typeFilter = typeEl ? typeEl.value : '';
             var fromVal = fromEl ? fromEl.value : '';
             var toVal = toEl ? toEl.value : '';
+            var searchEl = document.getElementById('paymentsSearch');
+            var searchTerm = (searchEl && searchEl.value) ? String(searchEl.value).trim().toLowerCase() : '';
             var list = getPaymentsListForTracking().sort(function(a, b) {
                 var dA = (a.date || '').replace(/-/g, '');
                 var dB = (b.date || '').replace(/-/g, '');
                 return dB.localeCompare(dA);
             });
-            if (typeFilter) list = list.filter(function(p) { return p.type === typeFilter; });
+            if (typeFilter === 'purchase_payments') list = list.filter(function(p) { return p.type === 'purchase' || (p.type === 'ledger_payment' && p.entityType === 'supplier'); });
+            if (typeFilter === 'sales_payments') list = list.filter(function(p) { return p.type === 'sale' || (p.type === 'ledger_receipt' && p.entityType === 'customer'); });
             if (fromVal) list = list.filter(function(p) { return (p.date || '') >= fromVal; });
             if (toVal) list = list.filter(function(p) { return (p.date || '') <= toVal; });
+            if (searchTerm) {
+                list = list.filter(function(p) {
+                    var party = (p.party || '').toLowerCase();
+                    var invoice = (p.invoice || '').toLowerCase();
+                    var mode = (p.mode || '').toLowerCase();
+                    var remarks = (p.remarks != null ? String(p.remarks) : '').toLowerCase();
+                    var amountStr = (p.amount != null ? String(p.amount) : '');
+                    return party.indexOf(searchTerm) >= 0 || invoice.indexOf(searchTerm) >= 0 || mode.indexOf(searchTerm) >= 0 || remarks.indexOf(searchTerm) >= 0 || amountStr.indexOf(searchTerm) >= 0;
+                });
+            }
             var totalAmount = list.reduce(function(s, p) { return s + (parseFloat(p.amount) || 0); }, 0);
             var pageSize = paginationState.payments.pageSize;
             var totalPages = Math.max(1, Math.ceil(list.length / pageSize));
@@ -7197,13 +7210,18 @@ function exportLedgerStatement() {
             }
             var currentPage = paginationState.payments.currentPage;
             var pageList = getPaginatedData(list, currentPage, pageSize);
-            var typeLabels = { purchase: 'Purchase (to supplier)', sale: 'Sale (from customer)', ledger_payment: 'Ledger payment', ledger_receipt: 'Ledger receipt' };
+            function getPaymentDisplayType(p) {
+                if (p.type === 'purchase' || (p.type === 'ledger_payment' && p.entityType === 'supplier')) return 'Purchase payment';
+                if (p.type === 'sale' || (p.type === 'ledger_receipt' && p.entityType === 'customer')) return 'Sales payment';
+                return p.type || 'Other';
+            }
             if (list.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No payments found. Try <strong>Type: All</strong> or leave date range empty to see all payments.</td></tr>';
+                var msg = searchTerm ? 'No payments match your search. Try clearing the search or changing filters.' : 'No payments found. Try <strong>Type: All</strong> or leave date range empty to see all payments.';
+                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">' + msg + '</td></tr>';
             } else {
                 tbody.innerHTML = pageList.map(function(p) {
                     var amt = parseFloat(p.amount) || 0;
-                    var typeLabel = typeLabels[p.type] || p.type || 'Payment';
+                    var typeLabel = getPaymentDisplayType(p);
                     return '<tr class="border-b border-slate-200 hover:bg-slate-50">' +
                         '<td class="px-4 py-3">' + escapeHtml(p.date || '-') + '</td>' +
                         '<td class="px-4 py-3">' + escapeHtml(typeLabel) + '</td>' +
@@ -7222,22 +7240,39 @@ function exportLedgerStatement() {
             var typeEl = document.getElementById('paymentsFilterType');
             var fromEl = document.getElementById('paymentsDateFrom');
             var toEl = document.getElementById('paymentsDateTo');
+            var searchEl = document.getElementById('paymentsSearch');
             var typeFilter = typeEl ? typeEl.value : '';
             var fromVal = fromEl ? fromEl.value : '';
             var toVal = toEl ? toEl.value : '';
+            var searchTerm = (searchEl && searchEl.value) ? String(searchEl.value).trim().toLowerCase() : '';
             var list = getPaymentsListForTracking().sort(function(a, b) {
                 var dA = (a.date || '').replace(/-/g, '');
                 var dB = (b.date || '').replace(/-/g, '');
                 return dB.localeCompare(dA);
             });
-            if (typeFilter) list = list.filter(function(p) { return p.type === typeFilter; });
+            if (typeFilter === 'purchase_payments') list = list.filter(function(p) { return p.type === 'purchase' || (p.type === 'ledger_payment' && p.entityType === 'supplier'); });
+            if (typeFilter === 'sales_payments') list = list.filter(function(p) { return p.type === 'sale' || (p.type === 'ledger_receipt' && p.entityType === 'customer'); });
             if (fromVal) list = list.filter(function(p) { return (p.date || '') >= fromVal; });
             if (toVal) list = list.filter(function(p) { return (p.date || '') <= toVal; });
-            var typeLabels = { purchase: 'Purchase', sale: 'Sale', ledger_payment: 'Ledger payment', ledger_receipt: 'Ledger receipt' };
+            if (searchTerm) {
+                list = list.filter(function(p) {
+                    var party = (p.party || '').toLowerCase();
+                    var invoice = (p.invoice || '').toLowerCase();
+                    var mode = (p.mode || '').toLowerCase();
+                    var remarks = (p.remarks != null ? String(p.remarks) : '').toLowerCase();
+                    var amountStr = (p.amount != null ? String(p.amount) : '');
+                    return party.indexOf(searchTerm) >= 0 || invoice.indexOf(searchTerm) >= 0 || mode.indexOf(searchTerm) >= 0 || remarks.indexOf(searchTerm) >= 0 || amountStr.indexOf(searchTerm) >= 0;
+                });
+            }
+            function getPaymentDisplayTypeExport(p) {
+                if (p.type === 'purchase' || (p.type === 'ledger_payment' && p.entityType === 'supplier')) return 'Purchase payment';
+                if (p.type === 'sale' || (p.type === 'ledger_receipt' && p.entityType === 'customer')) return 'Sales payment';
+                return p.type || 'Other';
+            }
             var csv = '\uFEFFDate,Type,Party,Invoice/Ref,Amount,Mode,Remarks\n';
             list.forEach(function(p) {
                 var amt = (parseFloat(p.amount) || 0).toFixed(2);
-                var typeLabel = typeLabels[p.type] || p.type || 'Payment';
+                var typeLabel = getPaymentDisplayTypeExport(p);
                 csv += '"' + (p.date || '') + '","' + typeLabel + '","' + (p.party || '').replace(/"/g, '""') + '","' + (p.invoice || '').replace(/"/g, '""') + '",' + amt + ',"' + (p.mode || '').replace(/"/g, '""') + '","' + (p.remarks || '').toString().replace(/"/g, '""').slice(0, 100) + '"\n';
             });
             var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
