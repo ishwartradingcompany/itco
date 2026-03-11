@@ -48,6 +48,7 @@ const paginationState = {
     sales: { currentPage: 1, pageSize: 10 },
     brokerage: { currentPage: 1, pageSize: 10 },
     deductions: { currentPage: 1, pageSize: 10 },
+    payments: { currentPage: 1, pageSize: 10 },
     stockMovement: { currentPage: 1, pageSize: 10 },
     pnl: { currentPage: 1, pageSize: 10 },
     ledger: { currentPage: 1, pageSize: 10 },
@@ -228,6 +229,22 @@ function changeOpeningBalancePageSize(size) {
     updateOpeningBalanceHistory();
 }
 
+function changePaymentsPage(page) {
+    paginationState.payments.currentPage = page;
+    loadPaymentsTracking();
+}
+
+function changePaymentsPageSize(size) {
+    paginationState.payments.pageSize = parseInt(size);
+    paginationState.payments.currentPage = 1;
+    loadPaymentsTracking();
+}
+
+function onPaymentsFilterChange() {
+    paginationState.payments.currentPage = 1;
+    loadPaymentsTracking();
+}
+
 // Store current data for P&L and Ledger for pagination
 let currentPnLData = [];
 let currentLedgerData = [];
@@ -254,9 +271,10 @@ function loadData() {
                 console.log("   - openingBalances in Firebase:", savedData.openingBalances);
                 
                 appData = savedData;
-                // Ensure arrays exist (older Firestore docs may lack these keys)
+                // Ensure arrays and settings exist (older Firestore docs may lack these keys)
                 appData.payments = appData.payments || [];
                 appData.openingBalances = appData.openingBalances || [];
+                appData.settings = appData.settings || {};
 
                 // Refresh ALL UI sections now that data is loaded
                 updateDashboard();
@@ -405,6 +423,7 @@ function restoreFromJSON() {
                 appData.deductions = appData.deductions || [];
                 appData.adjustments = appData.adjustments || [];
                 appData.payments = appData.payments || [];
+                appData.settings = appData.settings || {};
                 appData.inventory = appData.inventory || {};
                 (appData.items || []).forEach(function(i){ if (i.active === undefined) i.active = true; });
                 (appData.suppliers || []).forEach(function(s){ if (s.active === undefined) s.active = true; });
@@ -456,6 +475,90 @@ function logout() {
             alert("Error logging out!");
         });
     }
+}
+
+// Delete All (password protected) - Records vs Masters, similar to Transportation app
+var deleteAllPendingAction = null;
+function getDeleteAllPassword() {
+    appData.settings = appData.settings || {};
+    return (appData.settings.deleteAllPassword && String(appData.settings.deleteAllPassword).trim()) ? String(appData.settings.deleteAllPassword).trim() : 'admin';
+}
+function openDeleteAllModal(action) {
+    deleteAllPendingAction = action;
+    var titleEl = document.getElementById('deleteAllModalTitle');
+    var msgEl = document.getElementById('deleteAllModalMessage');
+    var pwdEl = document.getElementById('deleteAllPassword');
+    if (action === 'records') {
+        if (titleEl) titleEl.textContent = 'Delete All Records';
+        if (msgEl) msgEl.textContent = 'This will permanently delete all transactions: Purchases, Sales, Brokerage, Deductions, Payments, Adjustments, Opening Balances, and Inventory. This cannot be undone. Enter password to confirm.';
+    } else {
+        if (titleEl) titleEl.textContent = 'Delete All Masters';
+        if (msgEl) msgEl.textContent = 'This will permanently delete all master data: Items, Suppliers, Customers, Brokers, and Company details. Records (transactions) will remain. This cannot be undone. Enter password to confirm.';
+    }
+    if (pwdEl) { pwdEl.value = ''; pwdEl.focus(); }
+    var modal = document.getElementById('deleteAllModal');
+    if (modal) modal.classList.remove('hidden');
+}
+function closeDeleteAllModal() {
+    deleteAllPendingAction = null;
+    var pwdEl = document.getElementById('deleteAllPassword');
+    if (pwdEl) pwdEl.value = '';
+    var modal = document.getElementById('deleteAllModal');
+    if (modal) modal.classList.add('hidden');
+}
+function confirmDeleteAll() {
+    var pwdEl = document.getElementById('deleteAllPassword');
+    var entered = (pwdEl && pwdEl.value) ? String(pwdEl.value).trim() : '';
+    var expected = getDeleteAllPassword();
+    if (entered !== expected) {
+        alert('Incorrect password. Delete cancelled.');
+        return;
+    }
+    if (deleteAllPendingAction === 'records') {
+        deleteAllRecords();
+    } else if (deleteAllPendingAction === 'masters') {
+        deleteAllMasters();
+    }
+    closeDeleteAllModal();
+}
+function deleteAllRecords() {
+    appData.purchases = [];
+    appData.sales = [];
+    appData.brokerage = [];
+    appData.deductions = [];
+    appData.payments = [];
+    appData.adjustments = [];
+    appData.openingBalances = [];
+    appData.inventory = {};
+    saveData();
+    updateDashboard();
+    populateDropdowns();
+    updatePurchaseHistory();
+    updateSalesHistory();
+    updateBrokerageHistory();
+    updateDeductionsHistory();
+    refreshInventory();
+    if (typeof loadPaymentsTracking === 'function') loadPaymentsTracking();
+    if (typeof updateOpeningBalanceHistory === 'function') updateOpeningBalanceHistory();
+    if (typeof updateRecordsCount === 'function') updateRecordsCount();
+    alert('All records have been deleted.');
+}
+function deleteAllMasters() {
+    appData.items = [];
+    appData.suppliers = [];
+    appData.customers = [];
+    appData.brokers = [];
+    appData.company = {};
+    saveData();
+    populateDropdowns();
+    updateItemsList();
+    updateSuppliersList();
+    updateCustomersList();
+    updateBrokersList();
+    loadCompanyDetails();
+    updateDashboard();
+    if (typeof updateRecordsCount === 'function') updateRecordsCount();
+    alert('All masters have been deleted. Records (transactions) are unchanged.');
 }
 
         // Navigation
@@ -6878,6 +6981,20 @@ function exportLedgerStatement() {
             var tbody = document.getElementById('paymentsTableBody');
             var summaryEl = document.getElementById('paymentsSummary');
             if (!tbody) return;
+            // Outstanding payables & receivables (same logic as dashboard)
+            var totalPurchases = (appData.purchases || []).reduce(function(s, p) { return s + (p.grandTotal || p.total || 0); }, 0);
+            var openingPayables = (appData.openingBalances || []).filter(function(ob) { return ob.type === 'payable'; }).reduce(function(s, ob) { return s + (ob.amount || 0); }, 0);
+            var supplierPayments = (appData.payments || []).filter(function(pm) { return pm.type === 'purchase' || (pm.type === 'ledger_payment' && pm.entityType === 'supplier'); }).reduce(function(s, pm) { return s + (pm.amount || 0); }, 0);
+            var netPayables = Math.max(0, totalPurchases + openingPayables - supplierPayments);
+            var totalSales = (appData.sales || []).reduce(function(s, sale) { return s + (sale.grandTotal || sale.total || 0); }, 0);
+            var openingReceivables = (appData.openingBalances || []).filter(function(ob) { return ob.type === 'receivable'; }).reduce(function(s, ob) { return s + (ob.amount || 0); }, 0);
+            var totalDeductions = (appData.deductions || []).reduce(function(s, d) { return s + (d.amount || 0); }, 0);
+            var customerPayments = (appData.payments || []).filter(function(pm) { return pm.type === 'sale' || (pm.type === 'ledger_receipt' && pm.entityType === 'customer'); }).reduce(function(s, pm) { return s + (pm.amount || 0); }, 0);
+            var netReceivables = Math.max(0, totalSales + openingReceivables - totalDeductions - customerPayments);
+            var payablesEl = document.getElementById('paymentsOutstandingPayables');
+            var receivablesEl = document.getElementById('paymentsOutstandingReceivables');
+            if (payablesEl) payablesEl.textContent = RU + (netPayables || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+            if (receivablesEl) receivablesEl.textContent = RU + (netReceivables || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
             var typeFilter = typeEl ? typeEl.value : '';
             var fromVal = fromEl ? fromEl.value : '';
             var toVal = toEl ? toEl.value : '';
@@ -6889,14 +7006,20 @@ function exportLedgerStatement() {
             if (typeFilter) list = list.filter(function(p) { return p.type === typeFilter; });
             if (fromVal) list = list.filter(function(p) { return (p.date || '') >= fromVal; });
             if (toVal) list = list.filter(function(p) { return (p.date || '') <= toVal; });
+            var totalAmount = list.reduce(function(s, p) { return s + (parseFloat(p.amount) || 0); }, 0);
+            var pageSize = paginationState.payments.pageSize;
+            var totalPages = Math.max(1, Math.ceil(list.length / pageSize));
+            if (paginationState.payments.currentPage > totalPages) {
+                paginationState.payments.currentPage = 1;
+            }
+            var currentPage = paginationState.payments.currentPage;
+            var pageList = getPaginatedData(list, currentPage, pageSize);
             var typeLabels = { purchase: 'Purchase (to supplier)', sale: 'Sale (from customer)', ledger_payment: 'Ledger payment', ledger_receipt: 'Ledger receipt' };
-            var totalAmount = 0;
             if (list.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No payments found. Try <strong>Type: All</strong> or leave date range empty to see all payments.</td></tr>';
             } else {
-                tbody.innerHTML = list.map(function(p) {
+                tbody.innerHTML = pageList.map(function(p) {
                     var amt = parseFloat(p.amount) || 0;
-                    totalAmount += amt;
                     var typeLabel = typeLabels[p.type] || p.type || 'Payment';
                     return '<tr class="border-b border-slate-200 hover:bg-slate-50">' +
                         '<td class="px-4 py-3">' + escapeHtml(p.date || '-') + '</td>' +
@@ -6910,6 +7033,7 @@ function exportLedgerStatement() {
                 }).join('');
             }
             if (summaryEl) summaryEl.textContent = 'Total: ' + list.length + ' payment(s) | Amount: ' + RU + totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+            renderPagination('paymentsPagination', list.length, currentPage, pageSize, 'changePaymentsPage', 'changePaymentsPageSize');
         }
         function exportPaymentsToCsv() {
             var typeEl = document.getElementById('paymentsFilterType');
