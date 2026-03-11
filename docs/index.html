@@ -1787,11 +1787,12 @@
                         <label class="block text-sm font-medium text-slate-700 mb-1">Type</label>
                         <select id="paymentsFilterType" onchange="onPaymentsFilterChange()" class="p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                             <option value="">All</option>
-                            <option value="purchase">Purchase (to supplier)</option>
-                            <option value="sale">Sale (from customer)</option>
+                            <option value="purchase">Purchase – payment on invoice</option>
+                            <option value="sale">Sale – receipt on invoice</option>
                             <option value="ledger_payment">Ledger payment (to supplier)</option>
                             <option value="ledger_receipt">Ledger receipt (from customer)</option>
                         </select>
+                        <p class="text-xs text-slate-500 mt-1"><strong>Purchase</strong> = pay on a purchase invoice; <strong>Ledger payment</strong> = pay from Ledger (supplier). <strong>Sale</strong> = receive on a sale invoice; <strong>Ledger receipt</strong> = receive from Ledger (customer).</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">From</label>
@@ -1808,6 +1809,11 @@
                 <div class="flex flex-wrap justify-between items-center gap-4 mb-4">
                     <h3 class="text-xl font-semibold text-primary">Payment History</h3>
                     <button type="button" onclick="exportPaymentsToCsv()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportPaymentsBtn">Export to CSV</button>
+                </div>
+                <div class="mb-4 flex flex-wrap items-center gap-3">
+                    <label class="text-sm font-medium text-slate-700">Search</label>
+                    <input type="text" id="paymentsSearch" placeholder="Search by party, invoice, mode, remarks..." oninput="onPaymentsFilterChange()" class="flex-1 min-w-[200px] p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    <button type="button" onclick="document.getElementById('paymentsSearch').value=''; onPaymentsFilterChange();" class="px-3 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 text-sm">Clear</button>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full table-auto">
