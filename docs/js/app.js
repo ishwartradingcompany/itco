@@ -1,6 +1,7 @@
-        // Indian Rupee symbol (Unicode) - avoids encoding issues
-        const RU = '\u20B9';
-        const CHECK = '\u2713'; // checkmark
+        // Indian Rupee, bullet, checkmark - from code points to avoid file encoding issues
+        const RU = String.fromCharCode(0x20B9);
+        const BULLET = String.fromCharCode(0x2022);
+        const CHECK = String.fromCharCode(0x2713);
 
         // Audit trail: who/when (uses currentUser from auth.js)
         function getAuditMeta(isNew) {
@@ -3962,7 +3963,7 @@ function logout() {
                             </div>
                             <div class="flex-1">
                                 <p class="font-medium text-slate-700 truncate">${t.desc}</p>
-                                <p class="text-slate-400">${t.date} \u2022 ${t.invoice}</p>
+                                <p class="text-slate-400">${t.date} ${BULLET} ${t.invoice}</p>
                             </div>
                             <span class="${t.type === 'sale' ? 'text-green-600' : 'text-red-600'} font-bold">
                                 ${t.type === 'sale' ? '+' : '-'}${RU}${(t.amount || 0).toLocaleString('en-IN')}
@@ -6477,7 +6478,7 @@ function onPnLFilterChange() {
             if (soldItems.length > 0) {
                 let message = 'Cannot delete this purchase because the following items have been sold:\n\n';
                 soldItems.forEach(item => {
-                    message += `\u2022 ${item.itemName} (sold in: ${item.sales})\n`;
+                    message += `${BULLET} ${item.itemName} (sold in: ${item.sales})\n`;
                 });
                 message += '\nPlease delete the related sales entries first, then try deleting this purchase.';
                 alert(message);
