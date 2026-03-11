@@ -12,7 +12,7 @@ Web app for **Ishwar Trading Company** – business management for vegetables an
 ## Project structure
 
 ```
-├── public/                 # Web app (Firebase hosting root)
+├── docs/                   # Web app (GitHub Pages & Firebase hosting root)
 │   ├── index.html          # Main app (dashboard, after login)
 │   ├── login.html          # Login & forgot password
 │   ├── css/
@@ -48,20 +48,27 @@ Web app for **Ishwar Trading Company** – business management for vegetables an
      Or link: `firebase init` and choose Hosting + Firestore.
 
 3. **Config**
-   - Firebase config (API key, project ID, etc.) is in `public/js/firebase-config.js`.  
+   - Firebase config (API key, project ID, etc.) is in `docs/js/firebase-config.js`.  
    - For a new project, replace with your own config from Firebase Console → Project settings.
 
 4. **Run locally**
-   - Serve `public/` with any static server, e.g.:
+   - Serve `docs/` with any static server, e.g.:
      ```bash
-     npx serve public
+     npx serve docs
      ```
-   - Or use Firebase: `firebase serve` (serves from `public` per `firebase.json`).
+   - Or use Firebase: `firebase serve` (serves from `docs` per `firebase.json`).
 
-5. **Deploy**
+5. **Deploy** (Firebase Hosting)
    ```bash
    firebase deploy
    ```
+
+6. **Deploy on GitHub Pages** (optional)
+   - In the repo: **Settings → Pages**.
+   - Under "Build and deployment", set **Source** to **Deploy from a branch**.
+   - Branch: **main**, Folder: **/docs**, then Save.
+   - Site URL: `https://ishwartradingcompany.github.io/itco/`
+   - In **Firebase Console → Authentication → Settings → Authorized domains**, add `ishwartradingcompany.github.io` so login works on GitHub Pages.
 
 ## Pages (after login)
 
