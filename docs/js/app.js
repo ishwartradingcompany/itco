@@ -1,3 +1,14 @@
+        // Indian Rupee symbol (Unicode) - avoids encoding issues
+        const RU = '\u20B9';
+        const CHECK = '\u2713'; // checkmark
+
+        // Audit trail: who/when (uses currentUser from auth.js)
+        function getAuditMeta(isNew) {
+            const who = (typeof currentUserEmail !== 'undefined' && currentUserEmail) ? currentUserEmail : 'anonymous';
+            const when = new Date().toISOString();
+            return isNew ? { createdAt: when, createdBy: who } : { updatedAt: when, updatedBy: who };
+        }
+
         // Global data storage
         let appData = {
             company: {},
@@ -275,8 +286,8 @@ function saveData() {
     }
 
     console.log("ðŸ’¾ Saving to Firebase...");
-    console.log("   - openingBalances count:", appData.openingBalances ? appData.openingBalances.length : 0);
-    
+    var _p = JSON.stringify(appData);
+    if (_p.length > 900000) console.warn("App data large (" + (_p.length/1024).toFixed(0) + " KB). Consider archiving old records.");
     SHARED_DOC_REF.set({
         data: appData,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -289,23 +300,24 @@ function saveData() {
     });
 }
 function manualSave() {
+  const btn = document.querySelector('.btn-save');
+  const originalText = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="inline-flex items-center gap-2"><svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Saving...</span>'; }
   SHARED_DOC_REF.set({
       data: appData,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(() => {
-      console.log("âœ… Data saved to Firestore (manual save)");
+      console.log("Data saved to Firestore (manual save)");
 
       // Show message
       const msg = document.getElementById("save-message");
       msg.classList.remove("hidden");
-
-      // Hide after 3 seconds
-      setTimeout(() => {
-          msg.classList.add("hidden");
-      }, 3000);
+      setTimeout(function(){ if(msg) msg.classList.add("hidden"); }, 3000);
+      if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
   }).catch((error) => {
       console.error("âŒ Error saving to Firestore:", error);
       alert("Error saving data!");
+      if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
   });
 }
 
@@ -383,7 +395,10 @@ function restoreFromJSON() {
                 appData.adjustments = appData.adjustments || [];
                 appData.payments = appData.payments || [];
                 appData.inventory = appData.inventory || {};
-                
+                (appData.items || []).forEach(function(i){ if (i.active === undefined) i.active = true; });
+                (appData.suppliers || []).forEach(function(s){ if (s.active === undefined) s.active = true; });
+                (appData.customers || []).forEach(function(c){ if (c.active === undefined) c.active = true; });
+                (appData.brokers || []).forEach(function(b){ if (b.active === undefined) b.active = true; });
                 // Save to Firebase
                 saveData();
                 
@@ -498,6 +513,8 @@ function logout() {
             } else if (pageId === 'opening') {
                 populateOpeningBalanceDropdowns();
                 updateOpeningBalanceHistory();
+            } else if (pageId === 'reports') {
+                if (typeof setDefaultReportDates === 'function') setDefaultReportDates();
             }
             
             // Update records count
@@ -581,6 +598,7 @@ function logout() {
         function saveCompanyDetails() {
             appData.company = {
                 name: document.getElementById('companyName').value,
+                gstin: (document.getElementById('companyGSTIN') && document.getElementById('companyGSTIN').value) || '',
                 bank1: {
                     name: document.getElementById('bankName1').value,
                     account: document.getElementById('bankAccount1').value,
@@ -600,6 +618,8 @@ function logout() {
         function loadCompanyDetails() {
             if (appData.company) {
                 document.getElementById('companyName').value = appData.company.name || '';
+                var gstinEl = document.getElementById('companyGSTIN');
+                if (gstinEl) gstinEl.value = appData.company.gstin || '';
                 document.getElementById('bankName1').value = appData.company.bank1?.name || '';
                 document.getElementById('bankAccount1').value = appData.company.bank1?.account || '';
                 document.getElementById('ifsc1').value = appData.company.bank1?.ifsc || '';
@@ -619,24 +639,26 @@ function logout() {
             const name = document.getElementById('itemName').value;
             const category = document.getElementById('itemCategory').value;
             const unit = document.getElementById('itemUnit').value;
-            
+            var minStockEl = document.getElementById('itemMinStock');
+            const minStock = (minStockEl && parseFloat(minStockEl.value)) || 0;
             if (name && category && unit) {
                 if (editingItemId) {
-                    // Edit existing item
                     const item = appData.items.find(i => i.id === editingItemId);
                     if (item) {
                         item.name = name;
                         item.category = category;
                         item.unit = unit;
+                        item.minStock = minStock;
                     }
                     editingItemId = null;
                 } else {
-                    // Add new item
                     const item = {
                         id: Date.now(),
                         name: name,
                         category: category,
-                        unit: unit
+                        unit: unit,
+                        minStock: minStock,
+                        active: true
                     };
                     appData.items.push(item);
                 }
@@ -644,7 +666,7 @@ function logout() {
                 updateItemsList();
                 populateDropdowns();
                 
-                // Clear form
+                if (minStockEl) minStockEl.value = '';
                 document.getElementById('itemName').value = '';
                 document.getElementById('itemCategory').value = '';
                 document.getElementById('itemUnit').value = '';
@@ -653,28 +675,37 @@ function logout() {
 
         function updateItemsList() {
             const container = document.getElementById('itemsList');
+            if (!container) return;
             container.innerHTML = '';
-            appData.items.forEach(item => {
-                const div = document.createElement('div');
+            (appData.items || []).forEach(function(item) {
+                var minStr = (item.minStock != null && item.minStock > 0) ? ' Min: ' + item.minStock : '';
+                var active = item.active !== false;
+                var div = document.createElement('div');
                 div.className = 'flex justify-between items-center p-2 bg-gray-50 rounded';
-                div.innerHTML = `
-                    <span>${item.name} (${item.category}) - ${item.unit}</span>
-                    <div class="space-x-2">
-                        <button onclick="editItem(${item.id})" class="text-blue-500 hover:text-blue-700">Edit</button>
-                        <button onclick="removeItem(${item.id})" class="text-red-500 hover:text-red-700">Ã—</button>
-                    </div>
-                `;
+                div.innerHTML = '<span>' + (active ? '' : '<span class="text-slate-400 line-through">') + item.name + ' (' + item.category + ') - ' + item.unit + minStr + (active ? '' : '</span>') + '</span>' +
+                    '<div class="space-x-2">' +
+                    '<button onclick="editItem(' + item.id + ')" class="text-blue-500 hover:text-blue-700">Edit</button>' +
+                    (active ? '<button onclick="setItemActive(' + item.id + ', false)" class="text-amber-600 hover:text-amber-800">Deactivate</button>' : '<button onclick="setItemActive(' + item.id + ', true)" class="text-green-600 hover:text-green-800">Activate</button>') +
+                    '<button onclick="removeItem(' + item.id + ')" class="text-red-500 hover:text-red-700">\u00D7</button>' +
+                    '</div>';
                 container.appendChild(div);
             });
         }
 
+        function setItemActive(id, active) {
+            var item = appData.items.find(function(i) { return i.id === id; });
+            if (item) { item.active = active; saveData(); updateItemsList(); populateDropdowns(); }
+        }
+
         function editItem(id) {
-            const item = appData.items.find(i => i.id === id);
+            var item = appData.items.find(function(i) { return i.id === id; });
             if (item) {
                 editingItemId = id;
                 document.getElementById('itemName').value = item.name;
                 document.getElementById('itemCategory').value = item.category;
                 document.getElementById('itemUnit').value = item.unit;
+                var minStockEl = document.getElementById('itemMinStock');
+                if (minStockEl) minStockEl.value = (item.minStock != null && item.minStock > 0) ? item.minStock : '';
             }
         }
 
@@ -691,10 +722,10 @@ function logout() {
             const address = document.getElementById('supplierAddress').value;
             const account = document.getElementById('supplierAccount').value;
             const ifsc = document.getElementById('supplierIFSC').value;
-            
+            var gstinEl = document.getElementById('supplierGSTIN');
+            const gstin = gstinEl ? gstinEl.value : '';
             if (name && address) {
                 if (editingSupplierId) {
-                    // Edit existing supplier
                     const supplier = appData.suppliers.find(s => s.id === editingSupplierId);
                     if (supplier) {
                         supplier.name = name;
@@ -702,32 +733,31 @@ function logout() {
                         supplier.address = address;
                         supplier.account = account;
                         supplier.ifsc = ifsc;
+                        supplier.gstin = gstin;
                     }
                     editingSupplierId = null;
                 } else {
-                    // Add new supplier
                     const supplier = {
                         id: Date.now(),
                         name: name,
                         mobile: mobile,
                         address: address,
                         account: account,
-                        ifsc: ifsc
+                        ifsc: ifsc,
+                        gstin: gstin,
+                        active: true
                     };
                     appData.suppliers.push(supplier);
                 }
                 saveData();
                 updateSuppliersList();
                 populateDropdowns();
-                
-                // Clear form
                 document.getElementById('supplierName').value = '';
                 document.getElementById('supplierMobile').value = '';
                 document.getElementById('supplierAddress').value = '';
                 document.getElementById('supplierAccount').value = '';
                 document.getElementById('supplierIFSC').value = '';
-                
-                // Hide form after adding
+                if (gstinEl) gstinEl.value = '';
                 hideSupplierForm();
             } else {
                 alert('Please fill in Name and Address');
@@ -748,25 +778,29 @@ function logout() {
             document.getElementById('supplierAddress').value = '';
             document.getElementById('supplierAccount').value = '';
             document.getElementById('supplierIFSC').value = '';
+            var gstinEl = document.getElementById('supplierGSTIN');
+            if (gstinEl) gstinEl.value = '';
             editingSupplierId = null;
         }
 
         function updateSuppliersList() {
             const container = document.getElementById('suppliersList');
+            if (!container) return;
             container.innerHTML = '';
-            appData.suppliers.forEach(supplier => {
-                const div = document.createElement('div');
+            (appData.suppliers || []).forEach(function(supplier) {
+                var active = supplier.active !== false;
+                var div = document.createElement('div');
                 div.className = 'flex justify-between items-center p-2 bg-gray-50 rounded';
-                div.innerHTML = `
-                    <span>${supplier.name}</span>
-                    <div class="space-x-2">
-                        <button onclick="editSupplier(${supplier.id})" class="text-blue-500 hover:text-blue-700">Edit</button>
-                        <button onclick="removeSupplier(${supplier.id})" class="text-red-500 hover:text-red-700">Ã—</button>
-                    </div>
-                `;
+                div.innerHTML = '<span>' + (active ? '' : '<span class="text-slate-400 line-through">') + supplier.name + (active ? '' : '</span>') + '</span>' +
+                    '<div class="space-x-2">' +
+                    '<button onclick="editSupplier(' + supplier.id + ')" class="text-blue-500 hover:text-blue-700">Edit</button>' +
+                    (active ? '<button onclick="setSupplierActive(' + supplier.id + ', false)" class="text-amber-600 hover:text-amber-800">Deactivate</button>' : '<button onclick="setSupplierActive(' + supplier.id + ', true)" class="text-green-600 hover:text-green-800">Activate</button>') +
+                    '<button onclick="removeSupplier(' + supplier.id + ')" class="text-red-500 hover:text-red-700">\u00D7</button>' +
+                    '</div>';
                 container.appendChild(div);
             });
         }
+        function setSupplierActive(id, active) { var s = appData.suppliers.find(function(x){ return x.id === id; }); if (s) { s.active = active; saveData(); updateSuppliersList(); populateDropdowns(); } }
 
         function editSupplier(id) {
             const supplier = appData.suppliers.find(s => s.id === id);
@@ -777,6 +811,8 @@ function logout() {
                 document.getElementById('supplierAddress').value = supplier.address;
                 document.getElementById('supplierAccount').value = supplier.account || '';
                 document.getElementById('supplierIFSC').value = supplier.ifsc || '';
+                var gstinEl = document.getElementById('supplierGSTIN');
+                if (gstinEl) gstinEl.value = supplier.gstin || '';
             }
         }
 
@@ -792,40 +828,39 @@ function logout() {
             const mobile = document.getElementById('customerMobile').value;
             const address = document.getElementById('customerAddress').value;
             const account = document.getElementById('customerAccount').value;
-            
+            var custGstinEl = document.getElementById('customerGSTIN');
+            const custGstin = custGstinEl ? custGstinEl.value : '';
             if (name && address) {
                 if (editingCustomerId) {
-                    // Edit existing customer
                     const customer = appData.customers.find(c => c.id === editingCustomerId);
                     if (customer) {
                         customer.name = name;
                         customer.mobile = mobile;
                         customer.address = address;
                         customer.account = account;
+                        customer.gstin = custGstin;
                     }
                     editingCustomerId = null;
                 } else {
-                    // Add new customer
                     const customer = {
                         id: Date.now(),
                         name: name,
                         mobile: mobile,
                         address: address,
-                        account: account
+                        account: account,
+                        gstin: custGstin,
+                        active: true
                     };
                     appData.customers.push(customer);
                 }
                 saveData();
                 updateCustomersList();
                 populateDropdowns();
-                
-                // Clear form
                 document.getElementById('customerName').value = '';
                 document.getElementById('customerMobile').value = '';
                 document.getElementById('customerAddress').value = '';
                 document.getElementById('customerAccount').value = '';
-                
-                // Hide form after adding
+                if (custGstinEl) custGstinEl.value = '';
                 hideCustomerForm();
             } else {
                 alert('Please fill in Name and Address');
@@ -845,25 +880,29 @@ function logout() {
             document.getElementById('customerMobile').value = '';
             document.getElementById('customerAddress').value = '';
             document.getElementById('customerAccount').value = '';
+            var custGstinEl = document.getElementById('customerGSTIN');
+            if (custGstinEl) custGstinEl.value = '';
             editingCustomerId = null;
         }
 
         function updateCustomersList() {
             const container = document.getElementById('customersList');
+            if (!container) return;
             container.innerHTML = '';
-            appData.customers.forEach(customer => {
-                const div = document.createElement('div');
+            (appData.customers || []).forEach(function(customer) {
+                var active = customer.active !== false;
+                var div = document.createElement('div');
                 div.className = 'flex justify-between items-center p-2 bg-gray-50 rounded';
-                div.innerHTML = `
-                    <span>${customer.name}</span>
-                    <div class="space-x-2">
-                        <button onclick="editCustomer(${customer.id})" class="text-blue-500 hover:text-blue-700">Edit</button>
-                        <button onclick="removeCustomer(${customer.id})" class="text-red-500 hover:text-red-700">Ã—</button>
-                    </div>
-                `;
+                div.innerHTML = '<span>' + (active ? '' : '<span class="text-slate-400 line-through">') + customer.name + (active ? '' : '</span>') + '</span>' +
+                    '<div class="space-x-2">' +
+                    '<button onclick="editCustomer(' + customer.id + ')" class="text-blue-500 hover:text-blue-700">Edit</button>' +
+                    (active ? '<button onclick="setCustomerActive(' + customer.id + ', false)" class="text-amber-600 hover:text-amber-800">Deactivate</button>' : '<button onclick="setCustomerActive(' + customer.id + ', true)" class="text-green-600 hover:text-green-800">Activate</button>') +
+                    '<button onclick="removeCustomer(' + customer.id + ')" class="text-red-500 hover:text-red-700">\u00D7</button>' +
+                    '</div>';
                 container.appendChild(div);
             });
         }
+        function setCustomerActive(id, active) { var c = appData.customers.find(function(x){ return x.id === id; }); if (c) { c.active = active; saveData(); updateCustomersList(); populateDropdowns(); } }
 
         function editCustomer(id) {
             const customer = appData.customers.find(c => c.id === id);
@@ -873,6 +912,8 @@ function logout() {
                 document.getElementById('customerMobile').value = customer.mobile || '';
                 document.getElementById('customerAddress').value = customer.address;
                 document.getElementById('customerAccount').value = customer.account || '';
+                var custGstinEl = document.getElementById('customerGSTIN');
+                if (custGstinEl) custGstinEl.value = customer.gstin || '';
             }
         }
 
@@ -901,13 +942,13 @@ function logout() {
                     }
                     editingBrokerId = null;
                 } else {
-                    // Add new broker
                     const broker = {
                         id: Date.now(),
                         name: name,
                         mobile: mobile,
                         details: details,
-                        account: account
+                        account: account,
+                        active: true
                     };
                     appData.brokers.push(broker);
                 }
@@ -946,20 +987,22 @@ function logout() {
 
         function updateBrokersList() {
             const container = document.getElementById('brokersList');
+            if (!container) return;
             container.innerHTML = '';
-            appData.brokers.forEach(broker => {
-                const div = document.createElement('div');
+            (appData.brokers || []).forEach(function(broker) {
+                var active = broker.active !== false;
+                var div = document.createElement('div');
                 div.className = 'flex justify-between items-center p-2 bg-gray-50 rounded';
-                div.innerHTML = `
-                    <span>${broker.name}</span>
-                    <div class="space-x-2">
-                        <button onclick="editBroker(${broker.id})" class="text-blue-500 hover:text-blue-700">Edit</button>
-                        <button onclick="removeBroker(${broker.id})" class="text-red-500 hover:text-red-700">Ã—</button>
-                    </div>
-                `;
+                div.innerHTML = '<span>' + (active ? '' : '<span class="text-slate-400 line-through">') + broker.name + (active ? '' : '</span>') + '</span>' +
+                    '<div class="space-x-2">' +
+                    '<button onclick="editBroker(' + broker.id + ')" class="text-blue-500 hover:text-blue-700">Edit</button>' +
+                    (active ? '<button onclick="setBrokerActive(' + broker.id + ', false)" class="text-amber-600 hover:text-amber-800">Deactivate</button>' : '<button onclick="setBrokerActive(' + broker.id + ', true)" class="text-green-600 hover:text-green-800">Activate</button>') +
+                    '<button onclick="removeBroker(' + broker.id + ')" class="text-red-500 hover:text-red-700">\u00D7</button>' +
+                    '</div>';
                 container.appendChild(div);
             });
         }
+        function setBrokerActive(id, active) { var b = appData.brokers.find(function(x){ return x.id === id; }); if (b) { b.active = active; saveData(); updateBrokersList(); populateDropdowns(); } }
 
         function editBroker(id) {
             const broker = appData.brokers.find(b => b.id === id);
@@ -987,14 +1030,14 @@ function logout() {
             
             if (purchaseSupplier) {
                 purchaseSupplier.innerHTML = '<option value="">Select Supplier</option>';
-                appData.suppliers.forEach(supplier => {
+                (appData.suppliers || []).filter(function(s){ return s.active !== false; }).forEach(supplier => {
                     purchaseSupplier.innerHTML += `<option value="${supplier.id}">${supplier.name}</option>`;
                 });
             }
             
             if (purchaseItem) {
                 purchaseItem.innerHTML = '<option value="">Select Item</option>';
-                appData.items.forEach(item => {
+                (appData.items || []).filter(function(i){ return i.active !== false; }).forEach(item => {
                     purchaseItem.innerHTML += `<option value="${item.id}">${item.name}</option>`;
                 });
             }
@@ -1005,7 +1048,7 @@ function logout() {
             
             if (saleCustomer) {
                 saleCustomer.innerHTML = '<option value="">Select Customer</option>';
-                appData.customers.forEach(customer => {
+                (appData.customers || []).filter(function(c){ return c.active !== false; }).forEach(customer => {
                     saleCustomer.innerHTML += `<option value="${customer.id}">${customer.name}</option>`;
                 });
             }
@@ -1026,14 +1069,14 @@ function logout() {
             
             if (brokeragebroker) {
                 brokeragebroker.innerHTML = '<option value="">Select Broker</option>';
-                appData.brokers.forEach(broker => {
+                (appData.brokers || []).filter(function(b){ return b.active !== false; }).forEach(broker => {
                     brokeragebroker.innerHTML += `<option value="${broker.id}">${broker.name}</option>`;
                 });
             }
             
             if (brokerageItem) {
                 brokerageItem.innerHTML = '<option value="">Select Item</option>';
-                appData.items.forEach(item => {
+                (appData.items || []).filter(function(i){ return i.active !== false; }).forEach(item => {
                     brokerageItem.innerHTML += `<option value="${item.id}">${item.name}</option>`;
                 });
             }
@@ -1042,7 +1085,7 @@ function logout() {
             const deductionCustomer = document.getElementById('deductionCustomer');
             if (deductionCustomer) {
                 deductionCustomer.innerHTML = '<option value="">Select Customer</option>';
-                appData.customers.forEach(customer => {
+                (appData.customers || []).filter(function(c){ return c.active !== false; }).forEach(customer => {
                     deductionCustomer.innerHTML += `<option value="${customer.id}">${customer.name}</option>`;
                 });
             }
@@ -1168,7 +1211,7 @@ function logout() {
             if (item.name.toLowerCase().includes('coconut')) {
                 // For coconut: Net Quantity = Gross Quantity - Discount Quantity
                 netWeight = grossWeight - discountQty;
-                // Item Total = Rate Ã— Net Quantity
+                // Item Total = Rate x Net Quantity
                 total = netWeight * rate;
             } else if (item.unit.toLowerCase() === 'qty' || item.unit.toLowerCase() === 'quantity') {
                 total = amount;
@@ -1207,7 +1250,7 @@ function logout() {
                     return;
                 }
                 netWeight = grossWeight - discountQty;
-                // Item Total = Rate Ã— Net Quantity
+                // Item Total = Rate x Net Quantity
                 total = netWeight * rate;
             } else if (item.unit.toLowerCase() === 'qty' || item.unit.toLowerCase() === 'quantity') {
                 if (!amount) {
@@ -1234,7 +1277,7 @@ function logout() {
                 netWeight: netWeight, // Net quantity after discount
                 discountQty: discountQty, // Store discount for reference
                 rate: rate,
-                total: total, // Invoice amount = rate Ã— net quantity
+                total: total, // Invoice amount = rate x net quantity
                 isCoconut: item.name.toLowerCase().includes('coconut') // Flag for special handling
             };
             
@@ -1278,8 +1321,8 @@ function logout() {
                     <td class="px-4 py-3">${item.grossWeight}</td>
                     ${middleColumn}
                     <td class="px-4 py-3">${item.netWeight}</td>
-                    <td class="px-4 py-3">â‚¹${item.rate}</td>
-                    <td class="px-4 py-3">â‚¹${item.total.toFixed(2)}</td>
+                    <td class="px-4 py-3">${RU}${item.rate}</td>
+                    <td class="px-4 py-3">${RU}${item.total.toFixed(2)}</td>
                     <td class="px-4 py-3">
                         <button onclick="removeItemFromPurchase(${index})" class="text-red-500 hover:text-red-700 font-medium">Remove</button>
                     </td>
@@ -1404,6 +1447,13 @@ function logout() {
                 alert('Please fill in all required fields and add at least one item');
                 return;
             }
+
+            const invoiceTrim = (invoice || '').trim().toUpperCase();
+            const duplicatePurchase = appData.purchases.find(p => (p.invoice || '').trim().toUpperCase() === invoiceTrim && p.id !== editingPurchaseId);
+            if (duplicatePurchase) {
+                alert('This Purchase invoice number is already used. Please use a unique invoice number.');
+                return;
+            }
             
             const supplier = appData.suppliers.find(s => s.id == supplierId);
             if (!supplier) {
@@ -1452,6 +1502,7 @@ function logout() {
                     existingPurchase.othersEntries = othersEntries;
                     existingPurchase.grandTotal = grandTotal;
                     existingPurchase.balance = grandTotal - (existingPurchase.paid || 0);
+                    Object.assign(existingPurchase, getAuditMeta(false));
                     
                     // Add new inventory for updated purchase (using gross weight)
                     currentPurchaseItems.forEach(item => {
@@ -1479,7 +1530,8 @@ function logout() {
                     othersEntries: othersEntries,
                     grandTotal: grandTotal,
                     paid: 0, // Don't count advance as paid initially
-                    balance: grandTotal // Full amount is balance initially
+                    balance: grandTotal, // Full amount is balance initially
+                    ...getAuditMeta(true)
                 };
                 appData.purchases.push(purchase);
                 
@@ -1563,6 +1615,12 @@ function logout() {
                 alert('Please fill in all required fields');
                 return;
             }
+
+            const invoiceTrim = (invoice || '').trim().toUpperCase();
+            if (appData.purchases.some(p => (p.invoice || '').trim().toUpperCase() === invoiceTrim)) {
+                alert('This Purchase invoice number is already used. Please use a unique invoice number.');
+                return;
+            }
             
             const supplier = appData.suppliers.find(s => s.id == supplierId);
             const item = appData.items.find(i => i.id == itemId);
@@ -1605,7 +1663,8 @@ function logout() {
                 itemName: item.name,
                 quantity: quantity,
                 rate: rate,
-                total: total
+                total: total,
+                ...getAuditMeta(true)
             };
             
             appData.purchases.push(purchase);
@@ -1798,14 +1857,14 @@ function logout() {
                         </span>
                     </td>
                     <td class="px-4 py-3 text-right">
-                        <span class="font-semibold text-slate-800">â‚¹${grandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+                        <span class="font-semibold text-slate-800">${RU}${grandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
                     </td>
                     <td class="px-4 py-3 text-right">
-                        <span class="text-green-600 font-medium">â‚¹${paid.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+                        <span class="text-green-600 font-medium">${RU}${paid.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
                     </td>
                     <td class="px-4 py-3 text-right">
                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${currentBalance > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}">
-                            ${currentBalance > 0 ? 'â‚¹' + currentBalance.toLocaleString('en-IN', {minimumFractionDigits: 2}) : 'Paid âœ“'}
+                            ${currentBalance > 0 ? RU + currentBalance.toLocaleString('en-IN', {minimumFractionDigits: 2}) : 'Paid ' + CHECK}
                         </span>
                     </td>
                     <td class="px-4 py-3">
@@ -1843,8 +1902,8 @@ function logout() {
             const pendingEl = document.getElementById('purchasePendingAmount');
             
             if (countEl) countEl.textContent = totalCount;
-            if (amountEl) amountEl.textContent = `â‚¹${(totalAmount/1000).toFixed(0)}K`;
-            if (pendingEl) pendingEl.textContent = `â‚¹${(pendingAmount/1000).toFixed(0)}K`;
+            if (amountEl) amountEl.textContent = `${RU}${(totalAmount/1000).toFixed(0)}K`;
+            if (pendingEl) pendingEl.textContent = `${RU}${(pendingAmount/1000).toFixed(0)}K`;
         }
 
         // Calculate purchase total
@@ -1959,11 +2018,11 @@ function logout() {
                                     </div>
                                     <div class="flex justify-between items-center">
                                         <span class="text-xs text-slate-500">Avg Cost</span>
-                                        <span class="text-sm font-medium text-slate-700">â‚¹${avgCost.toFixed(2)}/${item.unit}</span>
+                                        <span class="text-sm font-medium text-slate-700">${RU}${avgCost.toFixed(2)}/${item.unit}</span>
                                     </div>
                                     <div class="pt-2 border-t border-slate-100 flex justify-between items-center">
                                         <span class="text-xs text-slate-500">Total Value</span>
-                                        <span class="text-sm font-bold text-emerald-600">â‚¹${stock.totalCost.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+                                        <span class="text-sm font-bold text-emerald-600">${RU}${stock.totalCost.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
                                     </div>
                                 </div>
                             </div>
@@ -1979,7 +2038,7 @@ function logout() {
             const invTotalValue = document.getElementById('invTotalValue');
             if (invTotalItems) invTotalItems.textContent = totalItems;
             if (invTotalQty) invTotalQty.textContent = totalQty.toLocaleString('en-IN');
-            if (invTotalValue) invTotalValue.textContent = `â‚¹${(totalValue/1000).toFixed(0)}K`;
+            if (invTotalValue) invTotalValue.textContent = `${RU}${(totalValue/1000).toFixed(0)}K`;
             
             // Update stock movement
             updateStockMovement();
@@ -2242,7 +2301,7 @@ function logout() {
             if (item && item.name.toLowerCase().includes('coconut')) {
                 // For coconut: Net Quantity = Gross - Discount
                 netWeight = grossWeight - discountQty;
-                // Item Total = Rate Ã— Net Quantity
+                // Item Total = Rate x Net Quantity
                 total = netWeight * rate;
             } else {
                 // For other items
@@ -2273,7 +2332,7 @@ function logout() {
             if (item.name.toLowerCase().includes('coconut')) {
                 // For coconut: Net Quantity = Gross - Discount
                 netWeight = grossWeight - discountQty;
-                // Item Total = Rate Ã— Net Quantity
+                // Item Total = Rate x Net Quantity
                 total = netWeight * rate;
             } else {
                 // For other items
@@ -2296,7 +2355,7 @@ function logout() {
                 netWeight: netWeight, // Net quantity after discount (for display)
                 discountQty: discountQty, // Store discount for reference
                 rate: rate,
-                total: total, // Invoice amount = rate Ã— net quantity
+                total: total, // Invoice amount = rate x net quantity
                 isCoconut: item.name.toLowerCase().includes('coconut') // Flag for special handling
             };
             
@@ -2339,8 +2398,8 @@ function logout() {
                     <td class="px-4 py-3">${item.grossWeight}</td>
                     ${middleColumn}
                     <td class="px-4 py-3">${item.netWeight}</td>
-                    <td class="px-4 py-3">â‚¹${item.rate}</td>
-                    <td class="px-4 py-3">â‚¹${item.total.toFixed(2)}</td>
+                    <td class="px-4 py-3">${RU}${item.rate}</td>
+                    <td class="px-4 py-3">${RU}${item.total.toFixed(2)}</td>
                     <td class="px-4 py-3">
                         <button onclick="removeItemFromSale(${index})" class="text-red-500 hover:text-red-700 font-medium">Remove</button>
                     </td>
@@ -2469,6 +2528,13 @@ function logout() {
                 alert('Please fill in all required fields and add at least one item');
                 return;
             }
+
+            const invoiceTrim = (invoice || '').trim().toUpperCase();
+            const duplicateSale = appData.sales.find(s => (s.invoice || '').trim().toUpperCase() === invoiceTrim && s.id !== editingSaleId);
+            if (duplicateSale) {
+                alert('This Sales invoice number is already used. Please use a unique invoice number.');
+                return;
+            }
             
             const customer = appData.customers.find(c => c.id == customerId);
             if (!customer) {
@@ -2520,6 +2586,7 @@ function logout() {
                     existingSale.grandTotal = grandTotal;
                     existingSale.balance = grandTotal - (existingSale.received || 0);
                     existingSale.linkedPurchases = [...linkedPurchases]; // Add linked purchases
+                    Object.assign(existingSale, getAuditMeta(false));
                     
                     // Deduct new inventory for updated sale (using gross weight)
                     currentSaleItems.forEach(item => {
@@ -2551,7 +2618,8 @@ function logout() {
                     grandTotal: grandTotal,
                     received: 0, // Don't count advance as received initially
                     balance: grandTotal, // Full amount is balance initially
-                    linkedPurchases: [...linkedPurchases] // Add linked purchases
+                    linkedPurchases: [...linkedPurchases], // Add linked purchases
+                    ...getAuditMeta(true)
                 };
                 appData.sales.push(sale);
                 
@@ -2668,7 +2736,7 @@ function logout() {
                             <div class="flex-1">
                                 <div class="font-semibold text-slate-800">Invoice: ${purchase.invoice}</div>
                                 <div class="text-sm text-slate-600">Date: ${purchase.date} | Supplier: ${purchase.supplierName}</div>
-                                <div class="text-sm text-slate-600">Total Amount: â‚¹${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</div>
+                                <div class="text-sm text-slate-600">Total Amount: ${RU}${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</div>
                                 <div class="text-sm font-medium ${availableQty > 0 ? 'text-green-600' : 'text-red-600'}">
                                     Available Quantity: ${availableQty.toFixed(2)} kg
                                 </div>
@@ -2764,9 +2832,9 @@ function logout() {
                         div.innerHTML = `
                             <div class="flex-1">
                                 <div class="font-medium text-slate-800">ðŸ“„ Invoice: ${purchase.invoice} | Supplier: ${purchase.supplierName}</div>
-                                <div class="text-sm text-slate-600">Quantity: ${link.quantityUsed} kg | Amount: â‚¹${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</div>
+                                <div class="text-sm text-slate-600">Quantity: ${link.quantityUsed} kg | Amount: ${RU}${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</div>
                             </div>
-                            <button onclick="removePurchaseLink(${link.purchaseId})" class="text-red-600 hover:text-red-800 font-bold">âœ•</button>
+                            <button onclick="removePurchaseLink(${link.purchaseId})" class="text-red-600 hover:text-red-800 font-bold">\u2716</button>
                         `;
                         container.appendChild(div);
                     }
@@ -2803,9 +2871,9 @@ function logout() {
                             <div class="flex-1">
                                 <div class="font-semibold text-slate-800">Invoice: ${purchase.invoice}</div>
                                 <div class="text-sm text-slate-600">Date: ${purchase.date} | Supplier: ${purchase.supplierName}</div>
-                                <div class="text-sm text-slate-600">Total Amount: â‚¹${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</div>
+                                <div class="text-sm text-slate-600">Total Amount: ${RU}${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</div>
                             </div>
-                            ${isSelected ? '<div class="text-orange-600 font-bold text-2xl">âœ“</div>' : ''}
+                            ${isSelected ? '<div class="text-orange-600 font-bold text-2xl">' + CHECK + '</div>' : ''}
                         </div>
                     `;
                     container.appendChild(div);
@@ -2861,9 +2929,9 @@ function logout() {
                             <div class="flex-1">
                                 <div class="font-semibold text-slate-800">Invoice: ${sale.invoice}</div>
                                 <div class="text-sm text-slate-600">Date: ${sale.date} | Customer: ${sale.customerName}</div>
-                                <div class="text-sm text-slate-600">Total Amount: â‚¹${(sale.grandTotal || sale.total || 0).toFixed(2)}</div>
+                                <div class="text-sm text-slate-600">Total Amount: ${RU}${(sale.grandTotal || sale.total || 0).toFixed(2)}</div>
                             </div>
-                            ${isSelected ? '<div class="text-blue-600 font-bold text-2xl">âœ“</div>' : ''}
+                            ${isSelected ? '<div class="text-blue-600 font-bold text-2xl">' + CHECK + '</div>' : ''}
                         </div>
                     `;
                     container.appendChild(div);
@@ -2914,9 +2982,9 @@ function logout() {
                     div.innerHTML = `
                         <div class="flex-1">
                             <div class="font-medium text-slate-800">ðŸ“¦ Purchase: ${deductionLinkedPurchase.invoice}</div>
-                            <div class="text-sm text-slate-600">Supplier: ${deductionLinkedPurchase.supplier} | Amount: â‚¹${deductionLinkedPurchase.amount.toFixed(2)}</div>
+                            <div class="text-sm text-slate-600">Supplier: ${deductionLinkedPurchase.supplier} | Amount: ${RU}${deductionLinkedPurchase.amount.toFixed(2)}</div>
                         </div>
-                        <button onclick="removeDeductionPurchaseLink()" class="text-red-600 hover:text-red-800 font-bold">âœ•</button>
+                        <button onclick="removeDeductionPurchaseLink()" class="text-red-600 hover:text-red-800 font-bold">\u2716</button>
                     `;
                     container.appendChild(div);
                 }
@@ -2927,9 +2995,9 @@ function logout() {
                     div.innerHTML = `
                         <div class="flex-1">
                             <div class="font-medium text-slate-800">ðŸ›’ Sale: ${deductionLinkedSale.invoice}</div>
-                            <div class="text-sm text-slate-600">Customer: ${deductionLinkedSale.customer} | Amount: â‚¹${deductionLinkedSale.amount.toFixed(2)}</div>
+                            <div class="text-sm text-slate-600">Customer: ${deductionLinkedSale.customer} | Amount: ${RU}${deductionLinkedSale.amount.toFixed(2)}</div>
                         </div>
-                        <button onclick="removeDeductionSaleLink()" class="text-red-600 hover:text-red-800 font-bold">âœ•</button>
+                        <button onclick="removeDeductionSaleLink()" class="text-red-600 hover:text-red-800 font-bold">\u2716</button>
                     `;
                     container.appendChild(div);
                 }
@@ -2955,6 +3023,11 @@ function logout() {
             const rate = parseFloat(document.getElementById('saleRate').value);
             
             if (date && invoice && customerId && itemId && quantity && rate) {
+                const invoiceTrim = (invoice || '').trim().toUpperCase();
+                if (appData.sales.some(s => (s.invoice || '').trim().toUpperCase() === invoiceTrim)) {
+                    alert('This Sales invoice number is already used. Please use a unique invoice number.');
+                    return;
+                }
                 // Check if enough stock is available
                 if (!appData.inventory[itemId] || appData.inventory[itemId].quantity < quantity) {
                     alert('Insufficient stock available!');
@@ -2975,7 +3048,8 @@ function logout() {
                     itemName: item.name,
                     quantity: quantity,
                     rate: rate,
-                    total: total
+                    total: total,
+                    ...getAuditMeta(true)
                 };
                 
                 appData.sales.push(sale);
@@ -3111,14 +3185,14 @@ function logout() {
                         </span>
                     </td>
                     <td class="px-4 py-3 text-right">
-                        <span class="font-semibold text-slate-800">â‚¹${grandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+                        <span class="font-semibold text-slate-800">${RU}${grandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
                     </td>
                     <td class="px-4 py-3 text-right">
-                        <span class="text-green-600 font-medium">â‚¹${received.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+                        <span class="text-green-600 font-medium">${RU}${received.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
                     </td>
                     <td class="px-4 py-3 text-right">
                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${currentBalance > 0 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}">
-                            ${currentBalance > 0 ? 'â‚¹' + currentBalance.toLocaleString('en-IN', {minimumFractionDigits: 2}) : 'Received âœ“'}
+                            ${currentBalance > 0 ? RU + currentBalance.toLocaleString('en-IN', {minimumFractionDigits: 2}) : 'Received ' + CHECK}
                         </span>
                     </td>
                     <td class="px-4 py-3">
@@ -3156,8 +3230,8 @@ function logout() {
             const pendingEl = document.getElementById('salesPendingAmount');
             
             if (countEl) countEl.textContent = totalCount;
-            if (amountEl) amountEl.textContent = `â‚¹${(totalAmount/1000).toFixed(0)}K`;
-            if (pendingEl) pendingEl.textContent = `â‚¹${(pendingAmount/1000).toFixed(0)}K`;
+            if (amountEl) amountEl.textContent = `${RU}${(totalAmount/1000).toFixed(0)}K`;
+            if (pendingEl) pendingEl.textContent = `${RU}${(pendingAmount/1000).toFixed(0)}K`;
         }
 
         // Brokerage functions
@@ -3298,7 +3372,7 @@ function logout() {
                     <td class="px-4 py-3">${entry.brokerName}</td>
                     <td class="px-4 py-3">${entry.itemName}</td>
                     <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded-full ${entry.type === 'Purchase' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}">${entry.type}</span></td>
-                    <td class="px-4 py-3">â‚¹${entry.amount}</td>
+                    <td class="px-4 py-3">${RU}${entry.amount}</td>
                     <td class="px-4 py-3">${entry.reference}</td>
                     <td class="px-4 py-3">
                         <div class="flex items-center gap-1">
@@ -3351,7 +3425,7 @@ function logout() {
                         <p><strong>Broker:</strong> ${entry.brokerName}</p>
                         <p><strong>Item:</strong> ${entry.itemName}</p>
                         <p><strong>Type:</strong> ${entry.type}</p>
-                        <p><strong>Amount:</strong> â‚¹${entry.amount}</p>
+                        <p><strong>Amount:</strong> ${RU}${entry.amount}</p>
                         <p><strong>Reference Invoice:</strong> ${entry.reference}</p>
                     </div>
                 </body>
@@ -3399,7 +3473,7 @@ function logout() {
             };
             
             document.getElementById('paymentModalTitle').textContent = 'Pay Brokerage to Broker';
-            document.getElementById('balanceDisplay').textContent = `Amount: â‚¹${entry.amount.toFixed(2)}`;
+            document.getElementById('balanceDisplay').textContent = `Amount: ${RU}${entry.amount.toFixed(2)}`;
             document.getElementById('paymentAmount').value = entry.amount;
             document.getElementById('paymentMode').value = '';
             document.getElementById('paidThrough').value = '';
@@ -3562,7 +3636,7 @@ function logout() {
                         supplier: { id: splitSupplierId, name: supplier.name, amount: splitSupplierAmount }
                     };
                     
-                    adjustmentEntityName = `${broker.name} (â‚¹${splitBrokerAmount}) + ${supplier.name} (â‚¹${splitSupplierAmount})`;
+                    adjustmentEntityName = `${broker.name} (${RU}${splitBrokerAmount}) + ${supplier.name} (${RU}${splitSupplierAmount})`;
                     
                     // Create adjustment entries
                     if (!appData.adjustments) appData.adjustments = [];
@@ -3640,7 +3714,7 @@ function logout() {
                 deductionLinkedSale = null;
                 updateDeductionLinkedTransactionsDisplay();
                 
-                alert(`Deduction entry added successfully! Loss amount: â‚¹${lossAmount.toFixed(2)}`);
+                alert(`Deduction entry added successfully! Loss amount: ${RU}${lossAmount.toFixed(2)}`);
             }
         }
 
@@ -3713,7 +3787,7 @@ function logout() {
             paginatedDeductions.forEach(deduction => {
                 let adjustmentText = deduction.adjustmentType || 'Loss';
                 if (deduction.adjustmentEntityName && deduction.adjustmentAmount) {
-                    adjustmentText += ` (${deduction.adjustmentEntityName}: â‚¹${deduction.adjustmentAmount})`;
+                    adjustmentText += ` (${deduction.adjustmentEntityName}: ${RU}${deduction.adjustmentAmount})`;
                 }
                 
                 const row = document.createElement('tr');
@@ -3722,10 +3796,10 @@ function logout() {
                     <td class="px-4 py-3">${deduction.date}</td>
                     <td class="px-4 py-3">${deduction.customerName}</td>
                     <td class="px-4 py-3">${deduction.invoice}</td>
-                    <td class="px-4 py-3">â‚¹${deduction.amount}</td>
+                    <td class="px-4 py-3">${RU}${deduction.amount}</td>
                     <td class="px-4 py-3">${deduction.reason}</td>
                     <td class="px-4 py-3">${adjustmentText}</td>
-                    <td class="px-4 py-3 text-red-600 font-medium">â‚¹${(deduction.lossAmount || deduction.amount).toFixed(2)}</td>
+                    <td class="px-4 py-3 text-red-600 font-medium">${RU}${(deduction.lossAmount || deduction.amount).toFixed(2)}</td>
                     <td class="px-4 py-3">
                         <div class="flex items-center gap-1">
                             <button onclick="editDeduction(${deduction.id})" class="action-btn action-edit" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg></button>
@@ -3783,15 +3857,15 @@ function logout() {
             });
             
             // Update key metrics
-            document.getElementById('netPayables').textContent = `â‚¹${(netPayables || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-            document.getElementById('netReceivables').textContent = `â‚¹${(netReceivables || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-            document.getElementById('stockValue').textContent = `â‚¹${(stockValue || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+            document.getElementById('netPayables').textContent = `${RU}${(netPayables || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+            document.getElementById('netReceivables').textContent = `${RU}${(netReceivables || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+            document.getElementById('stockValue').textContent = `${RU}${(stockValue || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
             
             // Net Position
             const netPosition = netReceivables - netPayables;
             const netPositionEl = document.getElementById('netPosition');
             if (netPositionEl) {
-                netPositionEl.textContent = `${netPosition >= 0 ? '+' : ''}â‚¹${netPosition.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+                netPositionEl.textContent = `${netPosition >= 0 ? '+' : ''}${RU}${netPosition.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
             }
             
             // Update last updated time
@@ -3812,7 +3886,7 @@ function logout() {
                             <span class="font-medium text-slate-700">${detail.name}</span>
                             <div class="flex items-center gap-2">
                                 <span class="text-slate-500">${detail.quantity.toFixed(1)} ${detail.unit}</span>
-                                <span class="text-amber-600 font-bold">â‚¹${detail.value.toLocaleString('en-IN')}</span>
+                                <span class="text-amber-600 font-bold">${RU}${detail.value.toLocaleString('en-IN')}</span>
                             </div>
                         </div>
                     `).join('');
@@ -3838,7 +3912,7 @@ function logout() {
                             <span class="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">${i + 1}</span>
                             <span class="flex-1 font-medium text-slate-700 truncate">${s.name}</span>
                             <span class="text-slate-500">${s.count} orders</span>
-                            <span class="text-blue-600 font-bold">â‚¹${(s.total/1000).toFixed(0)}K</span>
+                            <span class="text-blue-600 font-bold">${RU}${(s.total/1000).toFixed(0)}K</span>
                         </div>
                     `).join('');
                 }
@@ -3862,7 +3936,7 @@ function logout() {
                             <span class="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-xs">${i + 1}</span>
                             <span class="flex-1 font-medium text-slate-700 truncate">${c.name}</span>
                             <span class="text-slate-500">${c.count} orders</span>
-                            <span class="text-green-600 font-bold">â‚¹${(c.total/1000).toFixed(0)}K</span>
+                            <span class="text-green-600 font-bold">${RU}${(c.total/1000).toFixed(0)}K</span>
                         </div>
                     `).join('');
                 }
@@ -3891,7 +3965,7 @@ function logout() {
                                 <p class="text-slate-400">${t.date} â€¢ ${t.invoice}</p>
                             </div>
                             <span class="${t.type === 'sale' ? 'text-green-600' : 'text-red-600'} font-bold">
-                                ${t.type === 'sale' ? '+' : '-'}â‚¹${(t.amount || 0).toLocaleString('en-IN')}
+                                ${t.type === 'sale' ? '+' : '-'}${RU}${(t.amount || 0).toLocaleString('en-IN')}
                             </span>
                         </div>
                     `).join('');
@@ -3916,7 +3990,7 @@ function logout() {
                 if (alertsCountEl) alertsCountEl.textContent = `${totalAlerts} pending`;
                 
                 if (totalAlerts === 0) {
-                    paymentAlertsEl.innerHTML = '<div class="text-xs text-green-500 italic text-center py-4">âœ“ All payments cleared</div>';
+                    paymentAlertsEl.innerHTML = '<div class="text-xs text-green-500 italic text-center py-4">' + CHECK + ' All payments cleared</div>';
                 } else {
                     let alertsHtml = '';
                     unpaidPurchases.forEach(p => {
@@ -3925,7 +3999,7 @@ function logout() {
                             <div class="flex items-center gap-2 text-xs py-2 px-2 bg-red-50 rounded-lg border border-red-100">
                                 <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                 <span class="flex-1 text-slate-700">Pay <strong>${p.supplierName}</strong></span>
-                                <span class="text-red-600 font-bold">â‚¹${balance.toLocaleString('en-IN')}</span>
+                                <span class="text-red-600 font-bold">${RU}${balance.toLocaleString('en-IN')}</span>
                             </div>
                         `;
                     });
@@ -3935,11 +4009,36 @@ function logout() {
                             <div class="flex items-center gap-2 text-xs py-2 px-2 bg-amber-50 rounded-lg border border-amber-100">
                                 <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                 <span class="flex-1 text-slate-700">Collect from <strong>${s.customerName}</strong></span>
-                                <span class="text-amber-600 font-bold">â‚¹${balance.toLocaleString('en-IN')}</span>
+                                <span class="text-amber-600 font-bold">${RU}${balance.toLocaleString('en-IN')}</span>
                             </div>
                         `;
                     });
                     paymentAlertsEl.innerHTML = alertsHtml;
+                }
+            }
+            
+            // Low Stock Alerts (items with minStock set and current qty below it)
+            var lowStockAlertsEl = document.getElementById('lowStockAlerts');
+            var lowStockCountEl = document.getElementById('lowStockCount');
+            if (lowStockAlertsEl && lowStockCountEl) {
+                var lowStockList = [];
+                (appData.items || []).forEach(function(item) {
+                    if (item.active === false) return;
+                    var minStock = parseFloat(item.minStock);
+                    if (!minStock || minStock <= 0) return;
+                    var inv = appData.inventory[item.id];
+                    var qty = inv ? inv.quantity : 0;
+                    if (qty < minStock) lowStockList.push({ name: item.name, qty: qty, min: minStock, unit: item.unit || 'kg' });
+                });
+                lowStockCountEl.textContent = lowStockList.length;
+                if (lowStockList.length === 0) {
+                    lowStockAlertsEl.innerHTML = '<div class="text-xs text-slate-400 italic text-center py-4">No low stock items</div>';
+                } else {
+                    lowStockAlertsEl.innerHTML = lowStockList.map(function(l) {
+                        return '<div class="flex items-center gap-2 text-xs py-2 px-2 bg-amber-50 rounded-lg border border-amber-100">' +
+                            '<span class="flex-1 font-medium text-slate-700">' + l.name + '</span>' +
+                            '<span class="text-amber-600 font-bold">' + l.qty + ' / ' + l.min + ' ' + l.unit + '</span></div>';
+                    }).join('');
                 }
             }
             
@@ -4012,10 +4111,10 @@ function logout() {
             const chartGrossProfit = document.getElementById('chartGrossProfit');
             const chartTransactions = document.getElementById('chartTransactions');
             
-            if (chartTotalSales) chartTotalSales.textContent = `â‚¹${(totalSalesInPeriod/1000).toFixed(0)}K`;
-            if (chartTotalPurchases) chartTotalPurchases.textContent = `â‚¹${(totalPurchasesInPeriod/1000).toFixed(0)}K`;
+            if (chartTotalSales) chartTotalSales.textContent = `${RU}${(totalSalesInPeriod/1000).toFixed(0)}K`;
+            if (chartTotalPurchases) chartTotalPurchases.textContent = `${RU}${(totalPurchasesInPeriod/1000).toFixed(0)}K`;
             if (chartGrossProfit) {
-                chartGrossProfit.textContent = `${grossProfit >= 0 ? '+' : ''}â‚¹${(grossProfit/1000).toFixed(0)}K`;
+                chartGrossProfit.textContent = `${grossProfit >= 0 ? '+' : ''}${RU}${(grossProfit/1000).toFixed(0)}K`;
                 chartGrossProfit.className = `text-lg font-bold ${grossProfit >= 0 ? 'text-blue-700' : 'text-red-700'}`;
             }
             if (chartTransactions) chartTransactions.textContent = totalTransactions;
@@ -4053,15 +4152,15 @@ function logout() {
             // Update center value and legend
             if (donutCenterValue) {
                 const profitK = grossProfit / 1000;
-                donutCenterValue.textContent = `${grossProfit >= 0 ? '' : '-'}â‚¹${Math.abs(profitK).toFixed(0)}K`;
+                donutCenterValue.textContent = `${grossProfit >= 0 ? '' : '-'}${RU}${Math.abs(profitK).toFixed(0)}K`;
                 donutCenterValue.className = `text-xl font-bold ${grossProfit >= 0 ? 'text-green-600' : 'text-red-600'}`;
             }
             if (donutProfitPercent) {
                 donutProfitPercent.textContent = `${profitMargin >= 0 ? '+' : ''}${profitMargin.toFixed(1)}%`;
                 donutProfitPercent.className = `text-xs font-semibold ${profitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`;
             }
-            if (donutSalesValue) donutSalesValue.textContent = `â‚¹${(totalSalesInPeriod/1000).toFixed(0)}K`;
-            if (donutPurchasesValue) donutPurchasesValue.textContent = `â‚¹${(totalPurchasesInPeriod/1000).toFixed(0)}K`;
+            if (donutSalesValue) donutSalesValue.textContent = `${RU}${(totalSalesInPeriod/1000).toFixed(0)}K`;
+            if (donutPurchasesValue) donutPurchasesValue.textContent = `${RU}${(totalPurchasesInPeriod/1000).toFixed(0)}K`;
             if (donutMarginValue) {
                 donutMarginValue.textContent = `${profitMargin.toFixed(1)}%`;
                 donutMarginValue.className = `text-sm font-bold ${profitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`;
@@ -4141,7 +4240,7 @@ function logout() {
                                 </div>
                                 <div>
                                     <span class="font-semibold text-danger text-lg">${reminder.customerName}</span>
-                                    <p class="text-sm text-danger/80 font-medium">Outstanding: â‚¹${reminder.balance.toLocaleString()}</p>
+                                    <p class="text-sm text-danger/80 font-medium">Outstanding: ${RU}${reminder.balance.toLocaleString()}</p>
                                     <p class="text-xs text-danger/60">${reminder.daysSince} days since last transaction</p>
                                 </div>
                             </div>
@@ -4231,9 +4330,9 @@ function logout() {
             const netProfit = totalRevenue - totalCosts - totalBrokerage - totalDeductionsAmount;
             
             // Update summary
-            document.getElementById('totalRevenue').textContent = `â‚¹${totalRevenue.toFixed(2)}`;
-            document.getElementById('totalCosts').textContent = `â‚¹${(totalCosts + totalBrokerage).toFixed(2)}`;
-            document.getElementById('netProfit').textContent = `â‚¹${netProfit.toFixed(2)}`;
+            document.getElementById('totalRevenue').textContent = `${RU}${totalRevenue.toFixed(2)}`;
+            document.getElementById('totalCosts').textContent = `${RU}${(totalCosts + totalBrokerage).toFixed(2)}`;
+            document.getElementById('netProfit').textContent = `${RU}${netProfit.toFixed(2)}`;
             
             // Create P&L rows based on linked purchases
             const pnlRows = [];
@@ -4359,13 +4458,13 @@ function logout() {
                     <td class="px-4 py-3 bg-blue-50/30">${row.purchaseDate || '-'}</td>
                     <td class="px-4 py-3 bg-blue-50/30">${row.purchaseInvoice || '-'}</td>
                     <td class="px-4 py-3 bg-blue-50/30">${row.purchaseSupplier || '-'}</td>
-                    <td class="px-4 py-3 bg-blue-50/30 border-r-2 border-r-slate-300">${row.purchaseTotal > 0 ? `â‚¹${row.purchaseTotal.toFixed(2)}` : '-'}</td>
+                    <td class="px-4 py-3 bg-blue-50/30 border-r-2 border-r-slate-300">${row.purchaseTotal > 0 ? `${RU}${row.purchaseTotal.toFixed(2)}` : '-'}</td>
                     <td class="px-4 py-3 bg-green-50/30">${row.saleDate || '-'}</td>
                     <td class="px-4 py-3 bg-green-50/30">${row.saleInvoice || '-'}</td>
                     <td class="px-4 py-3 bg-green-50/30">${row.saleCustomer || '-'}</td>
-                    <td class="px-4 py-3 bg-green-50/30 border-r-2 border-r-slate-300">${row.saleTotal > 0 ? `â‚¹${row.saleTotal.toFixed(2)}` : '-'}</td>
+                    <td class="px-4 py-3 bg-green-50/30 border-r-2 border-r-slate-300">${row.saleTotal > 0 ? `${RU}${row.saleTotal.toFixed(2)}` : '-'}</td>
                     <td class="px-4 py-3 bg-amber-50/30 ${row.profitLoss >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}">
-                        ${row.profitLoss >= 0 ? '+' : ''}â‚¹${row.profitLoss.toFixed(2)}
+                        ${row.profitLoss >= 0 ? '+' : ''}${RU}${row.profitLoss.toFixed(2)}
                         ${row.quantityUsed ? `<br><small class="text-xs text-slate-500">(${row.quantityUsed} kg)</small>` : ''}
                     </td>
                 `;
@@ -4384,11 +4483,11 @@ function logout() {
                 grandTotalRow.className = 'bg-slate-200 font-bold text-lg';
                 grandTotalRow.innerHTML = `
                     <td colspan="3" class="px-4 py-4 text-right bg-blue-100">GRAND TOTAL:</td>
-                    <td class="px-4 py-4 bg-blue-100 border-r-2 border-r-slate-400">â‚¹${totalCosts.toFixed(2)}</td>
+                    <td class="px-4 py-4 bg-blue-100 border-r-2 border-r-slate-400">${RU}${totalCosts.toFixed(2)}</td>
                     <td colspan="3" class="px-4 py-4 bg-green-100"></td>
-                    <td class="px-4 py-4 bg-green-100 border-r-2 border-r-slate-400">â‚¹${totalRevenue.toFixed(2)}</td>
+                    <td class="px-4 py-4 bg-green-100 border-r-2 border-r-slate-400">${RU}${totalRevenue.toFixed(2)}</td>
                     <td class="px-4 py-4 bg-amber-100 ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}">
-                        ${netProfit >= 0 ? '+' : ''}â‚¹${netProfit.toFixed(2)}
+                        ${netProfit >= 0 ? '+' : ''}${RU}${netProfit.toFixed(2)}
                     </td>
                 `;
                 tbody.appendChild(grandTotalRow);
@@ -4427,9 +4526,9 @@ function logout() {
             csv += '\n';
             
             // Add summary
-            const totalRevenue = document.getElementById('totalRevenue').textContent.replace('â‚¹', '').replace(',', '');
-            const totalCosts = document.getElementById('totalCosts').textContent.replace('â‚¹', '').replace(',', '');
-            const netProfit = document.getElementById('netProfit').textContent.replace('â‚¹', '').replace(',', '');
+            const totalRevenue = document.getElementById('totalRevenue').textContent.replace(RU, '').replace(/,/g, '');
+            const totalCosts = document.getElementById('totalCosts').textContent.replace(RU, '').replace(/,/g, '');
+            const netProfit = document.getElementById('netProfit').textContent.replace(RU, '').replace(/,/g, '');
             
             csv += 'SUMMARY\n';
             csv += `Total Revenue,${totalRevenue}\n`;
@@ -4450,10 +4549,10 @@ function logout() {
                     const rowData = Array.from(cols).map(col => {
                         let text = col.textContent.trim();
                         // Clean up currency symbols and format numbers for Excel
-                        text = text.replace('â‚¹', '').replace(',', '');
+                        text = text.replace(RU, '').replace(/,/g, '');
                         // Handle negative numbers
-                        if (text.startsWith('-â‚¹')) {
-                            text = '-' + text.replace('-â‚¹', '');
+                        if (text.startsWith('-' + RU)) {
+                            text = '-' + text.replace('-' + RU, '');
                         }
                         // Wrap text fields in quotes to handle commas
                         if (isNaN(text) && text !== '-') {
@@ -4776,7 +4875,7 @@ function onPnLFilterChange() {
             
             balanceSection.style.display = 'block';
             entityNameElement.textContent = entityName;
-            balanceElement.textContent = `â‚¹${balance.toFixed(2)}`;
+            balanceElement.textContent = `${RU}${balance.toFixed(2)}`;
             
             // Show appropriate buttons based on ledger type and balance
             payButton.style.display = 'none';
@@ -4844,9 +4943,9 @@ function onPnLFilterChange() {
                     <td class="px-4 py-3">${entry.date}</td>
                     <td class="px-4 py-3">${entry.description}</td>
                     <td class="px-4 py-3">${entry.invoice}</td>
-                    <td class="px-4 py-3">${entry.debit ? 'â‚¹' + entry.debit.toFixed(2) : '-'}</td>
-                    <td class="px-4 py-3">${entry.credit ? 'â‚¹' + entry.credit.toFixed(2) : '-'}</td>
-                    <td class="px-4 py-3">â‚¹${entry.balance.toFixed(2)}</td>
+                    <td class="px-4 py-3">${entry.debit ? RU + entry.debit.toFixed(2) : '-'}</td>
+                    <td class="px-4 py-3">${entry.credit ? RU + entry.credit.toFixed(2) : '-'}</td>
+                    <td class="px-4 py-3">${RU}${entry.balance.toFixed(2)}</td>
                     <td class="px-4 py-3">
                         ${entry.canDelete ? `<button onclick="deleteLedgerEntry('${entry.id}', '${entry.type}', ${entry.sourceId})" class="text-red-600 hover:text-red-800 text-sm font-medium">Delete</button>` : '-'}
                     </td>
@@ -4866,7 +4965,34 @@ function onPnLFilterChange() {
         }
 
         // Reports functions
+        var currentReportType = '';
+        function getReportDateRange() {
+            var fromEl = document.getElementById('reportDateFrom');
+            var toEl = document.getElementById('reportDateTo');
+            return { from: fromEl ? fromEl.value : '', to: toEl ? toEl.value : '' };
+        }
+        function applyReportDateRange() {
+            var reportType = currentReportType || (document.getElementById('exportBtn') && document.getElementById('exportBtn').getAttribute('data-report-type'));
+            if (reportType) showReport(reportType);
+        }
+        function setDefaultReportDates() {
+            var d = new Date();
+            var fromEl = document.getElementById('reportDateFrom');
+            var toEl = document.getElementById('reportDateTo');
+            if (fromEl && !fromEl.value) {
+                fromEl.value = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+            }
+            if (toEl && !toEl.value) toEl.value = d.toISOString().slice(0, 10);
+        }
         function showReport(reportType) {
+            currentReportType = reportType;
+            setDefaultReportDates();
+            var range = getReportDateRange();
+            var dateFilter = function(d) {
+                if (range.from && d < range.from) return false;
+                if (range.to && d > range.to) return false;
+                return true;
+            };
             const reportTitle = document.getElementById('reportTitle');
             const exportBtn = document.getElementById('exportBtn');
             const tableHead = document.getElementById('reportTableHead');
@@ -4890,14 +5016,14 @@ function onPnLFilterChange() {
                     
                     tableBody.innerHTML = '';
                     let purchaseTotal = 0;
-                    appData.purchases.forEach(purchase => {
+                    (appData.purchases || []).filter(function(p){ return dateFilter(p.date); }).forEach(purchase => {
                         let itemsDisplay = '';
                         if (purchase.items && purchase.items.length > 0) {
                             itemsDisplay = purchase.items.map(item => 
-                                `${item.itemName} (${item.netWeight} kg @ â‚¹${item.rate})`
+                                `${item.itemName} (${item.netWeight} kg @ ${RU}${item.rate})`
                             ).join(', ');
                         } else if (purchase.itemName) {
-                            itemsDisplay = `${purchase.itemName} (${purchase.quantity || 0} @ â‚¹${purchase.rate || 0})`;
+                            itemsDisplay = `${purchase.itemName} (${purchase.quantity || 0} @ ${RU}${purchase.rate || 0})`;
                         } else {
                             itemsDisplay = 'No items';
                         }
@@ -4912,7 +5038,7 @@ function onPnLFilterChange() {
                             <td class="px-4 py-3">${purchase.invoice}</td>
                             <td class="px-4 py-3">${purchase.supplierName}</td>
                             <td class="px-4 py-3">${itemsDisplay}</td>
-                            <td class="px-4 py-3">â‚¹${amount.toFixed(2)}</td>
+                            <td class="px-4 py-3">${RU}${amount.toFixed(2)}</td>
                         `;
                         tableBody.appendChild(row);
                     });
@@ -4922,7 +5048,7 @@ function onPnLFilterChange() {
                     purchaseTotalRow.className = 'bg-slate-100 border-t-2 border-slate-400 font-bold';
                     purchaseTotalRow.innerHTML = `
                         <td class="px-4 py-4" colspan="4" style="text-align: right;">Total:</td>
-                        <td class="px-4 py-4">â‚¹${purchaseTotal.toFixed(2)}</td>
+                        <td class="px-4 py-4">${RU}${purchaseTotal.toFixed(2)}</td>
                     `;
                     tableBody.appendChild(purchaseTotalRow);
                     break;
@@ -4941,14 +5067,14 @@ function onPnLFilterChange() {
                     
                     tableBody.innerHTML = '';
                     let salesTotal = 0;
-                    appData.sales.forEach(sale => {
+                    (appData.sales || []).filter(function(s){ return dateFilter(s.date); }).forEach(sale => {
                         let itemsDisplay = '';
                         if (sale.items && sale.items.length > 0) {
                             itemsDisplay = sale.items.map(item => 
-                                `${item.itemName} (${item.netWeight} kg @ â‚¹${item.rate})`
+                                `${item.itemName} (${item.netWeight} kg @ ${RU}${item.rate})`
                             ).join(', ');
                         } else if (sale.itemName) {
-                            itemsDisplay = `${sale.itemName} (${sale.quantity || 0} @ â‚¹${sale.rate || 0})`;
+                            itemsDisplay = `${sale.itemName} (${sale.quantity || 0} @ ${RU}${sale.rate || 0})`;
                         } else {
                             itemsDisplay = 'No items';
                         }
@@ -4963,7 +5089,7 @@ function onPnLFilterChange() {
                             <td class="px-4 py-3">${sale.invoice}</td>
                             <td class="px-4 py-3">${sale.customerName}</td>
                             <td class="px-4 py-3">${itemsDisplay}</td>
-                            <td class="px-4 py-3">â‚¹${amount.toFixed(2)}</td>
+                            <td class="px-4 py-3">${RU}${amount.toFixed(2)}</td>
                         `;
                         tableBody.appendChild(row);
                     });
@@ -4973,7 +5099,7 @@ function onPnLFilterChange() {
                     salesTotalRow.className = 'bg-slate-100 border-t-2 border-slate-400 font-bold';
                     salesTotalRow.innerHTML = `
                         <td class="px-4 py-4" colspan="4" style="text-align: right;">Total:</td>
-                        <td class="px-4 py-4">â‚¹${salesTotal.toFixed(2)}</td>
+                        <td class="px-4 py-4">${RU}${salesTotal.toFixed(2)}</td>
                     `;
                     tableBody.appendChild(salesTotalRow);
                     break;
@@ -5003,7 +5129,7 @@ function onPnLFilterChange() {
                                 <td class="px-4 py-3">${item.category}</td>
                                 <td class="px-4 py-3">${stock.quantity}</td>
                                 <td class="px-4 py-3">${item.unit}</td>
-                                <td class="px-4 py-3">â‚¹${stock.totalCost.toFixed(2)}</td>
+                                <td class="px-4 py-3">${RU}${stock.totalCost.toFixed(2)}</td>
                             `;
                             tableBody.appendChild(row);
                         }
@@ -5024,7 +5150,7 @@ function onPnLFilterChange() {
                     `;
                     
                     tableBody.innerHTML = '';
-                    appData.brokerage.forEach(entry => {
+                    (appData.brokerage || []).filter(function(e){ return dateFilter(e.date); }).forEach(entry => {
                         const row = document.createElement('tr');
                         row.className = 'border-b border-slate-200';
                         row.innerHTML = `
@@ -5032,7 +5158,7 @@ function onPnLFilterChange() {
                             <td class="px-4 py-3">${entry.brokerName}</td>
                             <td class="px-4 py-3">${entry.itemName}</td>
                             <td class="px-4 py-3">${entry.type}</td>
-                            <td class="px-4 py-3">â‚¹${entry.amount}</td>
+                            <td class="px-4 py-3">${RU}${entry.amount}</td>
                             <td class="px-4 py-3">${entry.reference}</td>
                         `;
                         tableBody.appendChild(row);
@@ -5053,14 +5179,14 @@ function onPnLFilterChange() {
                     `;
                     
                     tableBody.innerHTML = '';
-                    appData.deductions.forEach(deduction => {
+                    (appData.deductions || []).filter(function(d){ return dateFilter(d.date); }).forEach(deduction => {
                         const row = document.createElement('tr');
                         row.className = 'border-b border-slate-200';
                         row.innerHTML = `
                             <td class="px-4 py-3">${deduction.date}</td>
                             <td class="px-4 py-3">${deduction.customerName}</td>
                             <td class="px-4 py-3">${deduction.invoice}</td>
-                            <td class="px-4 py-3">â‚¹${deduction.amount}</td>
+                            <td class="px-4 py-3">${RU}${deduction.amount}</td>
                             <td class="px-4 py-3">${deduction.reason}</td>
                             <td class="px-4 py-3">${deduction.adjustmentType}</td>
                         `;
@@ -5086,33 +5212,84 @@ function onPnLFilterChange() {
                     tableBody.innerHTML = `
                         <tr class="border-b border-slate-200">
                             <td class="px-4 py-3 font-medium">Total Purchases</td>
-                            <td class="px-4 py-3">â‚¹${totalPurchaseValue.toFixed(2)}</td>
+                            <td class="px-4 py-3">${RU}${totalPurchaseValue.toFixed(2)}</td>
                         </tr>
                         <tr class="border-b border-slate-200">
                             <td class="px-4 py-3 font-medium">Total Sales</td>
-                            <td class="px-4 py-3">â‚¹${totalSalesValue.toFixed(2)}</td>
+                            <td class="px-4 py-3">${RU}${totalSalesValue.toFixed(2)}</td>
                         </tr>
                         <tr class="border-b border-slate-200">
                             <td class="px-4 py-3 font-medium">Total Brokerage</td>
-                            <td class="px-4 py-3">â‚¹${totalBrokerageValue.toFixed(2)}</td>
+                            <td class="px-4 py-3">${RU}${totalBrokerageValue.toFixed(2)}</td>
                         </tr>
                         <tr class="border-b border-slate-200">
                             <td class="px-4 py-3 font-medium">Total Deductions</td>
-                            <td class="px-4 py-3">â‚¹${totalDeductionsValue.toFixed(2)}</td>
+                            <td class="px-4 py-3">${RU}${totalDeductionsValue.toFixed(2)}</td>
                         </tr>
                         <tr class="border-b border-slate-200">
                             <td class="px-4 py-3 font-medium">Current Inventory Value</td>
-                            <td class="px-4 py-3">â‚¹${totalInventoryValue.toFixed(2)}</td>
+                            <td class="px-4 py-3">${RU}${totalInventoryValue.toFixed(2)}</td>
                         </tr>
                         <tr class="border-b border-slate-200">
                             <td class="px-4 py-3 font-medium">Net Profit/Loss</td>
-                            <td class="px-4 py-3 ${(totalSalesValue - totalPurchaseValue - totalBrokerageValue - totalDeductionsValue) >= 0 ? 'text-green-600' : 'text-red-600'}">â‚¹${(totalSalesValue - totalPurchaseValue - totalBrokerageValue - totalDeductionsValue).toFixed(2)}</td>
+                            <td class="px-4 py-3 ${(totalSalesValue - totalPurchaseValue - totalBrokerageValue - totalDeductionsValue) >= 0 ? 'text-green-600' : 'text-red-600'}">${RU}${(totalSalesValue - totalPurchaseValue - totalBrokerageValue - totalDeductionsValue).toFixed(2)}</td>
                         </tr>
                     `;
                     break;
+                    
+                case 'ageing':
+                    reportTitle.textContent = 'Ageing Report (Receivables & Payables)';
+                    tableHead.innerHTML = '<tr class="bg-slate-50"><th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Party</th><th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Type</th><th class="px-4 py-3 text-right text-sm font-medium text-slate-700">0-30 days</th><th class="px-4 py-3 text-right text-sm font-medium text-slate-700">31-60 days</th><th class="px-4 py-3 text-right text-sm font-medium text-slate-700">61-90 days</th><th class="px-4 py-3 text-right text-sm font-medium text-slate-700">90+ days</th><th class="px-4 py-3 text-right text-sm font-medium text-slate-700">Total</th></tr>';
+                    tableBody.innerHTML = '';
+                    var today = new Date();
+                    today.setHours(0,0,0,0);
+                    function daysDiff(d) { var t = new Date(d); t.setHours(0,0,0,0); return Math.floor((today - t) / (24*60*60*1000)); }
+                    function bucket(days) {
+                        if (days <= 30) return 'b0';
+                        if (days <= 60) return 'b1';
+                        if (days <= 90) return 'b2';
+                        return 'b3';
+                    }
+                    var payablesByParty = {};
+                    (appData.purchases || []).forEach(function(p) {
+                        var bal = (p.grandTotal || p.total || 0) - (p.paid || 0);
+                        if (bal <= 0) return;
+                        var name = p.supplierName || 'Unknown';
+                        if (!payablesByParty[name]) payablesByParty[name] = { b0:0, b1:0, b2:0, b3:0, total: 0 };
+                        var days = daysDiff(p.date);
+                        var b = bucket(days);
+                        payablesByParty[name][b] += bal;
+                        payablesByParty[name].total += bal;
+                    });
+                    var receivablesByParty = {};
+                    (appData.sales || []).forEach(function(s) {
+                        var bal = (s.grandTotal || s.total || 0) - (s.received || 0);
+                        if (bal <= 0) return;
+                        var name = s.customerName || 'Unknown';
+                        if (!receivablesByParty[name]) receivablesByParty[name] = { b0:0, b1:0, b2:0, b3:0, total: 0 };
+                        var days = daysDiff(s.date);
+                        var b = bucket(days);
+                        receivablesByParty[name][b] += bal;
+                        receivablesByParty[name].total += bal;
+                    });
+                    Object.keys(payablesByParty).forEach(function(name) {
+                        var o = payablesByParty[name];
+                        var tr = document.createElement('tr');
+                        tr.className = 'border-b border-slate-200';
+                        tr.innerHTML = '<td class="px-4 py-3 font-medium">' + name + '</td><td class="px-4 py-3 text-red-600">Payable</td><td class="px-4 py-3 text-right">' + RU + (o.b0||0).toFixed(2) + '</td><td class="px-4 py-3 text-right">' + RU + (o.b1||0).toFixed(2) + '</td><td class="px-4 py-3 text-right">' + RU + (o.b2||0).toFixed(2) + '</td><td class="px-4 py-3 text-right">' + RU + (o.b3||0).toFixed(2) + '</td><td class="px-4 py-3 text-right font-bold">' + RU + (o.total||0).toFixed(2) + '</td>';
+                        tableBody.appendChild(tr);
+                    });
+                    Object.keys(receivablesByParty).forEach(function(name) {
+                        var o = receivablesByParty[name];
+                        var tr = document.createElement('tr');
+                        tr.className = 'border-b border-slate-200';
+                        tr.innerHTML = '<td class="px-4 py-3 font-medium">' + name + '</td><td class="px-4 py-3 text-green-600">Receivable</td><td class="px-4 py-3 text-right">' + RU + (o.b0||0).toFixed(2) + '</td><td class="px-4 py-3 text-right">' + RU + (o.b1||0).toFixed(2) + '</td><td class="px-4 py-3 text-right">' + RU + (o.b2||0).toFixed(2) + '</td><td class="px-4 py-3 text-right">' + RU + (o.b3||0).toFixed(2) + '</td><td class="px-4 py-3 text-right font-bold">' + RU + (o.total||0).toFixed(2) + '</td>';
+                        tableBody.appendChild(tr);
+                    });
+                    break;
             }
             
-            if (tableBody.children.length === 0 && reportType !== 'summary') {
+            if (tableBody.children.length === 0 && reportType !== 'summary' && reportType !== 'ageing') {
                 tableBody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No data available for this report</td></tr>';
             }
         }
@@ -5313,8 +5490,8 @@ function onPnLFilterChange() {
                             <td class="border px-2 py-1 text-center">${item.grossWeight}</td>
                             ${middleColumn}
                             <td class="border px-2 py-1 text-center">${item.netWeight}</td>
-                            <td class="border px-2 py-1 text-right">â‚¹${item.rate}</td>
-                            <td class="border px-2 py-1 text-right">â‚¹${item.total.toFixed(2)}</td>
+                            <td class="border px-2 py-1 text-right">${RU}${item.rate}</td>
+                            <td class="border px-2 py-1 text-right">${RU}${item.total.toFixed(2)}</td>
                         </tr>
                     `;
                 });
@@ -5420,14 +5597,14 @@ function onPnLFilterChange() {
                     
                     <div class="totals">
                         <div style="text-align: right;">
-                            <div><strong>Items Total: â‚¹${(purchase.itemsTotal || purchase.total || 0).toFixed(2)}</strong></div>
-                            <div>Hammali: â‚¹${(purchase.hammali || 0).toFixed(2)}</div>
-                            <div>Advance: â‚¹${(purchase.advance || 0).toFixed(2)}</div>
+                            <div><strong>Items Total: ${RU}${(purchase.itemsTotal || purchase.total || 0).toFixed(2)}</strong></div>
+                            <div>Hammali: ${RU}${(purchase.hammali || 0).toFixed(2)}</div>
+                            <div>Advance: ${RU}${(purchase.advance || 0).toFixed(2)}</div>
                             ${purchase.othersEntries && purchase.othersEntries.length > 0 ? purchase.othersEntries.map(entry => 
-                                `<div>${entry.operation === 'add' ? '+' : '-'} ${entry.reason}: â‚¹${entry.amount.toFixed(2)}</div>`
+                                `<div>${entry.operation === 'add' ? '+' : '-'} ${entry.reason}: ${RU}${entry.amount.toFixed(2)}</div>`
                             ).join('') : ''}
                             <div class="font-bold" style="font-size: 18px; margin-top: 10px;">
-                                Grand Total: â‚¹${(purchase.grandTotal || purchase.total || 0).toFixed(2)}
+                                Grand Total: ${RU}${(purchase.grandTotal || purchase.total || 0).toFixed(2)}
                             </div>
                         </div>
                     </div>
@@ -5441,7 +5618,7 @@ function onPnLFilterChange() {
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div class="font-bold">Ledger Balance (${supplier ? supplier.name : 'Supplier'}):</div>
                             <div class="font-bold" style="font-size: 16px; color: ${ledgerBalance > 0 ? '#856404' : '#155724'};">
-                                â‚¹${ledgerBalance.toFixed(2)} ${ledgerBalance > 0 ? '(To Pay)' : ledgerBalance < 0 ? '(To Receive)' : '(Settled)'}
+                                ${RU}${ledgerBalance.toFixed(2)} ${ledgerBalance > 0 ? '(To Pay)' : ledgerBalance < 0 ? '(To Receive)' : '(Settled)'}
                             </div>
                         </div>
                     </div>
@@ -5485,8 +5662,8 @@ function onPnLFilterChange() {
                             <td class="border px-2 py-1 text-center">${item.grossWeight}</td>
                             ${middleColumn}
                             <td class="border px-2 py-1 text-center">${item.netWeight}</td>
-                            <td class="border px-2 py-1 text-right">â‚¹${item.rate}</td>
-                            <td class="border px-2 py-1 text-right">â‚¹${item.total.toFixed(2)}</td>
+                            <td class="border px-2 py-1 text-right">${RU}${item.rate}</td>
+                            <td class="border px-2 py-1 text-right">${RU}${item.total.toFixed(2)}</td>
                         </tr>
                     `;
                 });
@@ -5631,15 +5808,15 @@ function onPnLFilterChange() {
                     
                     <div class="totals">
                         <div style="text-align: right;">
-                            <div><strong>Items Total: â‚¹${(sale.itemsTotal || sale.total || 0).toFixed(2)}</strong></div>
-                            <div>Hammali: â‚¹${(sale.hammali || 0).toFixed(2)}</div>
-                            <div>Advance: â‚¹${(sale.advance || 0).toFixed(2)}</div>
-                            <div style="color: #d97706;"><strong>Truck Advance: â‚¹${(sale.truckAdvance || 0).toFixed(2)}</strong></div>
+                            <div><strong>Items Total: ${RU}${(sale.itemsTotal || sale.total || 0).toFixed(2)}</strong></div>
+                            <div>Hammali: ${RU}${(sale.hammali || 0).toFixed(2)}</div>
+                            <div>Advance: ${RU}${(sale.advance || 0).toFixed(2)}</div>
+                            <div style="color: #d97706;"><strong>Truck Advance: ${RU}${(sale.truckAdvance || 0).toFixed(2)}</strong></div>
                             ${sale.othersEntries && sale.othersEntries.length > 0 ? sale.othersEntries.map(entry => 
-                                `<div>${entry.operation === 'add' ? '+' : '-'} ${entry.reason}: â‚¹${entry.amount.toFixed(2)}</div>`
+                                `<div>${entry.operation === 'add' ? '+' : '-'} ${entry.reason}: ${RU}${entry.amount.toFixed(2)}</div>`
                             ).join('') : ''}
                             <div class="font-bold" style="font-size: 18px; margin-top: 10px;">
-                                Grand Total: â‚¹${(sale.grandTotal || sale.total || 0).toFixed(2)}
+                                Grand Total: ${RU}${(sale.grandTotal || sale.total || 0).toFixed(2)}
                             </div>
                         </div>
                     </div>
@@ -5653,7 +5830,7 @@ function onPnLFilterChange() {
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div class="font-bold">Ledger Balance (${customer ? customer.name : 'Customer'}):</div>
                             <div class="font-bold" style="font-size: 16px; color: ${ledgerBalance > 0 ? '#856404' : '#155724'};">
-                                â‚¹${ledgerBalance.toFixed(2)} ${ledgerBalance > 0 ? '(To Receive)' : ledgerBalance < 0 ? '(To Pay)' : '(Settled)'}
+                                ${RU}${ledgerBalance.toFixed(2)} ${ledgerBalance > 0 ? '(To Receive)' : ledgerBalance < 0 ? '(To Pay)' : '(Settled)'}
                             </div>
                         </div>
                     </div>
@@ -5704,8 +5881,8 @@ function onPnLFilterChange() {
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.grossWeight} ${item.unit}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.bags || item.discountQty || 0}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.netWeight} ${item.unit}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">â‚¹${item.rate.toFixed(2)}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm font-semibold">â‚¹${item.total.toFixed(2)}</td>
+                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${item.rate.toFixed(2)}</td>
+                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm font-semibold">${RU}${item.total.toFixed(2)}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -5732,7 +5909,7 @@ function onPnLFilterChange() {
                                     <tr>
                                         <td class="border border-slate-300 px-3 py-2 text-sm">${entry.description}</td>
                                         <td class="border border-slate-300 px-3 py-2 text-center text-sm">${entry.operation}</td>
-                                        <td class="border border-slate-300 px-3 py-2 text-right text-sm">â‚¹${entry.amount.toFixed(2)}</td>
+                                        <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${entry.amount.toFixed(2)}</td>
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -5773,28 +5950,28 @@ function onPnLFilterChange() {
                         <div class="grid grid-cols-2 gap-3 text-sm">
                             <div class="flex justify-between">
                                 <span class="text-slate-600">Items Total:</span>
-                                <span class="font-semibold">â‚¹${(purchase.itemsTotal || 0).toFixed(2)}</span>
+                                <span class="font-semibold">${RU}${(purchase.itemsTotal || 0).toFixed(2)}</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-slate-600">Hammali:</span>
-                                <span class="font-semibold">â‚¹${(purchase.hammali || 0).toFixed(2)}</span>
+                                <span class="font-semibold">${RU}${(purchase.hammali || 0).toFixed(2)}</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-slate-600">Advance:</span>
-                                <span class="font-semibold">â‚¹${(purchase.advance || 0).toFixed(2)}</span>
+                                <span class="font-semibold">${RU}${(purchase.advance || 0).toFixed(2)}</span>
                             </div>
                             <div></div>
                             <div class="flex justify-between pt-3 border-t-2 border-slate-300 col-span-2">
                                 <span class="text-slate-700 font-bold text-base">Grand Total:</span>
-                                <span class="font-bold text-xl text-blue-600">â‚¹${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</span>
+                                <span class="font-bold text-xl text-blue-600">${RU}${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</span>
                             </div>
                             <div class="flex justify-between pt-2 border-t border-slate-200">
                                 <span class="text-slate-600">Paid:</span>
-                                <span class="font-semibold text-green-600">â‚¹${(purchase.paid || 0).toFixed(2)}</span>
+                                <span class="font-semibold text-green-600">${RU}${(purchase.paid || 0).toFixed(2)}</span>
                             </div>
                             <div class="flex justify-between pt-2 border-t border-slate-200">
                                 <span class="text-slate-600">Balance:</span>
-                                <span class="font-semibold text-red-600">â‚¹${(purchase.balance || purchase.grandTotal || purchase.total || 0).toFixed(2)}</span>
+                                <span class="font-semibold text-red-600">${RU}${(purchase.balance || purchase.grandTotal || purchase.total || 0).toFixed(2)}</span>
                             </div>
                         </div>
                     </div>
@@ -5915,8 +6092,8 @@ function onPnLFilterChange() {
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.grossWeight} ${item.unit}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.bags || item.discountQty || 0}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.netWeight} ${item.unit}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">â‚¹${item.rate.toFixed(2)}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm font-semibold">â‚¹${item.total.toFixed(2)}</td>
+                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${item.rate.toFixed(2)}</td>
+                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm font-semibold">${RU}${item.total.toFixed(2)}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -5943,7 +6120,7 @@ function onPnLFilterChange() {
                                     <tr>
                                         <td class="border border-slate-300 px-3 py-2 text-sm">${entry.description}</td>
                                         <td class="border border-slate-300 px-3 py-2 text-center text-sm">${entry.operation}</td>
-                                        <td class="border border-slate-300 px-3 py-2 text-right text-sm">â‚¹${entry.amount.toFixed(2)}</td>
+                                        <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${entry.amount.toFixed(2)}</td>
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -5984,28 +6161,28 @@ function onPnLFilterChange() {
                         <div class="grid grid-cols-2 gap-3 text-sm">
                             <div class="flex justify-between">
                                 <span class="text-slate-600">Items Total:</span>
-                                <span class="font-semibold">â‚¹${(sale.itemsTotal || 0).toFixed(2)}</span>
+                                <span class="font-semibold">${RU}${(sale.itemsTotal || 0).toFixed(2)}</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-slate-600">Hammali:</span>
-                                <span class="font-semibold">â‚¹${(sale.hammali || 0).toFixed(2)}</span>
+                                <span class="font-semibold">${RU}${(sale.hammali || 0).toFixed(2)}</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-slate-600">Advance:</span>
-                                <span class="font-semibold">â‚¹${(sale.advance || 0).toFixed(2)}</span>
+                                <span class="font-semibold">${RU}${(sale.advance || 0).toFixed(2)}</span>
                             </div>
                             <div></div>
                             <div class="flex justify-between pt-3 border-t-2 border-slate-300 col-span-2">
                                 <span class="text-slate-700 font-bold text-base">Grand Total:</span>
-                                <span class="font-bold text-xl text-blue-600">â‚¹${(sale.grandTotal || sale.total || 0).toFixed(2)}</span>
+                                <span class="font-bold text-xl text-blue-600">${RU}${(sale.grandTotal || sale.total || 0).toFixed(2)}</span>
                             </div>
                             <div class="flex justify-between pt-2 border-t border-slate-200">
                                 <span class="text-slate-600">Received:</span>
-                                <span class="font-semibold text-green-600">â‚¹${(sale.received || 0).toFixed(2)}</span>
+                                <span class="font-semibold text-green-600">${RU}${(sale.received || 0).toFixed(2)}</span>
                             </div>
                             <div class="flex justify-between pt-2 border-t border-slate-200">
                                 <span class="text-slate-600">Balance:</span>
-                                <span class="font-semibold text-red-600">â‚¹${(sale.balance || sale.grandTotal || sale.total || 0).toFixed(2)}</span>
+                                <span class="font-semibold text-red-600">${RU}${(sale.balance || sale.grandTotal || sale.total || 0).toFixed(2)}</span>
                             </div>
                         </div>
                     </div>
@@ -6118,7 +6295,7 @@ function onPnLFilterChange() {
             };
             
             document.getElementById('paymentModalTitle').textContent = 'Record Payment to Supplier';
-            document.getElementById('balanceDisplay').textContent = `Balance: â‚¹${purchase.balance.toFixed(2)}`;
+            document.getElementById('balanceDisplay').textContent = `Balance: ${RU}${purchase.balance.toFixed(2)}`;
             document.getElementById('paymentAmount').value = '';
             document.getElementById('paymentMode').value = '';
             document.getElementById('paidThrough').value = '';
@@ -6140,7 +6317,7 @@ function onPnLFilterChange() {
             };
             
             document.getElementById('paymentModalTitle').textContent = 'Record Payment from Customer';
-            document.getElementById('balanceDisplay').textContent = `Balance: â‚¹${sale.balance.toFixed(2)}`;
+            document.getElementById('balanceDisplay').textContent = `Balance: ${RU}${sale.balance.toFixed(2)}`;
             document.getElementById('paymentAmount').value = '';
             document.getElementById('paymentMode').value = '';
             document.getElementById('paidThrough').value = '';
@@ -6152,6 +6329,39 @@ function onPnLFilterChange() {
         function closePaymentModal() {
             document.getElementById('paymentModal').classList.add('hidden');
             currentPaymentData = null;
+        }
+        function printPaymentVoucherFromModal() {
+            var titleEl = document.getElementById('paymentModalTitle');
+            var amountEl = document.getElementById('paymentAmount');
+            var modeEl = document.getElementById('paymentMode');
+            var throughEl = document.getElementById('paidThrough');
+            var remarksEl = document.getElementById('paymentRemarks');
+            var party = currentPaymentData ? currentPaymentData.party : '';
+            var invoice = currentPaymentData ? currentPaymentData.invoice : '';
+            var amount = amountEl ? parseFloat(amountEl.value) || 0 : 0;
+            var mode = modeEl ? (modeEl.options[modeEl.selectedIndex] && modeEl.options[modeEl.selectedIndex].text) || modeEl.value : '';
+            var paidThrough = throughEl ? throughEl.value : '';
+            var remarks = remarksEl ? remarksEl.value : '';
+            var companyName = (appData.company && appData.company.name) ? appData.company.name : 'ITCO';
+            var d = new Date();
+            var dateStr = d.toLocaleDateString('en-IN');
+            var timeStr = d.toLocaleTimeString('en-IN', { hour12: true });
+            var win = window.open('', '_blank');
+            win.document.write('<!DOCTYPE html><html><head><title>Payment Voucher</title></head><body style="font-family: Arial, sans-serif; padding: 24px; max-width: 400px;">' +
+                '<div style="border: 2px solid #333; padding: 20px;">' +
+                '<h2 style="margin: 0 0 16px 0; text-align: center;">PAYMENT VOUCHER</h2>' +
+                '<p style="margin: 4px 0;"><strong>Date:</strong> ' + dateStr + ' &nbsp; <strong>Time:</strong> ' + timeStr + '</p>' +
+                '<p style="margin: 4px 0;"><strong>Party:</strong> ' + (party || '-') + '</p>' +
+                '<p style="margin: 4px 0;"><strong>Invoice/Ref:</strong> ' + (invoice || '-') + '</p>' +
+                '<p style="margin: 4px 0;"><strong>Amount:</strong> ' + RU + ' ' + amount.toFixed(2) + '</p>' +
+                '<p style="margin: 4px 0;"><strong>Mode:</strong> ' + (mode || '-') + '</p>' +
+                (paidThrough ? '<p style="margin: 4px 0;"><strong>Paid Through:</strong> ' + paidThrough + '</p>' : '') +
+                (remarks ? '<p style="margin: 4px 0;"><strong>Remarks:</strong> ' + remarks + '</p>' : '') +
+                '<hr style="margin: 16px 0;">' +
+                '<p style="font-size: 12px; color: #666; text-align: center;">' + companyName + '</p>' +
+                '</div></body></html>');
+            win.document.close();
+            win.print();
         }
 
         function savePayment() {
@@ -6372,7 +6582,7 @@ function onPnLFilterChange() {
             };
             
             document.getElementById('paymentModalTitle').textContent = `Pay ${ledgerData.entityName}`;
-            document.getElementById('balanceDisplay').textContent = `Balance: â‚¹${ledgerData.balance.toFixed(2)}`;
+            document.getElementById('balanceDisplay').textContent = `Balance: ${RU}${ledgerData.balance.toFixed(2)}`;
             document.getElementById('paymentAmount').value = ledgerData.balance;
             document.getElementById('paymentMode').value = '';
             document.getElementById('paidThrough').value = '';
@@ -6394,7 +6604,7 @@ function onPnLFilterChange() {
             };
             
             document.getElementById('paymentModalTitle').textContent = `Receive from ${ledgerData.entityName}`;
-            document.getElementById('balanceDisplay').textContent = `Balance: â‚¹${ledgerData.balance.toFixed(2)}`;
+            document.getElementById('balanceDisplay').textContent = `Balance: ${RU}${ledgerData.balance.toFixed(2)}`;
             document.getElementById('paymentAmount').value = ledgerData.balance;
             document.getElementById('paymentMode').value = '';
             document.getElementById('paidThrough').value = '';
@@ -6418,7 +6628,7 @@ function onPnLFilterChange() {
             csv += `Generated on: ${new Date().toLocaleDateString()}\n`;
             csv += `Entity Type: ${ledgerData.type.charAt(0).toUpperCase() + ledgerData.type.slice(1)}\n`;
             csv += `Entity Name: ${ledgerData.entityName}\n`;
-            csv += `Current Balance: â‚¹${ledgerData.balance.toFixed(2)}\n`;
+            csv += `Current Balance: ${RU}${ledgerData.balance.toFixed(2)}\n`;
             csv += '\n';
             
             // Add table headers
@@ -6671,7 +6881,7 @@ function onPnLFilterChange() {
                         <span class="px-3 py-1 rounded-full text-xs font-medium ${typeClass}">${typeText}</span>
                     </td>
                     <td class="px-6 py-4 text-sm text-slate-700">${entry.entityName}</td>
-                    <td class="px-6 py-4 text-sm font-semibold text-gray-900">â‚¹${entry.amount.toFixed(2)}</td>
+                    <td class="px-6 py-4 text-sm font-semibold text-gray-900">${RU}${entry.amount.toFixed(2)}</td>
                     <td class="px-6 py-4 text-sm text-slate-600">${entry.reference || '-'}</td>
                     <td class="px-6 py-4 text-sm text-slate-600">${entry.description || '-'}</td>
                     <td class="px-6 py-4">
