@@ -681,11 +681,23 @@ function logout() {
             }
         }
 
+        function getMasterSearchTerm() {
+            var el = document.getElementById('masterDataSearch');
+            return (el && el.value) ? el.value.trim().toLowerCase() : '';
+        }
         function updateItemsList() {
             const container = document.getElementById('itemsList');
             if (!container) return;
+            var term = getMasterSearchTerm();
             container.innerHTML = '';
-            (appData.items || []).forEach(function(item) {
+            var items = (appData.items || []).filter(function(item) {
+                if (!term) return true;
+                var name = (item.name || '').toLowerCase();
+                var cat = (item.category || '').toLowerCase();
+                var unit = (item.unit || '').toLowerCase();
+                return name.indexOf(term) >= 0 || cat.indexOf(term) >= 0 || unit.indexOf(term) >= 0;
+            });
+            items.forEach(function(item) {
                 var minStr = (item.minStock != null && item.minStock > 0) ? ' Min: ' + item.minStock : '';
                 var active = item.active !== false;
                 var div = document.createElement('div');
@@ -698,6 +710,12 @@ function logout() {
                     '</div>';
                 container.appendChild(div);
             });
+        }
+        function applyMasterSearch() {
+            updateItemsList();
+            updateSuppliersList();
+            updateCustomersList();
+            updateBrokersList();
         }
 
         function setItemActive(id, active) {
@@ -794,8 +812,16 @@ function logout() {
         function updateSuppliersList() {
             const container = document.getElementById('suppliersList');
             if (!container) return;
+            var term = getMasterSearchTerm();
             container.innerHTML = '';
-            (appData.suppliers || []).forEach(function(supplier) {
+            var suppliers = (appData.suppliers || []).filter(function(s) {
+                if (!term) return true;
+                var n = (s.name || '').toLowerCase();
+                var m = (s.mobile || '').toLowerCase();
+                var a = (s.address || '').toLowerCase();
+                return n.indexOf(term) >= 0 || m.indexOf(term) >= 0 || a.indexOf(term) >= 0;
+            });
+            suppliers.forEach(function(supplier) {
                 var active = supplier.active !== false;
                 var div = document.createElement('div');
                 div.className = 'flex justify-between items-center p-2 bg-gray-50 rounded';
@@ -896,8 +922,16 @@ function logout() {
         function updateCustomersList() {
             const container = document.getElementById('customersList');
             if (!container) return;
+            var term = getMasterSearchTerm();
             container.innerHTML = '';
-            (appData.customers || []).forEach(function(customer) {
+            var customers = (appData.customers || []).filter(function(c) {
+                if (!term) return true;
+                var n = (c.name || '').toLowerCase();
+                var m = (c.mobile || '').toLowerCase();
+                var a = (c.address || '').toLowerCase();
+                return n.indexOf(term) >= 0 || m.indexOf(term) >= 0 || a.indexOf(term) >= 0;
+            });
+            customers.forEach(function(customer) {
                 var active = customer.active !== false;
                 var div = document.createElement('div');
                 div.className = 'flex justify-between items-center p-2 bg-gray-50 rounded';
@@ -996,8 +1030,16 @@ function logout() {
         function updateBrokersList() {
             const container = document.getElementById('brokersList');
             if (!container) return;
+            var term = getMasterSearchTerm();
             container.innerHTML = '';
-            (appData.brokers || []).forEach(function(broker) {
+            var brokers = (appData.brokers || []).filter(function(b) {
+                if (!term) return true;
+                var n = (b.name || '').toLowerCase();
+                var m = (b.mobile || '').toLowerCase();
+                var d = (b.details || '').toLowerCase();
+                return n.indexOf(term) >= 0 || m.indexOf(term) >= 0 || d.indexOf(term) >= 0;
+            });
+            brokers.forEach(function(broker) {
                 var active = broker.active !== false;
                 var div = document.createElement('div');
                 div.className = 'flex justify-between items-center p-2 bg-gray-50 rounded';
@@ -1845,6 +1887,8 @@ function logout() {
                 const paid = purchase.paid || 0;
                 const currentBalance = grandTotal - paid;
                 purchase.balance = currentBalance;
+                var linkedSales = (appData.sales || []).filter(function(s) { return s.linkedPurchases && s.linkedPurchases.some(function(lp) { return lp.purchaseId === purchase.id; }); });
+                var linkedBadge = linkedSales.length > 0 ? ' <span class="inline-block ml-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Linked to sale(s): ' + escapeHtml(linkedSales.map(function(s){ return s.invoice || s.id; }).join(', ')) + '">Linked</span>' : '';
                 
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-blue-50/50 transition-colors';
@@ -1853,7 +1897,7 @@ function logout() {
                         <span class="text-slate-600">${purchase.date}</span>
                     </td>
                     <td class="px-4 py-3">
-                        <span class="font-mono text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">${purchase.invoice}</span>
+                        <span class="font-mono text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">${purchase.invoice}</span>${linkedBadge}
                     </td>
                     <td class="px-4 py-3">
                         <span class="font-medium text-slate-700 text-sm">${escapeHtml(purchase.supplierName)}</span>
@@ -6544,7 +6588,17 @@ function onPnLFilterChange() {
             const purchase = appData.purchases.find(p => p.id === purchaseId);
             if (!purchase) return;
             
-            // Check if any items from this purchase have been sold
+            // Step 1: Block if any sale is explicitly linked to this purchase (process: Purchase first -> Sale of that purchase)
+            const salesLinkedToThisPurchase = (appData.sales || []).filter(function(sale) {
+                return sale.linkedPurchases && sale.linkedPurchases.some(function(lp) { return lp.purchaseId === purchaseId; });
+            });
+            if (salesLinkedToThisPurchase.length > 0) {
+                var invoiceList = salesLinkedToThisPurchase.map(function(s) { return s.invoice || ('Sale #' + s.id); }).join(', ');
+                alert('Cannot delete this purchase because it is linked to the following sale(s):\n\n' + invoiceList + '\n\nProcess: Purchase is first, then sale of that purchase. Remove this purchase from the linked list in those sales (Edit sale → Link to Purchase), or delete those sales first, then delete this purchase.');
+                return;
+            }
+            
+            // Check if any items from this purchase have been sold (extra safety for any sale using same items)
             let soldItems = [];
             if (purchase.items) {
                 purchase.items.forEach(purchaseItem => {
