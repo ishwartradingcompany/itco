@@ -77,10 +77,10 @@ function renderPagination(containerId, totalItems, currentPage, pageSize, onPage
                 </select>
             </div>
             <button class="pagination-btn" onclick="${onPageChange}(1)" ${currentPage === 1 ? 'disabled' : ''}>
-                Â« First
+                First
             </button>
             <button class="pagination-btn" onclick="${onPageChange}(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
-                â€¹ Prev
+                Prev
             </button>
             <div class="pagination-numbers">
     `;
@@ -113,10 +113,10 @@ function renderPagination(containerId, totalItems, currentPage, pageSize, onPage
     paginationHTML += `
             </div>
             <button class="pagination-btn" onclick="${onPageChange}(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>
-                Next â€º
+                Next
             </button>
             <button class="pagination-btn" onclick="${onPageChange}(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''}>
-                Last Â»
+                Last
             </button>
         </div>
     `;
@@ -3962,7 +3962,7 @@ function logout() {
                             </div>
                             <div class="flex-1">
                                 <p class="font-medium text-slate-700 truncate">${t.desc}</p>
-                                <p class="text-slate-400">${t.date} â€¢ ${t.invoice}</p>
+                                <p class="text-slate-400">${t.date} \u2022 ${t.invoice}</p>
                             </div>
                             <span class="${t.type === 'sale' ? 'text-green-600' : 'text-red-600'} font-bold">
                                 ${t.type === 'sale' ? '+' : '-'}${RU}${(t.amount || 0).toLocaleString('en-IN')}
@@ -4289,7 +4289,7 @@ function logout() {
       startDate = null; // skip filtering until user picks both dates
     }
   } else if (filterType === 'all' || !filterType) {
-    startDate = null; // no filtering â€” show all transactions
+    startDate = null; // no filtering - show all transactions
   }
 
   // Apply date filters if we have a startDate
@@ -6477,7 +6477,7 @@ function onPnLFilterChange() {
             if (soldItems.length > 0) {
                 let message = 'Cannot delete this purchase because the following items have been sold:\n\n';
                 soldItems.forEach(item => {
-                    message += `â€¢ ${item.itemName} (sold in: ${item.sales})\n`;
+                    message += `\u2022 ${item.itemName} (sold in: ${item.sales})\n`;
                 });
                 message += '\nPlease delete the related sales entries first, then try deleting this purchase.';
                 alert(message);
