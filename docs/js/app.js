@@ -3,6 +3,13 @@
         const BULLET = String.fromCharCode(0x2022);
         const CHECK = String.fromCharCode(0x2713);
 
+        // Escape user input for safe HTML display (XSS prevention)
+        function escapeHtml(str) {
+            if (str == null || str === '') return '';
+            var s = String(str);
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
         // Audit trail: who/when (uses currentUser from auth.js)
         function getAuditMeta(isNew) {
             const who = (typeof currentUserEmail !== 'undefined' && currentUserEmail) ? currentUserEmail : 'anonymous';
@@ -1849,7 +1856,7 @@ function logout() {
                         <span class="font-mono text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">${purchase.invoice}</span>
                     </td>
                     <td class="px-4 py-3">
-                        <span class="font-medium text-slate-700 text-sm">${purchase.supplierName}</span>
+                        <span class="font-medium text-slate-700 text-sm">${escapeHtml(purchase.supplierName)}</span>
                     </td>
                     <td class="px-4 py-3 text-sm text-slate-500">${purchase.truck || '-'}</td>
                     <td class="px-4 py-3">
@@ -3177,7 +3184,7 @@ function logout() {
                         <span class="font-mono text-sm font-medium text-green-600 bg-green-50 px-2 py-1 rounded">${sale.invoice}</span>
                     </td>
                     <td class="px-4 py-3">
-                        <span class="font-medium text-slate-700 text-sm">${sale.customerName}</span>
+                        <span class="font-medium text-slate-700 text-sm">${escapeHtml(sale.customerName)}</span>
                     </td>
                     <td class="px-4 py-3 text-sm text-slate-500">${sale.truck || '-'}</td>
                     <td class="px-4 py-3">
@@ -3199,7 +3206,8 @@ function logout() {
                     <td class="px-4 py-3">
                         <div class="flex items-center justify-center gap-1">
                             <button onclick="viewSale(${sale.id})" class="action-btn action-view" title="View"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg></button>
-                            <button onclick="printSaleInvoice(${sale.id})" class="action-btn action-print" title="Print"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
+                            <button onclick="printSaleInvoice(${sale.id})" class="action-btn action-print" title="Print Invoice"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
+                            <button onclick="printDeliveryChallan(${sale.id})" class="action-btn" title="Delivery Challan"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/><path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z"/></svg></button>
                             <button onclick="editSale(${sale.id})" class="action-btn action-edit" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg></button>
                             <button onclick="receiveSale(${sale.id})" class="action-btn action-pay" title="Receive Payment"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12v2H6V3zm0 4h12v2h-4.5c-.83 2.07-2.6 3.56-4.74 3.94L14 21h-2.5l-5.24-8H6v-2h4.5c1.38 0 2.56-.8 3.12-1.94L6 9V7z"/></svg></button>
                             <button onclick="deleteSale(${sale.id})" class="action-btn action-delete" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd"/></svg></button>
@@ -3961,11 +3969,11 @@ function logout() {
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${t.type === 'sale' ? 'M7 11l5-5m0 0l5 5m-5-5v12' : 'M17 13l-5 5m0 0l-5-5m5 5V6'}"/>
                                 </svg>
                             </div>
-                            <div class="flex-1">
-                                <p class="font-medium text-slate-700 truncate">${t.desc}</p>
-                                <p class="text-slate-400">${t.date} ${BULLET} ${t.invoice}</p>
+                            <div class="flex-1 min-w-0">
+                                <p class="font-medium text-slate-700 truncate">${escapeHtml(t.desc)}</p>
+                                <p class="text-slate-400">${escapeHtml(t.date)} ${BULLET} ${escapeHtml(t.invoice)}</p>
                             </div>
-                            <span class="${t.type === 'sale' ? 'text-green-600' : 'text-red-600'} font-bold">
+                            <span class="${t.type === 'sale' ? 'text-green-600' : 'text-red-600'} font-bold flex-shrink-0">
                                 ${t.type === 'sale' ? '+' : '-'}${RU}${(t.amount || 0).toLocaleString('en-IN')}
                             </span>
                         </div>
@@ -3996,20 +4004,24 @@ function logout() {
                     let alertsHtml = '';
                     unpaidPurchases.forEach(p => {
                         const balance = (p.grandTotal || p.total || 0) - (p.paid || 0);
+                        const daysOld = p.date ? Math.floor((Date.now() - new Date(p.date)) / (24 * 60 * 60 * 1000)) : 0;
+                        const isOverdue = daysOld > 30;
                         alertsHtml += `
                             <div class="flex items-center gap-2 text-xs py-2 px-2 bg-red-50 rounded-lg border border-red-100">
-                                <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                <span class="flex-1 text-slate-700">Pay <strong>${p.supplierName}</strong></span>
+                                <svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <span class="flex-1 text-slate-700">Pay <strong>${escapeHtml(p.supplierName)}</strong>${isOverdue ? ' <span class="inline-block px-1.5 py-0.5 rounded text-red-700 bg-red-200 font-semibold">Overdue</span>' : ''}</span>
                                 <span class="text-red-600 font-bold">${RU}${balance.toLocaleString('en-IN')}</span>
                             </div>
                         `;
                     });
                     unpaidSales.forEach(s => {
                         const balance = (s.grandTotal || s.total || 0) - (s.received || 0);
+                        const daysOld = s.date ? Math.floor((Date.now() - new Date(s.date)) / (24 * 60 * 60 * 1000)) : 0;
+                        const isOverdue = daysOld > 30;
                         alertsHtml += `
                             <div class="flex items-center gap-2 text-xs py-2 px-2 bg-amber-50 rounded-lg border border-amber-100">
-                                <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                <span class="flex-1 text-slate-700">Collect from <strong>${s.customerName}</strong></span>
+                                <svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <span class="flex-1 text-slate-700">Collect from <strong>${escapeHtml(s.customerName)}</strong>${isOverdue ? ' <span class="inline-block px-1.5 py-0.5 rounded text-amber-800 bg-amber-200 font-semibold">Overdue</span>' : ''}</span>
                                 <span class="text-amber-600 font-bold">${RU}${balance.toLocaleString('en-IN')}</span>
                             </div>
                         `;
@@ -4985,6 +4997,38 @@ function onPnLFilterChange() {
             }
             if (toEl && !toEl.value) toEl.value = d.toISOString().slice(0, 10);
         }
+        function applyReportDatePreset(value) {
+            var fromEl = document.getElementById('reportDateFrom');
+            var toEl = document.getElementById('reportDateTo');
+            var presetEl = document.getElementById('reportDatePreset');
+            if (!fromEl || !toEl || !value) return;
+            var d = new Date();
+            var from, to;
+            switch (value) {
+                case 'this_month':
+                    from = new Date(d.getFullYear(), d.getMonth(), 1);
+                    to = new Date();
+                    break;
+                case 'last_month':
+                    from = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+                    to = new Date(d.getFullYear(), d.getMonth(), 0);
+                    break;
+                case 'last_3_months':
+                    to = new Date();
+                    from = new Date(to);
+                    from.setMonth(from.getMonth() - 3);
+                    break;
+                case 'this_fy':
+                    from = d.getMonth() >= 3 ? new Date(d.getFullYear(), 2, 1) : new Date(d.getFullYear() - 1, 2, 1);
+                    to = new Date();
+                    break;
+                default: return;
+            }
+            fromEl.value = from.toISOString().slice(0, 10);
+            toEl.value = to.toISOString().slice(0, 10);
+            if (presetEl) presetEl.value = value;
+            applyReportDateRange();
+        }
         function showReport(reportType) {
             currentReportType = reportType;
             setDefaultReportDates();
@@ -4996,11 +5040,13 @@ function onPnLFilterChange() {
             };
             const reportTitle = document.getElementById('reportTitle');
             const exportBtn = document.getElementById('exportBtn');
+            const exportPdfBtn = document.getElementById('exportPdfBtn');
             const tableHead = document.getElementById('reportTableHead');
             const tableBody = document.getElementById('reportTableBody');
             
             exportBtn.style.display = 'block';
             exportBtn.setAttribute('data-report-type', reportType);
+            if (exportPdfBtn) { exportPdfBtn.style.display = 'block'; }
             
             switch (reportType) {
                 case 'purchases':
@@ -5295,6 +5341,17 @@ function onPnLFilterChange() {
             }
         }
 
+        function exportReportToPdf() {
+            var reportTitleEl = document.getElementById('reportTitle');
+            var table = document.getElementById('reportTable');
+            if (!table || !reportTitleEl) return;
+            var title = reportTitleEl.textContent || 'Report';
+            var win = window.open('', '_blank');
+            win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + escapeHtml(title) + '</title><style>body{font-family:Arial,sans-serif;margin:20px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #333;padding:8px;text-align:left;} th{background:#f0f0f0;}</style></head><body><h2>' + escapeHtml(title) + '</h2>' + table.outerHTML + '</body></html>');
+            win.document.close();
+            win.focus();
+            setTimeout(function() { win.print(); }, 250);
+        }
         function exportReport() {
             const reportType = document.getElementById('exportBtn').getAttribute('data-report-type');
             const table = document.getElementById('reportTable');
@@ -5850,6 +5907,38 @@ function onPnLFilterChange() {
             printWindow.print();
         }
 
+        function printDeliveryChallan(saleId) {
+            var sale = appData.sales.find(function(s) { return s.id === saleId; });
+            if (!sale) return;
+            var company = appData.company || {};
+            var customer = appData.customers.find(function(c) { return c.id == sale.customerId; });
+            var custName = (customer && customer.name) ? customer.name : (sale.customerName || 'Customer');
+            var challanNo = 'DC-' + (sale.date || '').replace(/-/g, '') + '-' + (sale.invoice || sale.id || '');
+            var itemsRows = '';
+            if (sale.items && sale.items.length) {
+                sale.items.forEach(function(item) {
+                    itemsRows += '<tr><td style="border:1px solid #000;padding:6px;">' + escapeHtml(item.itemName) + '</td><td style="border:1px solid #000;padding:6px;text-align:right;">' + (item.netWeight || item.grossWeight || '-') + '</td><td style="border:1px solid #000;padding:6px;">kg</td></tr>';
+                });
+            } else {
+                itemsRows = '<tr><td colspan="3" style="border:1px solid #000;padding:8px;text-align:center;">No items</td></tr>';
+            }
+            var win = window.open('', '_blank');
+            win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Delivery Challan - ' + escapeHtml(challanNo) + '</title><style>body{font-family:Arial,sans-serif;margin:20px;} .header{text-align:center;margin-bottom:20px;} table{width:100%;border-collapse:collapse;} .sig{ margin-top:40px; border:1px solid #000; padding:30px; width:220px; text-align:center;}</style></head><body>' +
+                '<div class="header"><h1>' + escapeHtml(company.name || 'ITCO') + '</h1><h2>DELIVERY CHALLAN</h2></div>' +
+                '<p><strong>Challan No:</strong> ' + escapeHtml(challanNo) + ' &nbsp; <strong>Date:</strong> ' + escapeHtml(sale.date || '') + ' &nbsp; <strong>Invoice Ref:</strong> ' + escapeHtml(sale.invoice || '') + '</p>' +
+                '<p><strong>Customer:</strong> ' + escapeHtml(custName) + '</p>' +
+                '<p><strong>Vehicle / Truck:</strong> ' + escapeHtml(sale.truck || '') + '</p>' +
+                '<table><thead><tr style="background:#f0f0f0;"><th style="border:1px solid #000;padding:8px;">Item</th><th style="border:1px solid #000;padding:8px;">Quantity</th><th style="border:1px solid #000;padding:8px;">Unit</th></tr></thead><tbody>' + itemsRows + '</tbody></table>' +
+                '<p style="margin-top:16px;"><strong>Remarks:</strong> _________________________________________</p>' +
+                '<div style="margin-top:40px;display:flex;justify-content:space-between;">' +
+                '<div class="sig">Receiver Signature<br/><br/><br/></div>' +
+                '<div class="sig">Authorised Signature</div>' +
+                '</div></body></html>');
+            win.document.close();
+            win.focus();
+            setTimeout(function() { win.print(); }, 250);
+        }
+
         let editingPurchaseId = null;
         let editingSaleId = null;
 
@@ -6355,6 +6444,7 @@ function onPnLFilterChange() {
                 '<p style="margin: 4px 0;"><strong>Party:</strong> ' + (party || '-') + '</p>' +
                 '<p style="margin: 4px 0;"><strong>Invoice/Ref:</strong> ' + (invoice || '-') + '</p>' +
                 '<p style="margin: 4px 0;"><strong>Amount:</strong> ' + RU + ' ' + amount.toFixed(2) + '</p>' +
+                '<p style="margin: 4px 0;"><strong>Amount in Words:</strong> ' + (typeof numberToWords === "function" ? numberToWords(amount) : amount.toFixed(2)) + '</p>' +
                 '<p style="margin: 4px 0;"><strong>Mode:</strong> ' + (mode || '-') + '</p>' +
                 (paidThrough ? '<p style="margin: 4px 0;"><strong>Paid Through:</strong> ' + paidThrough + '</p>' : '') +
                 (remarks ? '<p style="margin: 4px 0;"><strong>Remarks:</strong> ' + remarks + '</p>' : '') +
