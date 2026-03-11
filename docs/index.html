@@ -2219,13 +2219,23 @@
                 <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
                     <h3 class="text-xl font-semibold text-primary" id="reportTitle">Select a Report Category</h3>
                     <div class="flex flex-wrap items-center gap-2">
+                        <select id="reportDatePreset" onchange="applyReportDatePreset(this.value)" class="p-2 border border-slate-300 rounded-lg text-sm bg-white">
+                            <option value="">Date range</option>
+                            <option value="this_month">This Month</option>
+                            <option value="last_month">Last Month</option>
+                            <option value="last_3_months">Last 3 Months</option>
+                            <option value="this_fy">This Financial Year</option>
+                        </select>
                         <label class="text-sm text-slate-600">From</label>
                         <input type="date" id="reportDateFrom" class="p-2 border border-slate-300 rounded-lg text-sm">
                         <label class="text-sm text-slate-600">To</label>
                         <input type="date" id="reportDateTo" class="p-2 border border-slate-300 rounded-lg text-sm">
                         <button type="button" onclick="applyReportDateRange()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-sm font-medium">Apply</button>
                     </div>
-                    <button onclick="exportReport()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportBtn" style="display: none;">Export to CSV</button>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="exportReportToPdf()" class="px-3 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 text-sm font-medium" id="exportPdfBtn" style="display: none;">Download PDF</button>
+                        <button onclick="exportReport()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportBtn" style="display: none;">Export to CSV</button>
+                    </div>
                 </div>
                 
                 <div class="overflow-x-auto">
