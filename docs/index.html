@@ -1787,12 +1787,10 @@
                         <label class="block text-sm font-medium text-slate-700 mb-1">Type</label>
                         <select id="paymentsFilterType" onchange="onPaymentsFilterChange()" class="p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                             <option value="">All</option>
-                            <option value="purchase">Purchase – payment on invoice</option>
-                            <option value="sale">Sale – receipt on invoice</option>
-                            <option value="ledger_payment">Ledger payment (to supplier)</option>
-                            <option value="ledger_receipt">Ledger receipt (from customer)</option>
+                            <option value="purchase_payments">Purchase payments</option>
+                            <option value="sales_payments">Sales payments</option>
                         </select>
-                        <p class="text-xs text-slate-500 mt-1"><strong>Purchase</strong> = pay on a purchase invoice; <strong>Ledger payment</strong> = pay from Ledger (supplier). <strong>Sale</strong> = receive on a sale invoice; <strong>Ledger receipt</strong> = receive from Ledger (customer).</p>
+                        <p class="text-xs text-slate-500 mt-1">Purchase = paid on invoice or from Ledger (supplier). Sales = received on invoice or from Ledger (customer).</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">From</label>
