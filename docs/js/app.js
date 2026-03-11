@@ -3033,7 +3033,7 @@ function logout() {
                     div.className = 'flex justify-between items-center p-3 bg-white border border-orange-300 rounded-lg';
                     div.innerHTML = `
                         <div class="flex-1">
-                            <div class="font-medium text-slate-800">ðŸ“¦ Purchase: ${deductionLinkedPurchase.invoice}</div>
+                            <div class="font-medium text-slate-800">Purchase: ${escapeHtml(deductionLinkedPurchase.invoice)}</div>
                             <div class="text-sm text-slate-600">Supplier: ${deductionLinkedPurchase.supplier} | Amount: ${RU}${deductionLinkedPurchase.amount.toFixed(2)}</div>
                         </div>
                         <button onclick="removeDeductionPurchaseLink()" class="text-red-600 hover:text-red-800 font-bold">\u2716</button>
@@ -3046,7 +3046,7 @@ function logout() {
                     div.className = 'flex justify-between items-center p-3 bg-white border border-blue-300 rounded-lg';
                     div.innerHTML = `
                         <div class="flex-1">
-                            <div class="font-medium text-slate-800">ðŸ›’ Sale: ${deductionLinkedSale.invoice}</div>
+                            <div class="font-medium text-slate-800">Sale: ${escapeHtml(deductionLinkedSale.invoice)}</div>
                             <div class="text-sm text-slate-600">Customer: ${deductionLinkedSale.customer} | Amount: ${RU}${deductionLinkedSale.amount.toFixed(2)}</div>
                         </div>
                         <button onclick="removeDeductionSaleLink()" class="text-red-600 hover:text-red-800 font-bold">\u2716</button>
@@ -4383,7 +4383,11 @@ function logout() {
             }, 0);
             const totalCosts = filteredPurchases.reduce((sum, purchase) => sum + (purchase.grandTotal || purchase.total || 0), 0);
             const totalBrokerage = filteredBrokerage.reduce((sum, entry) => sum + (entry.amount || 0), 0);
-            const totalDeductionsAmount = filteredDeductions.reduce((sum, deduction) => sum + (deduction.amount || 0), 0);
+            const totalDeductionsAmount = filteredDeductions.reduce((sum, d) => {
+                var amt = parseFloat(d.amount) || 0;
+                var loss = (d.lossAmount !== undefined && d.lossAmount !== null && d.lossAmount !== '') ? parseFloat(d.lossAmount) : amt;
+                return sum + loss;
+            }, 0);
             const netProfit = totalRevenue - totalCosts - totalBrokerage - totalDeductionsAmount;
             
             // Update summary
@@ -4391,16 +4395,24 @@ function logout() {
             document.getElementById('totalCosts').textContent = `${RU}${(totalCosts + totalBrokerage).toFixed(2)}`;
             document.getElementById('netProfit').textContent = `${RU}${netProfit.toFixed(2)}`;
             
-            // Helper: total deduction amount for a sale (by linkedSale.saleId or invoice match)
+            // Helper: deduction totals for a sale (by linkedSale.saleId or invoice match). Uses lossAmount for P&L so adjustment (supplier/broker share) is respected.
             function getDeductionsForSale(sale) {
-                if (!sale || !appData.deductions || !appData.deductions.length) return 0;
-                return appData.deductions
-                    .filter(function(d) {
-                        if (d.linkedSale && d.linkedSale.saleId === sale.id) return true;
-                        if (d.invoice && sale.invoice && String(d.invoice).trim() === String(sale.invoice).trim()) return true;
-                        return false;
-                    })
-                    .reduce(function(sum, d) { return sum + (parseFloat(d.amount) || parseFloat(d.lossAmount) || 0); }, 0);
+                if (!sale || !appData.deductions || !appData.deductions.length) return { netLoss: 0, adjustmentTotal: 0 };
+                var deductionsForSale = appData.deductions.filter(function(d) {
+                    if (d.linkedSale && d.linkedSale.saleId === sale.id) return true;
+                    if (d.invoice && sale.invoice && String(d.invoice).trim() === String(sale.invoice).trim()) return true;
+                    return false;
+                });
+                var netLoss = 0;
+                var adjustmentTotal = 0;
+                deductionsForSale.forEach(function(d) {
+                    var amt = parseFloat(d.amount) || 0;
+                    var loss = (d.lossAmount !== undefined && d.lossAmount !== null && d.lossAmount !== '') ? parseFloat(d.lossAmount) : amt;
+                    var adj = parseFloat(d.adjustmentAmount) || 0;
+                    netLoss += loss;
+                    adjustmentTotal += adj;
+                });
+                return { netLoss: netLoss, adjustmentTotal: adjustmentTotal };
             }
             
             // Create P&L rows based on linked purchases
@@ -4411,7 +4423,9 @@ function logout() {
                 const saleTotal = sale.grandTotal || sale.total || 0;
                 const saleTruckAdvance = sale.truckAdvance || 0;
                 const saleNetAmount = saleTotal - saleTruckAdvance;
-                const totalDeductionForSale = getDeductionsForSale(sale);
+                var deductionTotals = getDeductionsForSale(sale);
+                var totalDeductionForSale = deductionTotals.netLoss;
+                var totalAdjustmentForSale = deductionTotals.adjustmentTotal || 0;
                 
                 if (sale.linkedPurchases && sale.linkedPurchases.length > 0) {
                     const totalSaleQty = sale.items ? sale.items.reduce((sum, item) => sum + item.grossWeight, 0) : 1;
@@ -4426,8 +4440,9 @@ function logout() {
                             
                             // Calculate proportional sale amount
                             const proportionalSaleAmount = totalSaleQty > 0 ? (saleNetAmount / totalSaleQty) * link.quantityUsed : 0;
-                            // Allocate deduction to this row by quantity share
-                            const deductionAllocation = totalSaleQty > 0 ? totalDeductionForSale * (link.quantityUsed / totalSaleQty) : (totalDeductionForSale / sale.linkedPurchases.length);
+                            var ratio = totalSaleQty > 0 ? (link.quantityUsed / totalSaleQty) : (1 / sale.linkedPurchases.length);
+                            var deductionAllocation = totalDeductionForSale * ratio;
+                            var adjustmentAllocation = totalAdjustmentForSale * ratio;
                             const profitLoss = proportionalSaleAmount - proportionalPurchaseCost - deductionAllocation;
                             
                             pnlRows.push({
@@ -4441,7 +4456,8 @@ function logout() {
                                 saleTotal: proportionalSaleAmount,
                                 profitLoss: profitLoss,
                                 quantityUsed: link.quantityUsed,
-                                deductionsAmount: deductionAllocation
+                                deductionsAmount: deductionAllocation,
+                                adjustmentAmount: adjustmentAllocation
                             });
                         }
                     });
@@ -4458,7 +4474,8 @@ function logout() {
                         saleTotal: saleNetAmount,
                         profitLoss: saleNetAmount - totalDeductionForSale,
                         quantityUsed: null,
-                        deductionsAmount: totalDeductionForSale
+                        deductionsAmount: totalDeductionForSale,
+                        adjustmentAmount: totalAdjustmentForSale
                     });
                 }
             });
@@ -4487,7 +4504,8 @@ function logout() {
                         saleTotal: 0,
                         profitLoss: -purchaseTotal,
                         quantityUsed: null,
-                        deductionsAmount: 0
+                        deductionsAmount: 0,
+                        adjustmentAmount: 0
                     });
                 }
             });
@@ -4541,6 +4559,7 @@ function logout() {
                         ${row.profitLoss >= 0 ? '+' : ''}${RU}${row.profitLoss.toFixed(2)}
                         ${row.quantityUsed ? `<br><small class="text-xs text-slate-500">(${row.quantityUsed} kg)</small>` : ''}
                         ${(row.deductionsAmount || 0) > 0 ? `<br><small class="text-xs text-red-600">Ded: ${RU}${(row.deductionsAmount || 0).toFixed(2)}</small>` : ''}
+                        ${(row.adjustmentAmount || 0) > 0 ? `<br><small class="text-xs text-slate-600">Adj: ${RU}${(row.adjustmentAmount || 0).toFixed(2)}</small>` : ''}
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -4581,77 +4600,63 @@ function logout() {
         }
 
         function exportPnLReport() {
-            const filterType = document.getElementById('pnlFilterType').value;
-            const filterValue = document.getElementById('pnlFilterValue').value;
+            var filterTypeEl = document.getElementById('pnlFilterType');
+            var filterType = filterTypeEl ? filterTypeEl.value : '';
+            var filterValueEl = document.getElementById('pnlFilterValue');
+            var filterValue = filterValueEl ? filterValueEl.value : '';
             
-            // Get filter name for filename
-            let filterName = 'All';
+            var filterName = 'All';
             if (filterType && filterValue) {
                 if (filterType === 'last3months') {
-                    const date = new Date(filterValue + '-01');
+                    var date = new Date(filterValue + '-01');
                     filterName = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
                 }
             }
             
-            // Create Excel-compatible CSV content with proper formatting
-            let csv = '\uFEFF'; // BOM for Excel UTF-8 recognition
+            var csv = '\uFEFF';
             csv += 'P&L Statement Report\n';
-            csv += `Generated on,${new Date().toLocaleDateString()}\n`;
-            csv += `Filter,${filterType ? filterType.charAt(0).toUpperCase() + filterType.slice(1).replace('last3months', 'Last 3 Months') : 'All Transactions'}\n`;
-            csv += `Filter Value,${filterName}\n`;
-            csv += '\n';
+            csv += 'Generated on,' + new Date().toLocaleDateString() + '\n';
+            csv += 'Filter,' + (filterType ? filterType.charAt(0).toUpperCase() + filterType.slice(1).replace('last3months', 'Last 3 Months') : 'All Transactions') + '\n';
+            csv += 'Filter Value,' + filterName + '\n\n';
             
-            // Add summary
-            const totalRevenue = document.getElementById('totalRevenue').textContent.replace(RU, '').replace(/,/g, '');
-            const totalCosts = document.getElementById('totalCosts').textContent.replace(RU, '').replace(/,/g, '');
-            const netProfit = document.getElementById('netProfit').textContent.replace(RU, '').replace(/,/g, '');
-            
+            var totalRevenueEl = document.getElementById('totalRevenue');
+            var totalCostsEl = document.getElementById('totalCosts');
+            var netProfitEl = document.getElementById('netProfit');
+            var totalRevenue = totalRevenueEl ? (totalRevenueEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
+            var totalCosts = totalCostsEl ? (totalCostsEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
+            var netProfit = netProfitEl ? (netProfitEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
             csv += 'SUMMARY\n';
-            csv += `Total Revenue,${totalRevenue}\n`;
-            csv += `Total Costs,${totalCosts}\n`;
-            csv += `Net Profit,${netProfit}\n`;
-            csv += '\n';
+            csv += 'Total Revenue,' + totalRevenue + '\n';
+            csv += 'Total Costs,' + totalCosts + '\n';
+            csv += 'Net Profit,' + netProfit + '\n\n';
             
-            // Add detailed P&L table with proper headers
             csv += 'DETAILED P&L STATEMENT\n';
-            csv += 'Purchase Date,Purchase Invoice,Supplier,Purchase Total,Sale Date,Sale Invoice,Customer,Sale Total,Profit/Loss\n';
+            csv += 'Purchase Date,Purchase Invoice,Supplier,Purchase Total,Sale Date,Sale Invoice,Customer,Sale Total,Profit/Loss,Deductions,Adjustment\n';
             
-            const tbody = document.getElementById('pnlDetails');
-            const rows = tbody.querySelectorAll('tr');
-            
-            rows.forEach(row => {
-                const cols = row.querySelectorAll('td');
-                if (cols.length > 0) {
-                    const rowData = Array.from(cols).map(col => {
-                        let text = col.textContent.trim();
-                        // Clean up currency symbols and format numbers for Excel
-                        text = text.replace(RU, '').replace(/,/g, '');
-                        // Handle negative numbers
-                        if (text.startsWith('-' + RU)) {
-                            text = '-' + text.replace('-' + RU, '');
-                        }
-                        // Wrap text fields in quotes to handle commas
-                        if (isNaN(text) && text !== '-') {
-                            text = `"${text}"`;
-                        }
-                        return text;
-                    }).join(',');
-                    csv += rowData + '\n';
-                }
+            var data = (typeof currentPnLData !== 'undefined' && currentPnLData) ? currentPnLData : [];
+            if (data.length === 0) {
+                alert('No P&L data to export. Please generate the P&L report first (select a filter and ensure data is loaded).');
+                return;
+            }
+            data.forEach(function(row) {
+                var purchaseTotal = (row.purchaseTotal != null && row.purchaseTotal > 0) ? row.purchaseTotal.toFixed(2) : '-';
+                var saleTotal = (row.saleTotal != null && row.saleTotal > 0) ? row.saleTotal.toFixed(2) : '-';
+                var profitLoss = (row.profitLoss != null) ? row.profitLoss.toFixed(2) : '-';
+                var ded = (row.deductionsAmount != null && row.deductionsAmount > 0) ? row.deductionsAmount.toFixed(2) : '';
+                var adj = (row.adjustmentAmount != null && row.adjustmentAmount > 0) ? row.adjustmentAmount.toFixed(2) : '';
+                csv += '"' + (row.purchaseDate || '-') + '","' + (row.purchaseInvoice || '-') + '","' + (row.purchaseSupplier || '-') + '",' + purchaseTotal + ',"' + (row.saleDate || '-') + '","' + (row.saleInvoice || '-') + '","' + (row.saleCustomer || '-') + '",' + saleTotal + ',' + profitLoss + ',' + ded + ',' + adj + '\n';
             });
             
-            // Create Excel file (.xlsx would require a library, so we'll use .csv with Excel formatting)
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
+            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
             a.href = url;
-            a.download = `PnL_Report_${filterName.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.download = 'PnL_Report_' + filterName.replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.csv';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
-            
-            alert('P&L Report exported successfully! The CSV file is formatted for Excel compatibility.');
+            alert('P&L Report exported successfully!');
         }
 function onPnLFilterChange() {
   const filterType = document.getElementById('pnlFilterType').value;
@@ -5416,25 +5421,29 @@ function onPnLFilterChange() {
             setTimeout(function() { win.print(); }, 250);
         }
         function exportReport() {
-            const reportType = document.getElementById('exportBtn').getAttribute('data-report-type');
-            const table = document.getElementById('reportTable');
-            
-            // Convert table to CSV
-            let csv = '';
-            const rows = table.querySelectorAll('tr');
-            
-            rows.forEach(row => {
-                const cols = row.querySelectorAll('th, td');
-                const rowData = Array.from(cols).map(col => col.textContent.trim()).join(',');
+            var exportBtn = document.getElementById('exportBtn');
+            var reportType = exportBtn ? exportBtn.getAttribute('data-report-type') : '';
+            var table = document.getElementById('reportTable');
+            if (!table) {
+                alert('No report data to export. Please select a report category first.');
+                return;
+            }
+            var rows = table.querySelectorAll('tr');
+            if (!rows.length) {
+                alert('No report data to export. Please select a report and apply date range.');
+                return;
+            }
+            var csv = '\uFEFF';
+            for (var i = 0; i < rows.length; i++) {
+                var cols = rows[i].querySelectorAll('th, td');
+                var rowData = Array.from(cols).map(function(col) { return (col.textContent || '').trim().replace(/\n/g, ' '); }).join(',');
                 csv += rowData + '\n';
-            });
-            
-            // Download CSV
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
+            }
+            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
             a.href = url;
-            a.download = `${reportType}_report_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.download = (reportType || 'report') + '_' + new Date().toISOString().slice(0, 10) + '.csv';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -6777,49 +6786,44 @@ function onPnLFilterChange() {
             document.getElementById('paymentModal').classList.remove('hidden');
         }
 
-        function exportLedgerStatement() {
+function exportLedgerStatement() {
             if (!window.currentLedgerData) {
-                alert('Please generate a ledger first');
+                alert('Please generate a ledger first.');
                 return;
             }
+            var ledgerData = window.currentLedgerData;
+            var tbody = document.getElementById('ledgerEntries');
+            if (!tbody) {
+                alert('Ledger table not found. Please generate the ledger again.');
+                return;
+            }
+            var rows = tbody.querySelectorAll('tr');
             
-            const ledgerData = window.currentLedgerData;
-            const tbody = document.getElementById('ledgerEntries');
-            const rows = tbody.querySelectorAll('tr');
-            
-            // Create CSV content
-            let csv = 'Ledger Statement\n';
-            csv += `Generated on: ${new Date().toLocaleDateString()}\n`;
-            csv += `Entity Type: ${ledgerData.type.charAt(0).toUpperCase() + ledgerData.type.slice(1)}\n`;
-            csv += `Entity Name: ${ledgerData.entityName}\n`;
-            csv += `Current Balance: ${RU}${ledgerData.balance.toFixed(2)}\n`;
-            csv += '\n';
-            
-            // Add table headers
+            var csv = '\uFEFFLedger Statement\n';
+            csv += 'Generated on,' + new Date().toLocaleDateString() + '\n';
+            csv += 'Entity Type,' + (ledgerData.type ? ledgerData.type.charAt(0).toUpperCase() + ledgerData.type.slice(1) : '') + '\n';
+            csv += 'Entity Name,' + (ledgerData.entityName || '') + '\n';
+            csv += 'Current Balance,' + (ledgerData.balance != null ? ledgerData.balance.toFixed(2) : '0') + '\n\n';
             csv += 'Date,Description,Invoice,Debit,Credit,Balance\n';
-            
-            // Add table data
-            rows.forEach(row => {
-                const cols = row.querySelectorAll('td');
+            for (var r = 0; r < rows.length; r++) {
+                var cols = rows[r].querySelectorAll('td');
                 if (cols.length >= 6) {
-                    const rowData = [
-                        cols[0].textContent.trim(), // Date
-                        cols[1].textContent.trim(), // Description
-                        cols[2].textContent.trim(), // Invoice
-                        cols[3].textContent.trim(), // Debit
-                        cols[4].textContent.trim(), // Credit
-                        cols[5].textContent.trim()  // Balance
+                    var rowData = [
+                        (cols[0].textContent || '').trim(),
+                        (cols[1].textContent || '').trim(),
+                        (cols[2].textContent || '').trim(),
+                        (cols[3].textContent || '').trim().replace(RU, '').replace(/,/g, ''),
+                        (cols[4].textContent || '').trim().replace(RU, '').replace(/,/g, ''),
+                        (cols[5].textContent || '').trim().replace(RU, '').replace(/,/g, '')
                     ].join(',');
                     csv += rowData + '\n';
                 }
-            });
-            
-            // Download CSV
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
+            }
+            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
             a.href = url;
-            a.download = `Ledger_${ledgerData.entityName}_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.download = 'Ledger_' + (ledgerData.entityName || 'export').replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.csv';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
