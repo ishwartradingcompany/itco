@@ -56,6 +56,7 @@ const pageTitles = {
     'inventory': 'Inventory Management',
     'broker': 'Broker Management',
     'deductions': 'Deductions Management',
+    'payments': 'Payment Tracking',
     'opening': 'Opening Balance',
     'pnl': 'Profit & Loss Statement',
     'ledger': 'Ledger Management',
