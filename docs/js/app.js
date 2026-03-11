@@ -6824,14 +6824,14 @@ function onPnLFilterChange() {
             
             if (receivableCustomer) {
                 receivableCustomer.innerHTML = '<option value="">Select Customer</option>';
-                appData.customers.forEach(customer => {
+                (appData.customers || []).filter(function(c){ return c.active !== false; }).forEach(customer => {
                     receivableCustomer.innerHTML += `<option value="${customer.id}">${customer.name}</option>`;
                 });
             }
             
             if (payableSupplier) {
                 payableSupplier.innerHTML = '<option value="">Select Supplier</option>';
-                appData.suppliers.forEach(supplier => {
+                (appData.suppliers || []).filter(function(s){ return s.active !== false; }).forEach(supplier => {
                     payableSupplier.innerHTML += `<option value="${supplier.id}">${supplier.name}</option>`;
                 });
             }
