@@ -58,10 +58,11 @@ Web app for **Ishwar Trading Company** – business management for vegetables an
      ```
    - Or use Firebase: `firebase serve` (serves from `docs` per `firebase.json`).
 
-5. **Deploy** (Firebase Hosting)
+5. **Deploy** (Firebase Hosting + Firestore rules)
    ```bash
    firebase deploy
    ```
+   This deploys both hosting and **Firestore security rules**. The rules restrict read/write to **authenticated users only**; deploy them so your data is protected.
 
 6. **Deploy on GitHub Pages** (optional)
    - In the repo: **Settings → Pages**.
