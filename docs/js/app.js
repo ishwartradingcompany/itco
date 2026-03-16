@@ -1435,6 +1435,7 @@ function deleteAllMasters() {
             const rateHelp = document.getElementById('purchaseRateHelp');
             const discountQtyContainer = document.getElementById('purchaseDiscountQtyContainer');
             const bagsContainer = document.getElementById('purchaseBagsContainer');
+            const discountContainer = document.getElementById('purchaseDiscountContainer');
             
             // Get labels to update
             const grossLabel = document.querySelector('label[for="purchaseQuantity"]');
@@ -1448,8 +1449,8 @@ function deleteAllMasters() {
                     
                     // Special handling for coconut products
                     if (item.name.toLowerCase().includes('coconut')) {
-                        // For coconut: hide bags, show discount, use quantity terminology
                         bagsContainer.style.display = 'none';
+                        if (discountContainer) discountContainer.style.display = 'none';
                         discountQtyContainer.style.display = 'block';
                         rateContainer.style.display = 'block';
                         amountContainer.style.display = 'none';
@@ -1470,29 +1471,28 @@ function deleteAllMasters() {
                         rateContainer.style.display = 'none';
                         amountContainer.style.display = 'block';
                         bagsContainer.style.display = 'none';
+                        if (discountContainer) discountContainer.style.display = 'none';
                         discountQtyContainer.style.display = 'none';
                         document.getElementById('purchaseDiscountQty').value = '0';
                         
-                        // Reset labels
                         grossLabel.textContent = 'Gross Weight (kg)';
                         document.getElementById('purchaseQuantity').placeholder = 'Gross Weight';
                         netLabel.textContent = 'Net Weight';
                         document.getElementById('purchaseNetWeight').placeholder = 'Net Weight';
-                        netHelp.textContent = 'Auto-calculated (Gross - Bags)';
+                        netHelp.textContent = 'Auto-calculated (Gross - Discount); you can edit';
                     } else {
-                        // For weight-based items (kg, ton, etc.), show rate per unit
                         rateContainer.style.display = 'block';
                         amountContainer.style.display = 'none';
                         bagsContainer.style.display = 'block';
+                        if (discountContainer) discountContainer.style.display = 'block';
                         discountQtyContainer.style.display = 'none';
                         document.getElementById('purchaseDiscountQty').value = '0';
                         
-                        // Reset labels
                         grossLabel.textContent = 'Gross Weight (kg)';
                         document.getElementById('purchaseQuantity').placeholder = 'Gross Weight';
                         netLabel.textContent = 'Net Weight';
                         document.getElementById('purchaseNetWeight').placeholder = 'Net Weight';
-                        netHelp.textContent = 'Auto-calculated (Gross - Bags)';
+                        netHelp.textContent = 'Auto-calculated (Gross - Discount); you can edit';
                         rateLabel.textContent = `Rate per ${item.unit}`;
                         rateHelp.textContent = `Enter rate per ${item.unit}`;
                     }
@@ -1502,16 +1502,15 @@ function deleteAllMasters() {
                 rateContainer.style.display = 'block';
                 amountContainer.style.display = 'none';
                 bagsContainer.style.display = 'block';
+                if (discountContainer) discountContainer.style.display = 'block';
                 discountQtyContainer.style.display = 'none';
                 rateLabel.textContent = 'Rate per Unit';
                 rateHelp.textContent = 'Enter rate per unit';
-                
-                // Reset labels
                 grossLabel.textContent = 'Gross Weight (kg)';
                 document.getElementById('purchaseQuantity').placeholder = 'Gross Weight';
                 netLabel.textContent = 'Net Weight';
                 document.getElementById('purchaseNetWeight').placeholder = 'Net Weight';
-                netHelp.textContent = 'Auto-calculated (Gross - Bags)';
+                netHelp.textContent = 'Auto-calculated (Gross - Discount); you can edit';
             }
             
             calculatePurchaseItemTotal();
@@ -1519,7 +1518,7 @@ function deleteAllMasters() {
 
         function calculatePurchaseItemTotal() {
             const grossWeight = parseFloat(document.getElementById('purchaseQuantity').value) || 0;
-            const bags = parseFloat(document.getElementById('purchaseBags').value) || 0;
+            const discount = parseFloat(document.getElementById('purchaseDiscount').value) || 0;
             const discountQty = parseFloat(document.getElementById('purchaseDiscountQty').value) || 0;
             const rate = parseFloat(document.getElementById('purchaseRate').value) || 0;
             const amount = parseFloat(document.getElementById('purchaseAmount').value) || 0;
@@ -1532,21 +1531,37 @@ function deleteAllMasters() {
             let total = 0;
             
             if (item.name.toLowerCase().includes('coconut')) {
-                // For coconut: Net Quantity = Gross Quantity - Discount Quantity
                 netWeight = grossWeight - discountQty;
-                // Item Total = Rate x Net Quantity
                 total = netWeight * rate;
             } else if (item.unit.toLowerCase() === 'qty' || item.unit.toLowerCase() === 'quantity') {
                 total = amount;
-                netWeight = grossWeight; // No bag deduction for quantity items
+                netWeight = grossWeight;
             } else {
-                // For other weight-based items
-                netWeight = grossWeight - bags;
+                // Weight-based: Net = Gross - Discount (Discount box; flows from Bags)
+                netWeight = grossWeight - discount;
                 total = netWeight * rate;
             }
             
             document.getElementById('purchaseNetWeight').value = netWeight;
             document.getElementById('purchaseItemTotal').value = total.toFixed(2);
+        }
+
+        function recalcPurchaseItemTotalFromNetWeight() {
+            var netInput = parseFloat(document.getElementById('purchaseNetWeight').value);
+            if (isNaN(netInput)) return;
+            var itemId = document.getElementById('purchaseItem').value;
+            if (!itemId) return;
+            var item = appData.items.find(i => i.id == itemId);
+            if (!item) return;
+            var rate = parseFloat(document.getElementById('purchaseRate').value) || 0;
+            var amount = parseFloat(document.getElementById('purchaseAmount').value) || 0;
+            if (item.name.toLowerCase().includes('coconut')) {
+                document.getElementById('purchaseItemTotal').value = (netInput * rate).toFixed(2);
+            } else if (item.unit.toLowerCase() === 'qty' || item.unit.toLowerCase() === 'quantity') {
+                document.getElementById('purchaseItemTotal').value = amount;
+            } else {
+                document.getElementById('purchaseItemTotal').value = (netInput * rate).toFixed(2);
+            }
         }
 
         function addItemToPurchase() {
@@ -1573,7 +1588,6 @@ function deleteAllMasters() {
                     return;
                 }
                 netWeight = grossWeight - discountQty;
-                // Item Total = Rate x Net Quantity
                 total = netWeight * rate;
             } else if (item.unit.toLowerCase() === 'qty' || item.unit.toLowerCase() === 'quantity') {
                 if (!amount) {
@@ -1587,17 +1601,25 @@ function deleteAllMasters() {
                     alert('Please enter rate per unit');
                     return;
                 }
-                netWeight = grossWeight - bags;
+                var discountVal = parseFloat(document.getElementById('purchaseDiscount').value) || 0;
+                netWeight = grossWeight - discountVal;
                 total = netWeight * rate;
+            }
+            // Use edited net weight from input if user changed it
+            var inputNet = parseFloat(document.getElementById('purchaseNetWeight').value);
+            if (!isNaN(inputNet) && inputNet >= 0) {
+                netWeight = inputNet;
+                if (item.name.toLowerCase().includes('coconut')) total = netWeight * rate;
+                else if (item.unit.toLowerCase() !== 'qty' && item.unit.toLowerCase() !== 'quantity') total = netWeight * rate;
             }
             
             const purchaseItem = {
                 id: Date.now(),
                 itemId: itemId,
                 itemName: item.name,
-                grossWeight: grossWeight, // Gross quantity for inventory
+                grossWeight: grossWeight,
                 bags: bags,
-                netWeight: netWeight, // Net quantity after discount
+                netWeight: netWeight,
                 discountQty: discountQty, // Store discount for reference
                 rate: rate,
                 total: total, // Invoice amount = rate x net quantity
@@ -1612,6 +1634,7 @@ function deleteAllMasters() {
             document.getElementById('purchaseItem').value = '';
             document.getElementById('purchaseQuantity').value = '';
             document.getElementById('purchaseBags').value = '';
+            document.getElementById('purchaseDiscount').value = '0';
             document.getElementById('purchaseNetWeight').value = '';
             document.getElementById('purchaseDiscountQty').value = '0';
             document.getElementById('purchaseRate').value = '';
@@ -1901,6 +1924,8 @@ function deleteAllMasters() {
             document.getElementById('purchaseTruck').value = '';
             document.getElementById('purchaseHammali').value = '';
             document.getElementById('purchaseAdvance').value = '';
+            var pdEl = document.getElementById('purchaseDiscount');
+            if (pdEl) pdEl.value = '0';
             
             // Clear all Others rows except the first one
             const container = document.getElementById('purchaseOthersContainer');
@@ -2620,7 +2645,7 @@ function deleteAllMasters() {
             
             const item = appData.items.find(i => i.id == itemId);
             const grossWeight = parseFloat(document.getElementById('saleQuantity').value) || 0;
-            const bags = parseFloat(document.getElementById('saleBags').value) || 0;
+            const discount = parseFloat(document.getElementById('saleDiscount').value) || 0;
             const discountQty = parseFloat(document.getElementById('saleDiscountQty').value) || 0;
             const rate = parseFloat(document.getElementById('saleRate').value) || 0;
             
@@ -2628,18 +2653,31 @@ function deleteAllMasters() {
             let total = 0;
             
             if (item && item.name.toLowerCase().includes('coconut')) {
-                // For coconut: Net Quantity = Gross - Discount
                 netWeight = grossWeight - discountQty;
-                // Item Total = Rate x Net Quantity
                 total = netWeight * rate;
             } else {
-                // For other items
-                netWeight = grossWeight - bags;
+                // Net = Gross - Discount (Discount box; flows from Bags)
+                netWeight = grossWeight - discount;
                 total = netWeight * rate;
             }
             
             document.getElementById('saleNetWeight').value = netWeight;
             document.getElementById('saleItemTotal').value = total.toFixed(2);
+        }
+
+        function recalcSaleItemTotalFromNetWeight() {
+            var netInput = parseFloat(document.getElementById('saleNetWeight').value);
+            if (isNaN(netInput)) return;
+            var itemId = document.getElementById('saleItem').value;
+            if (!itemId) return;
+            var item = appData.items.find(i => i.id == itemId);
+            if (!item) return;
+            var rate = parseFloat(document.getElementById('saleRate').value) || 0;
+            if (item.name.toLowerCase().includes('coconut')) {
+                document.getElementById('saleItemTotal').value = (netInput * rate).toFixed(2);
+            } else {
+                document.getElementById('saleItemTotal').value = (netInput * rate).toFixed(2);
+            }
         }
 
         function addItemToSale() {
@@ -2659,13 +2697,17 @@ function deleteAllMasters() {
             let total = 0;
             
             if (item.name.toLowerCase().includes('coconut')) {
-                // For coconut: Net Quantity = Gross - Discount
                 netWeight = grossWeight - discountQty;
-                // Item Total = Rate x Net Quantity
                 total = netWeight * rate;
             } else {
-                // For other items
-                netWeight = grossWeight - bags;
+                var discountVal = parseFloat(document.getElementById('saleDiscount').value) || 0;
+                netWeight = grossWeight - discountVal;
+                total = netWeight * rate;
+            }
+            // Use edited net weight from input if user changed it
+            var inputNet = parseFloat(document.getElementById('saleNetWeight').value);
+            if (!isNaN(inputNet) && inputNet >= 0) {
+                netWeight = inputNet;
                 total = netWeight * rate;
             }
             
@@ -2696,6 +2738,7 @@ function deleteAllMasters() {
             document.getElementById('saleItem').value = '';
             document.getElementById('saleQuantity').value = '';
             document.getElementById('saleBags').value = '';
+            document.getElementById('saleDiscount').value = '0';
             document.getElementById('saleNetWeight').value = '';
             document.getElementById('saleDiscountQty').value = '0';
             document.getElementById('saleRate').value = '';
@@ -2999,6 +3042,8 @@ function deleteAllMasters() {
             document.getElementById('saleHammali').value = '';
             document.getElementById('saleAdvance').value = '';
             document.getElementById('saleTruckAdvance').value = '';
+            var sdEl = document.getElementById('saleDiscount');
+            if (sdEl) sdEl.value = '0';
             
             // Clear all Others rows except the first one
             const container = document.getElementById('saleOthersContainer');
@@ -6479,6 +6524,8 @@ function onPnLFilterChange() {
             document.getElementById('purchaseTruck').value = '';
             document.getElementById('purchaseHammali').value = '';
             document.getElementById('purchaseAdvance').value = '';
+            var pdEl = document.getElementById('purchaseDiscount');
+            if (pdEl) pdEl.value = '0';
             
             // Clear Others fields
             const othersContainer = document.getElementById('purchaseOthersContainer');
@@ -6701,6 +6748,8 @@ function onPnLFilterChange() {
             document.getElementById('saleHammali').value = '';
             document.getElementById('saleAdvance').value = '';
             document.getElementById('saleTruckAdvance').value = '';
+            var sdEl = document.getElementById('saleDiscount');
+            if (sdEl) sdEl.value = '0';
             
             // Clear Others fields
             const othersContainer = document.getElementById('saleOthersContainer');
