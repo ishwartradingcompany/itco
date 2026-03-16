@@ -1,7842 +1,2493 @@
-        // Indian Rupee, bullet, checkmark - from code points to avoid file encoding issues
-        const RU = String.fromCharCode(0x20B9);
-        const BULLET = String.fromCharCode(0x2022);
-        const CHECK = String.fromCharCode(0x2713);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ITCO Trade Management - Business Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="js/config.js" charset="UTF-8"></script>
+    <!-- Firebase v9 compat scripts (global firebase object) -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-storage-compat.js"></script>
+    <script src="js/firebase-config.js" charset="UTF-8"></script>
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body class="bg-slate-100 font-sans min-h-screen antialiased">
+<!-- Styles loaded from css/main.css -->
 
-        // Escape user input for safe HTML display (XSS prevention)
-        function escapeHtml(str) {
-            if (str == null || str === '') return '';
-            var s = String(str);
-            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-        }
-
-        // Audit trail: who/when (uses currentUser from auth.js)
-        function getAuditMeta(isNew) {
-            const who = (typeof currentUserEmail !== 'undefined' && currentUserEmail) ? currentUserEmail : 'anonymous';
-            const when = new Date().toISOString();
-            return isNew ? { createdAt: when, createdBy: who } : { updatedAt: when, updatedBy: who };
-        }
-
-        // Global data storage
-        let appData = {
-            company: {},
-            items: [],
-            suppliers: [],
-            customers: [],
-            brokers: [],
-            purchases: [],
-            sales: [],
-            inventory: {},
-            brokerage: [],
-            deductions: [],
-            payments: [],
-            adjustments: [],
-            openingBalances: []
-        };
-
-       // Current invoice items (temporary storage)
-let currentPurchaseItems = [];
-let currentSaleItems = [];
-let linkedPurchases = []; // Store linked purchases for current sale
-let tempLinkedPurchases = []; // Temporary storage while modal is open
-let deductionLinkedPurchase = null; // Store linked purchase for deduction
-let deductionLinkedSale = null; // Store linked sale for deduction
-
-// Pagination State
-const paginationState = {
-    purchases: { currentPage: 1, pageSize: 10 },
-    sales: { currentPage: 1, pageSize: 10 },
-    brokerage: { currentPage: 1, pageSize: 10 },
-    deductions: { currentPage: 1, pageSize: 10 },
-    payments: { currentPage: 1, pageSize: 10 },
-    stockMovement: { currentPage: 1, pageSize: 10 },
-    pnl: { currentPage: 1, pageSize: 10 },
-    ledger: { currentPage: 1, pageSize: 10 },
-    openingBalance: { currentPage: 1, pageSize: 10 }
-};
-
-// Generic Pagination Functions
-function renderPagination(containerId, totalItems, currentPage, pageSize, onPageChange, onPageSizeChange) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-    
-    const totalPages = Math.ceil(totalItems / pageSize);
-    
-    if (totalItems === 0) {
-        container.innerHTML = '';
-        return;
-    }
-    
-    const startItem = (currentPage - 1) * pageSize + 1;
-    const endItem = Math.min(currentPage * pageSize, totalItems);
-    
-    let paginationHTML = `
-        <div class="pagination-info">
-            Showing ${startItem} to ${endItem} of ${totalItems} entries
+<!-- Authentication Loading Screen -->
+<div id="authLoadingScreen" class="fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 z-[10000] flex items-center justify-center">
+    <div class="text-center">
+        <div class="w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl mx-auto mb-8 flex items-center justify-center shadow-2xl">
+            <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
+            </svg>
         </div>
-        <div class="pagination-controls">
-            <div class="page-size-selector">
-                <label>Show:</label>
-                <select onchange="${onPageSizeChange}(this.value)">
-                    <option value="5" ${pageSize === 5 ? 'selected' : ''}>5</option>
-                    <option value="10" ${pageSize === 10 ? 'selected' : ''}>10</option>
-                    <option value="25" ${pageSize === 25 ? 'selected' : ''}>25</option>
-                    <option value="50" ${pageSize === 50 ? 'selected' : ''}>50</option>
-                    <option value="100" ${pageSize === 100 ? 'selected' : ''}>100</option>
-                </select>
+        <h2 class="text-2xl font-bold text-white mb-1 tracking-tight">ITCO TRADE MANAGEMENT</h2>
+        <p class="text-blue-400 font-medium text-sm uppercase tracking-widest">Enterprise Business Solutions</p>
+        <p class="text-slate-500 text-xs mt-6 uppercase tracking-wider">Authenticating</p>
+        <div class="mt-4">
+            <div class="w-48 h-1 bg-slate-700 rounded-full mx-auto overflow-hidden">
+                <div class="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full animate-loading-bar"></div>
             </div>
-            <button class="pagination-btn" onclick="${onPageChange}(1)" ${currentPage === 1 ? 'disabled' : ''}>
-                First
-            </button>
-            <button class="pagination-btn" onclick="${onPageChange}(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
-                Prev
-            </button>
-            <div class="pagination-numbers">
-    `;
-    
-    // Generate page numbers
-    const maxVisiblePages = 5;
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-    
-    if (endPage - startPage + 1 < maxVisiblePages) {
-        startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-    
-    if (startPage > 1) {
-        paginationHTML += `<span class="pagination-ellipsis">...</span>`;
-    }
-    
-    for (let i = startPage; i <= endPage; i++) {
-        paginationHTML += `
-            <button class="pagination-number ${i === currentPage ? 'active' : ''}" onclick="${onPageChange}(${i})">
-                ${i}
-            </button>
-        `;
-    }
-    
-    if (endPage < totalPages) {
-        paginationHTML += `<span class="pagination-ellipsis">...</span>`;
-    }
-    
-    paginationHTML += `
+        </div>
+    </div>
+</div>
+
+<!-- Main App Content (Hidden until authenticated) -->
+<div id="mainAppContent" class="hidden">
+ <!-- Save confirmation message -->
+    <div id="save-message" 
+     class="hidden fixed top-4 right-4 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-strong z-[9999] font-semibold border border-emerald-500">
+  Data saved successfully!
+</div>
+
+    <!-- View Details Modal -->
+    <div id="viewModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div class="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-4 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-white" id="modalTitle">Details</h3>
+                <button onclick="closeViewModal()" class="text-white hover:text-slate-300 text-2xl font-bold">&times;</button>
             </div>
-            <button class="pagination-btn" onclick="${onPageChange}(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>
-                Next
+            <div class="p-6 overflow-y-auto max-h-[calc(90vh-80px)]" id="modalContent">
+                <!-- Content will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+<!-- Left Sidebar Navigation -->
+<div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <div class="sidebar-logo">
+            <div class="sidebar-logo-icon">
+                <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
+                </svg>
+            </div>
+            <div class="sidebar-logo-text">
+                <h1>ITCO</h1>
+                <p>Trade Management</p>
+            </div>
+        </div>
+        <button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+            </svg>
+        </button>
+    </div>
+    
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Main</div>
+        <button onclick="showPage('home')" class="nav-item active" data-page="home">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+            </svg>
+            Dashboard
+        </button>
+    </div>
+    
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Operations</div>
+        <button onclick="showPage('purchase')" class="nav-item" data-page="purchase">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            Purchase
+        </button>
+        <button onclick="showPage('sales')" class="nav-item" data-page="sales">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Sales
+        </button>
+        <button onclick="showPage('inventory')" class="nav-item" data-page="inventory">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+            </svg>
+            Inventory
+        </button>
+        <button onclick="showPage('broker')" class="nav-item" data-page="broker">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            Broker
+        </button>
+        <button onclick="showPage('deductions')" class="nav-item" data-page="deductions">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z"/>
+            </svg>
+            Deductions
+        </button>
+    </div>
+    
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Financial</div>
+        <button onclick="showPage('payments')" class="nav-item" data-page="payments">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            Payment Tracking
+        </button>
+        <button onclick="showPage('pnl')" class="nav-item" data-page="pnl">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+            Profit & Loss
+        </button>
+        <button onclick="showPage('ledger')" class="nav-item" data-page="ledger">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+            </svg>
+            Ledger
+        </button>
+        <button onclick="showPage('reports')" class="nav-item" data-page="reports">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            Reports
+        </button>
+        <button onclick="showPage('opening')" class="nav-item" data-page="opening">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+            Opening Balance
+        </button>
+    </div>
+    
+    <div class="sidebar-section" style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px;">
+        <button onclick="saveAsJSON()" class="nav-item">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Backup Data
+        </button>
+        <button onclick="restoreFromJSON()" class="nav-item">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+            </svg>
+            Restore Data
+        </button>
+        <div class="sidebar-section-title" style="margin-top: 12px; font-size: 0.7rem; opacity: 0.8;">Delete All (password protected)</div>
+        <button onclick="openDeleteAllModal('records')" class="nav-item text-red-200 hover:text-red-100 hover:bg-red-900/20">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+            Delete All Records
+        </button>
+        <button onclick="openDeleteAllModal('masters')" class="nav-item text-red-200 hover:text-red-100 hover:bg-red-900/20">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+            Delete All Masters
+        </button>
+    </div>
+</div>
+
+<!-- Main Content Wrapper -->
+<div class="main-wrapper" id="mainContent">
+    <!-- Top Header -->
+    <header class="top-header">
+        <div class="header-left">
+            <button class="sidebar-expand-btn" id="sidebarExpandBtn" onclick="toggleSidebar()" title="Show Sidebar" style="display: none;">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
             </button>
-            <button class="pagination-btn" onclick="${onPageChange}(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''}>
-                Last
+            <h2 class="header-title" id="pageTitle">Dashboard</h2>
+        </div>
+        <div class="header-right">
+            <button onclick="showPage('master')" class="header-icon-btn" title="Masters" data-page="master">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+            </button>
+            <div class="datetime-display" id="headerDateTime">
+                <span id="headerDate"></span> &nbsp; <span id="headerTime"></span>
+            </div>
+            <button onclick="manualSave()" class="header-btn btn-save">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+                </svg>
+                Save
+            </button>
+            <button onclick="logout()" class="header-btn btn-logout">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                </svg>
+                Logout
             </button>
         </div>
-    `;
-    
-    container.innerHTML = paginationHTML;
-}
-
-// Get paginated data slice
-function getPaginatedData(data, currentPage, pageSize) {
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    return data.slice(startIndex, endIndex);
-}
-
-// Page change handlers for each section
-function changePurchasePage(page) {
-    paginationState.purchases.currentPage = page;
-    renderPurchaseTable();
-}
-
-function changePurchasePageSize(size) {
-    paginationState.purchases.pageSize = parseInt(size);
-    paginationState.purchases.currentPage = 1;
-    renderPurchaseTable();
-}
-
-function changeSalesPage(page) {
-    paginationState.sales.currentPage = page;
-    renderSalesTable();
-}
-
-function changeSalesPageSize(size) {
-    paginationState.sales.pageSize = parseInt(size);
-    paginationState.sales.currentPage = 1;
-    renderSalesTable();
-}
-
-function changeBrokeragePage(page) {
-    paginationState.brokerage.currentPage = page;
-    renderBrokerageTable();
-}
-
-function changeBrokeragePageSize(size) {
-    paginationState.brokerage.pageSize = parseInt(size);
-    paginationState.brokerage.currentPage = 1;
-    renderBrokerageTable();
-}
-
-function changeDeductionsPage(page) {
-    paginationState.deductions.currentPage = page;
-    renderDeductionsTable();
-}
-
-function changeDeductionsPageSize(size) {
-    paginationState.deductions.pageSize = parseInt(size);
-    paginationState.deductions.currentPage = 1;
-    renderDeductionsTable();
-}
-
-function changeStockMovementPage(page) {
-    paginationState.stockMovement.currentPage = page;
-    renderStockMovementTable();
-}
-
-function changeStockMovementPageSize(size) {
-    paginationState.stockMovement.pageSize = parseInt(size);
-    paginationState.stockMovement.currentPage = 1;
-    renderStockMovementTable();
-}
-
-function changePnlPage(page) {
-    paginationState.pnl.currentPage = page;
-    renderPnLWithCurrentData();
-}
-
-function changePnlPageSize(size) {
-    paginationState.pnl.pageSize = parseInt(size);
-    paginationState.pnl.currentPage = 1;
-    renderPnLWithCurrentData();
-}
-
-function changeLedgerPage(page) {
-    paginationState.ledger.currentPage = page;
-    renderLedgerWithCurrentData();
-}
-
-function changeLedgerPageSize(size) {
-    paginationState.ledger.pageSize = parseInt(size);
-    paginationState.ledger.currentPage = 1;
-    renderLedgerWithCurrentData();
-}
-
-function changeOpeningBalancePage(page) {
-    paginationState.openingBalance.currentPage = page;
-    updateOpeningBalanceHistory();
-}
-
-function changeOpeningBalancePageSize(size) {
-    paginationState.openingBalance.pageSize = parseInt(size);
-    paginationState.openingBalance.currentPage = 1;
-    updateOpeningBalanceHistory();
-}
-
-function changePaymentsPage(page) {
-    paginationState.payments.currentPage = page;
-    loadPaymentsTracking();
-}
-
-function changePaymentsPageSize(size) {
-    paginationState.payments.pageSize = parseInt(size);
-    paginationState.payments.currentPage = 1;
-    loadPaymentsTracking();
-}
-
-function onPaymentsFilterChange() {
-    paginationState.payments.currentPage = 1;
-    loadPaymentsTracking();
-}
-
-// Store current data for P&L and Ledger for pagination
-let currentPnLData = [];
-let currentLedgerData = [];
-
-function renderPnLWithCurrentData() {
-    renderPnLTable(currentPnLData);
-}
-
-function renderLedgerWithCurrentData() {
-    renderLedgerTable(currentLedgerData);
-}
-
-// Load data from Firestore on page load
-function loadData() {
-    console.log("ðŸ“¡ Loading data from Firestore...");
-    
-    SHARED_DOC_REF.onSnapshot((doc) => {
-        if (doc && doc.exists) {
-            const savedData = doc.data().data;
-            if (savedData) {
-                suppressNextLocalSave = true;
-
-                console.log("ðŸ“¥ Data received from Firestore");
-                console.log("   - openingBalances in Firebase:", savedData.openingBalances);
-                
-                appData = savedData;
-                // Ensure arrays and settings exist (older Firestore docs may lack these keys)
-                appData.payments = appData.payments || [];
-                appData.openingBalances = appData.openingBalances || [];
-                appData.settings = appData.settings || {};
-
-                // Refresh ALL UI sections now that data is loaded
-                updateDashboard();
-                populateDropdowns();
-                updateItemsList();
-                updateSuppliersList();
-                updateCustomersList();
-                updateBrokersList();
-                updatePurchaseHistory();
-                updateSalesHistory();
-                updateBrokerageHistory();
-                updateDeductionsHistory();
-                loadCompanyDetails(); // Load company details into form fields
-
-                console.log("âœ… Data loaded from Firestore and UI updated");
-                console.log("   - appData.openingBalances in memory:", appData.openingBalances);
-                
-                // Update records count in header
-                if (typeof updateRecordsCount === 'function') {
-                    updateRecordsCount();
-                }
-
-                setTimeout(() => { suppressNextLocalSave = false; }, 200);
-            }
-        } else {
-            console.log("â„¹ï¸ No online data yet. Using defaults.");
-        }
-    }, (err) => {
-        console.error("âŒ Firestore onSnapshot error:", err);
-    });
-}
-
-   // Save data to Firestore
-function saveData() {
-    if (suppressNextLocalSave) {
-        console.log("â›” Save suppressed (change came from Firestore).");
-        return;
-    }
-
-    console.log("ðŸ’¾ Saving to Firebase...");
-    var _p = JSON.stringify(appData);
-    if (_p.length > 900000) console.warn("App data large (" + (_p.length/1024).toFixed(0) + " KB). Consider archiving old records.");
-    SHARED_DOC_REF.set({
-        data: appData,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).then(() => {
-        console.log("âœ… Data saved to Firestore successfully");
-        console.log("   - Saved openingBalances:", appData.openingBalances);
-    }).catch((error) => {
-        console.error("âŒ Error saving to Firestore:", error);
-        alert("Failed to save data! Error: " + error.message);
-    });
-}
-function manualSave() {
-  const btn = document.querySelector('.btn-save');
-  const originalText = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="inline-flex items-center gap-2"><svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Saving...</span>'; }
-  SHARED_DOC_REF.set({
-      data: appData,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(() => {
-      console.log("Data saved to Firestore (manual save)");
-
-      // Show message
-      const msg = document.getElementById("save-message");
-      msg.classList.remove("hidden");
-      setTimeout(function(){ if(msg) msg.classList.add("hidden"); }, 3000);
-      if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
-  }).catch((error) => {
-      console.error("âŒ Error saving to Firestore:", error);
-      alert("Error saving data!");
-      if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
-  });
-}
-
-function saveAsJSON() {
-    try {
-        // Create JSON backup of all app data
-        const jsonData = JSON.stringify(appData, null, 2);
-        
-        // Create a blob with the JSON data
-        const blob = new Blob([jsonData], { type: 'application/json' });
-        
-        // Create download link
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        
-        // Generate filename with current date and time
-        const now = new Date();
-        const dateStr = now.toISOString().slice(0, 10);
-        const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '-');
-        a.download = `ITCO_Backup_${dateStr}_${timeStr}.json`;
-        
-        // Trigger download
-        document.body.appendChild(a);
-        a.click();
-        
-        // Cleanup
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        console.log("âœ… JSON backup downloaded successfully");
-    } catch (error) {
-        console.error("âŒ Error creating JSON backup:", error);
-        alert("Error creating backup file!");
-    }
-}
-
-function restoreFromJSON() {
-    // Create a file input element
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    
-    input.onchange = function(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        
-        // Confirm before restoring
-        if (!confirm('âš ï¸ WARNING: This will replace all current data with the backup data. Are you sure you want to continue?')) {
-            return;
-        }
-        
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const jsonData = JSON.parse(e.target.result);
-                
-                // Validate the data structure
-                if (!jsonData || typeof jsonData !== 'object') {
-                    throw new Error('Invalid backup file format');
-                }
-                
-                // Restore the data
-                appData = jsonData;
-                
-                // Ensure all required properties exist
-                appData.items = appData.items || [];
-                appData.suppliers = appData.suppliers || [];
-                appData.customers = appData.customers || [];
-                appData.brokers = appData.brokers || [];
-                appData.purchases = appData.purchases || [];
-                appData.sales = appData.sales || [];
-                appData.brokerages = appData.brokerages || [];
-                appData.deductions = appData.deductions || [];
-                appData.adjustments = appData.adjustments || [];
-                appData.payments = appData.payments || [];
-                appData.settings = appData.settings || {};
-                appData.inventory = appData.inventory || {};
-                (appData.items || []).forEach(function(i){ if (i.active === undefined) i.active = true; });
-                (appData.suppliers || []).forEach(function(s){ if (s.active === undefined) s.active = true; });
-                (appData.customers || []).forEach(function(c){ if (c.active === undefined) c.active = true; });
-                (appData.brokers || []).forEach(function(b){ if (b.active === undefined) b.active = true; });
-                // Save to Firebase
-                saveData();
-                
-                // Refresh all displays
-                updateItemsList();
-                updateSuppliersList();
-                updateCustomersList();
-                updateBrokersList();
-                updatePurchaseHistory();
-                updateSalesHistory();
-                updateBrokerageHistory();
-                updateDeductionsHistory();
-                updateDashboard();
-                refreshInventory();
-                
-                alert('âœ… Data restored successfully from backup!');
-                console.log("âœ… Data restored from JSON backup");
-                
-            } catch (error) {
-                console.error("âŒ Error restoring backup:", error);
-                alert('Error restoring backup file! Please make sure you selected a valid backup file.');
-            }
-        };
-        
-        reader.onerror = function() {
-            alert('Error reading backup file!');
-        };
-        
-        reader.readAsText(file);
-    };
-    
-    // Trigger file selection
-    input.click();
-}
-
-function logout() {
-    if (confirm('Are you sure you want to logout?')) {
-        auth.signOut().then(() => {
-            console.log("âœ… User logged out successfully");
-            // Redirect to login page or reload
-            window.location.reload();
-        }).catch((error) => {
-            console.error("âŒ Error logging out:", error);
-            alert("Error logging out!");
-        });
-    }
-}
-
-// Delete All (password protected) - Records vs Masters, similar to Transportation app
-var deleteAllPendingAction = null;
-function getDeleteAllPassword() {
-    appData.settings = appData.settings || {};
-    return (appData.settings.deleteAllPassword && String(appData.settings.deleteAllPassword).trim()) ? String(appData.settings.deleteAllPassword).trim() : 'NFc@@1993jc';
-}
-function openDeleteAllModal(action) {
-    deleteAllPendingAction = action;
-    var titleEl = document.getElementById('deleteAllModalTitle');
-    var msgEl = document.getElementById('deleteAllModalMessage');
-    var pwdEl = document.getElementById('deleteAllPassword');
-    if (action === 'records') {
-        if (titleEl) titleEl.textContent = 'Delete All Records';
-        if (msgEl) msgEl.textContent = 'This will permanently delete all transactions: Purchases, Sales, Brokerage, Deductions, Payments, Adjustments, Opening Balances, and Inventory. This cannot be undone. Enter password to confirm.';
-    } else {
-        if (titleEl) titleEl.textContent = 'Delete All Masters';
-        if (msgEl) msgEl.textContent = 'This will permanently delete all master data: Items, Suppliers, Customers, Brokers, and Company details. Records (transactions) will remain. This cannot be undone. Enter password to confirm.';
-    }
-    if (pwdEl) { pwdEl.value = ''; pwdEl.focus(); }
-    var modal = document.getElementById('deleteAllModal');
-    if (modal) modal.classList.remove('hidden');
-}
-function closeDeleteAllModal() {
-    deleteAllPendingAction = null;
-    var pwdEl = document.getElementById('deleteAllPassword');
-    if (pwdEl) pwdEl.value = '';
-    var modal = document.getElementById('deleteAllModal');
-    if (modal) modal.classList.add('hidden');
-}
-function confirmDeleteAll() {
-    var pwdEl = document.getElementById('deleteAllPassword');
-    var entered = (pwdEl && pwdEl.value) ? String(pwdEl.value).trim() : '';
-    var expected = getDeleteAllPassword();
-    if (entered !== expected) {
-        alert('Incorrect password. Delete cancelled.');
-        return;
-    }
-    if (deleteAllPendingAction === 'records') {
-        deleteAllRecords();
-    } else if (deleteAllPendingAction === 'masters') {
-        deleteAllMasters();
-    }
-    closeDeleteAllModal();
-}
-function deleteAllRecords() {
-    appData.purchases = [];
-    appData.sales = [];
-    appData.brokerage = [];
-    appData.deductions = [];
-    appData.payments = [];
-    appData.adjustments = [];
-    appData.openingBalances = [];
-    appData.inventory = {};
-    saveData();
-    updateDashboard();
-    populateDropdowns();
-    updatePurchaseHistory();
-    updateSalesHistory();
-    updateBrokerageHistory();
-    updateDeductionsHistory();
-    refreshInventory();
-    if (typeof loadPaymentsTracking === 'function') loadPaymentsTracking();
-    if (typeof updateOpeningBalanceHistory === 'function') updateOpeningBalanceHistory();
-    if (typeof updateRecordsCount === 'function') updateRecordsCount();
-    alert('All records have been deleted.');
-}
-function deleteAllMasters() {
-    appData.items = [];
-    appData.suppliers = [];
-    appData.customers = [];
-    appData.brokers = [];
-    appData.company = {};
-    saveData();
-    populateDropdowns();
-    updateItemsList();
-    updateSuppliersList();
-    updateCustomersList();
-    updateBrokersList();
-    loadCompanyDetails();
-    updateDashboard();
-    if (typeof updateRecordsCount === 'function') updateRecordsCount();
-    alert('All masters have been deleted. Records (transactions) are unchanged.');
-}
-
-        // Navigation
-        // Close view modal
-        function closeViewModal() {
-            document.getElementById('viewModal').classList.add('hidden');
-        }
-
-        function showPage(pageId) {
-            // Hide all pages
-            document.querySelectorAll('.page-content').forEach(page => {
-                page.classList.add('hidden');
-            });
-            
-            // Remove active class from all nav items in sidebar
-            document.querySelectorAll('.nav-item').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            
-            // Remove active class from header icon buttons
-            document.querySelectorAll('.header-icon-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            
-            // Show selected page
-            const targetPage = document.getElementById(pageId);
-            if (targetPage) {
-                targetPage.classList.remove('hidden');
-            }
-            
-            // Add active class to clicked nav item (sidebar)
-            const activeBtn = document.querySelector(`.nav-item[data-page="${pageId}"]`);
-            if (activeBtn) {
-                activeBtn.classList.add('active');
-            }
-            
-            // Add active class to header icon button if applicable
-            const activeHeaderBtn = document.querySelector(`.header-icon-btn[data-page="${pageId}"]`);
-            if (activeHeaderBtn) {
-                activeHeaderBtn.classList.add('active');
-            }
-            
-            // Update header title
-            const titleEl = document.getElementById('pageTitle');
-            if (titleEl && pageTitles[pageId]) {
-                titleEl.textContent = pageTitles[pageId];
-            }
-            
-            // Close sidebar on mobile after navigation
-            const sidebar = document.getElementById('sidebar');
-            if (window.innerWidth < 1024) {
-                sidebar.classList.remove('open');
-            }
-            
-            // Update page-specific content
-            if (pageId === 'inventory') {
-                refreshInventory();
-            } else if (pageId === 'purchase') {
-                populateDropdowns();
-                // Show history view by default
-                hidePurchaseForm();
-            } else if (pageId === 'sales') {
-                populateDropdowns();
-                // Show history view by default
-                hideSalesForm();
-            } else if (pageId === 'payments') {
-                loadPaymentsTracking();
-            } else if (pageId === 'opening') {
-                populateOpeningBalanceDropdowns();
-                updateOpeningBalanceHistory();
-            } else if (pageId === 'reports') {
-                if (typeof setDefaultReportDates === 'function') setDefaultReportDates();
-            }
-            
-            // Update records count
-            if (typeof updateRecordsCount === 'function') {
-                updateRecordsCount();
-            }
-        }
-
-        // Purchase Form Show/Hide Functions
-        // Auto Invoice Number Generation with Financial Year
-        function getFinancialYear() {
-            const today = new Date();
-            const month = today.getMonth(); // 0-11 (Jan=0, Apr=3)
-            const year = today.getFullYear();
-            // Financial year runs April to March
-            // If current month is Jan, Feb, Mar (0,1,2), FY is previous year
-            // If current month is Apr-Dec (3-11), FY is current year
-            if (month < 3) { // Jan, Feb, Mar
-                return year - 1;
-            } else { // Apr to Dec
-                return year;
-            }
-        }
-        
-        function generatePurchaseInvoiceNumber() {
-            const fy = getFinancialYear();
-            const prefix = `PUR-${fy}-`;
-            const existingNumbers = new Set(appData.purchases
-                .map(p => p.invoice)
-                .filter(inv => inv && inv.startsWith(prefix))
-                .map(inv => parseInt(inv.replace(prefix, ''), 10) || 0)
-                .filter(n => n >= 1));
-            let nextNumber = 1;
-            while (existingNumbers.has(nextNumber)) nextNumber++;
-            return prefix + String(nextNumber).padStart(3, '0');
-        }
-        
-        function generateSaleInvoiceNumber() {
-            const fy = getFinancialYear();
-            const prefix = `SALE-${fy}-`;
-            const existingNumbers = new Set(appData.sales
-                .map(s => s.invoice)
-                .filter(inv => inv && inv.startsWith(prefix))
-                .map(inv => parseInt(inv.replace(prefix, ''), 10) || 0)
-                .filter(n => n >= 1));
-            let nextNumber = 1;
-            while (existingNumbers.has(nextNumber)) nextNumber++;
-            return prefix + String(nextNumber).padStart(3, '0');
-        }
-        
-        function showPurchaseForm() {
-            document.getElementById('purchaseHistoryView').classList.add('hidden');
-            document.getElementById('purchaseEntryView').classList.remove('hidden');
-            document.getElementById('addPurchaseBtn').classList.add('hidden');
-            // Auto-generate invoice number
-            document.getElementById('purchaseInvoice').value = generatePurchaseInvoiceNumber();
-        }
-
-        function hidePurchaseForm() {
-            document.getElementById('purchaseHistoryView').classList.remove('hidden');
-            document.getElementById('purchaseEntryView').classList.add('hidden');
-            document.getElementById('addPurchaseBtn').classList.remove('hidden');
-            clearPurchaseForm();
-        }
-
-        // Sales Form Show/Hide Functions
-        function showSalesForm() {
-            document.getElementById('salesHistoryView').classList.add('hidden');
-            document.getElementById('salesEntryView').classList.remove('hidden');
-            document.getElementById('addSalesBtn').classList.add('hidden');
-            // Auto-generate invoice number
-            document.getElementById('saleInvoice').value = generateSaleInvoiceNumber();
-        }
-
-        function hideSalesForm() {
-            document.getElementById('salesHistoryView').classList.remove('hidden');
-            document.getElementById('salesEntryView').classList.add('hidden');
-            document.getElementById('addSalesBtn').classList.remove('hidden');
-            clearSaleForm();
-        }
-
-        // Master Data Functions
-        function saveCompanyDetails() {
-            appData.company = {
-                name: document.getElementById('companyName').value,
-                gstin: (document.getElementById('companyGSTIN') && document.getElementById('companyGSTIN').value) || '',
-                bank1: {
-                    name: document.getElementById('bankName1').value,
-                    account: document.getElementById('bankAccount1').value,
-                    ifsc: document.getElementById('ifsc1').value
-                },
-                bank2: {
-                    name: document.getElementById('bankName2').value,
-                    account: document.getElementById('bankAccount2').value,
-                    ifsc: document.getElementById('ifsc2').value
-                },
-                upi: document.getElementById('upiNumber').value
-            };
-            saveData();
-            alert('Company details saved successfully!');
-        }
-
-        function loadCompanyDetails() {
-            if (appData.company) {
-                document.getElementById('companyName').value = appData.company.name || '';
-                var gstinEl = document.getElementById('companyGSTIN');
-                if (gstinEl) gstinEl.value = appData.company.gstin || '';
-                document.getElementById('bankName1').value = appData.company.bank1?.name || '';
-                document.getElementById('bankAccount1').value = appData.company.bank1?.account || '';
-                document.getElementById('ifsc1').value = appData.company.bank1?.ifsc || '';
-                document.getElementById('bankName2').value = appData.company.bank2?.name || '';
-                document.getElementById('bankAccount2').value = appData.company.bank2?.account || '';
-                document.getElementById('ifsc2').value = appData.company.bank2?.ifsc || '';
-                document.getElementById('upiNumber').value = appData.company.upi || '';
-            }
-        }
-
-        let editingItemId = null;
-        let editingSupplierId = null;
-        let editingCustomerId = null;
-        let editingBrokerId = null;
-
-        function addItem() {
-            const name = document.getElementById('itemName').value;
-            const category = document.getElementById('itemCategory').value;
-            const unit = document.getElementById('itemUnit').value;
-            var minStockEl = document.getElementById('itemMinStock');
-            const minStock = (minStockEl && parseFloat(minStockEl.value)) || 0;
-            if (name && category && unit) {
-                if (editingItemId) {
-                    const item = appData.items.find(i => i.id === editingItemId);
-                    if (item) {
-                        item.name = name;
-                        item.category = category;
-                        item.unit = unit;
-                        item.minStock = minStock;
-                    }
-                    editingItemId = null;
-                } else {
-                    const item = {
-                        id: Date.now(),
-                        name: name,
-                        category: category,
-                        unit: unit,
-                        minStock: minStock,
-                        active: true
-                    };
-                    appData.items.push(item);
-                }
-                saveData();
-                updateItemsList();
-                populateDropdowns();
-                
-                if (minStockEl) minStockEl.value = '';
-                document.getElementById('itemName').value = '';
-                document.getElementById('itemCategory').value = '';
-                document.getElementById('itemUnit').value = '';
-            }
-        }
-
-        function getMasterSearchTerm() {
-            var el = document.getElementById('masterDataSearch');
-            return (el && el.value) ? el.value.trim().toLowerCase() : '';
-        }
-        function updateItemsList() {
-            const container = document.getElementById('itemsList');
-            if (!container) return;
-            var term = getMasterSearchTerm();
-            container.innerHTML = '';
-            var items = (appData.items || []).filter(function(item) {
-                if (!term) return true;
-                var name = (item.name || '').toLowerCase();
-                var cat = (item.category || '').toLowerCase();
-                var unit = (item.unit || '').toLowerCase();
-                return name.indexOf(term) >= 0 || cat.indexOf(term) >= 0 || unit.indexOf(term) >= 0;
-            });
-            items.forEach(function(item) {
-                var minStr = (item.minStock != null && item.minStock > 0) ? ' Min: ' + item.minStock : '';
-                var active = item.active !== false;
-                var div = document.createElement('div');
-                div.className = 'flex justify-between items-center p-2 bg-gray-50 rounded';
-                div.innerHTML = '<span>' + (active ? '' : '<span class="text-slate-400 line-through">') + item.name + ' (' + item.category + ') - ' + item.unit + minStr + (active ? '' : '</span>') + '</span>' +
-                    '<div class="space-x-2">' +
-                    '<button onclick="editItem(' + item.id + ')" class="text-blue-500 hover:text-blue-700">Edit</button>' +
-                    (active ? '<button onclick="setItemActive(' + item.id + ', false)" class="text-amber-600 hover:text-amber-800">Deactivate</button>' : '<button onclick="setItemActive(' + item.id + ', true)" class="text-green-600 hover:text-green-800">Activate</button>') +
-                    '<button onclick="removeItem(' + item.id + ')" class="text-red-500 hover:text-red-700">\u00D7</button>' +
-                    '</div>';
-                container.appendChild(div);
-            });
-        }
-        function applyMasterSearch() {
-            updateItemsList();
-            updateSuppliersList();
-            updateCustomersList();
-            updateBrokersList();
-        }
-
-        function setItemActive(id, active) {
-            var item = appData.items.find(function(i) { return i.id === id; });
-            if (item) { item.active = active; saveData(); updateItemsList(); populateDropdowns(); }
-        }
-
-        function editItem(id) {
-            var item = appData.items.find(function(i) { return i.id === id; });
-            if (item) {
-                editingItemId = id;
-                document.getElementById('itemName').value = item.name;
-                document.getElementById('itemCategory').value = item.category;
-                document.getElementById('itemUnit').value = item.unit;
-                var minStockEl = document.getElementById('itemMinStock');
-                if (minStockEl) minStockEl.value = (item.minStock != null && item.minStock > 0) ? item.minStock : '';
-            }
-        }
-
-        function removeItem(id) {
-            appData.items = appData.items.filter(item => item.id !== id);
-            saveData();
-            updateItemsList();
-            populateDropdowns();
-        }
-
-        function normalizedName(str) { return (String(str || '').trim().toLowerCase()); }
-        function isDuplicateSupplierName(name, excludeId) {
-            var n = normalizedName(name);
-            return (appData.suppliers || []).some(function(s) { return (s.id !== excludeId) && normalizedName(s.name) === n; });
-        }
-        function isDuplicateCustomerName(name, excludeId) {
-            var n = normalizedName(name);
-            return (appData.customers || []).some(function(c) { return (c.id !== excludeId) && normalizedName(c.name) === n; });
-        }
-        function isDuplicateBrokerName(name, excludeId) {
-            var n = normalizedName(name);
-            return (appData.brokers || []).some(function(b) { return (b.id !== excludeId) && normalizedName(b.name) === n; });
-        }
-        function addSupplier() {
-            var rawName = document.getElementById('supplierName').value;
-            const name = rawName ? String(rawName).trim() : '';
-            const mobile = (document.getElementById('supplierMobile').value || '').trim();
-            const address = (document.getElementById('supplierAddress').value || '').trim();
-            const account = (document.getElementById('supplierAccount').value || '').trim();
-            const ifsc = (document.getElementById('supplierIFSC').value || '').trim();
-            var gstinEl = document.getElementById('supplierGSTIN');
-            const gstin = gstinEl ? (gstinEl.value || '').trim() : '';
-            if (name && address) {
-                if (editingSupplierId) {
-                    if (isDuplicateSupplierName(name, editingSupplierId)) { alert('Another supplier with this name already exists (including with different spaces).'); return; }
-                    const supplier = appData.suppliers.find(s => s.id === editingSupplierId);
-                    if (supplier) {
-                        supplier.name = name;
-                        supplier.mobile = mobile;
-                        supplier.address = address;
-                        supplier.account = account;
-                        supplier.ifsc = ifsc;
-                        supplier.gstin = gstin;
-                    }
-                    editingSupplierId = null;
-                } else {
-                    if (isDuplicateSupplierName(name)) { alert('Supplier with this name already exists (including with different spaces).'); return; }
-                    const supplier = {
-                        id: Date.now(),
-                        name: name,
-                        mobile: mobile,
-                        address: address,
-                        account: account,
-                        ifsc: ifsc,
-                        gstin: gstin,
-                        active: true
-                    };
-                    appData.suppliers.push(supplier);
-                }
-                saveData();
-                updateSuppliersList();
-                populateDropdowns();
-                document.getElementById('supplierName').value = '';
-                document.getElementById('supplierMobile').value = '';
-                document.getElementById('supplierAddress').value = '';
-                document.getElementById('supplierAccount').value = '';
-                document.getElementById('supplierIFSC').value = '';
-                if (gstinEl) gstinEl.value = '';
-                hideSupplierForm();
-            } else {
-                alert('Please fill in Name and Address');
-            }
-        }
-
-        function showSupplierForm() {
-            document.getElementById('suppliersListView').classList.add('hidden');
-            document.getElementById('supplierFormView').classList.remove('hidden');
-        }
-
-        function hideSupplierForm() {
-            document.getElementById('suppliersListView').classList.remove('hidden');
-            document.getElementById('supplierFormView').classList.add('hidden');
-            // Clear form
-            document.getElementById('supplierName').value = '';
-            document.getElementById('supplierMobile').value = '';
-            document.getElementById('supplierAddress').value = '';
-            document.getElementById('supplierAccount').value = '';
-            document.getElementById('supplierIFSC').value = '';
-            var gstinEl = document.getElementById('supplierGSTIN');
-            if (gstinEl) gstinEl.value = '';
-            editingSupplierId = null;
-        }
-
-        function updateSuppliersList() {
-            const container = document.getElementById('suppliersList');
-            if (!container) return;
-            var term = getMasterSearchTerm();
-            container.innerHTML = '';
-            var suppliers = (appData.suppliers || []).filter(function(s) {
-                if (!term) return true;
-                var n = (s.name || '').toLowerCase();
-                var m = (s.mobile || '').toLowerCase();
-                var a = (s.address || '').toLowerCase();
-                return n.indexOf(term) >= 0 || m.indexOf(term) >= 0 || a.indexOf(term) >= 0;
-            });
-            suppliers.forEach(function(supplier) {
-                var active = supplier.active !== false;
-                var div = document.createElement('div');
-                div.className = 'flex justify-between items-center p-2 bg-gray-50 rounded';
-                div.innerHTML = '<span>' + (active ? '' : '<span class="text-slate-400 line-through">') + supplier.name + (active ? '' : '</span>') + '</span>' +
-                    '<div class="space-x-2">' +
-                    '<button onclick="editSupplier(' + supplier.id + ')" class="text-blue-500 hover:text-blue-700">Edit</button>' +
-                    (active ? '<button onclick="setSupplierActive(' + supplier.id + ', false)" class="text-amber-600 hover:text-amber-800">Deactivate</button>' : '<button onclick="setSupplierActive(' + supplier.id + ', true)" class="text-green-600 hover:text-green-800">Activate</button>') +
-                    '<button onclick="removeSupplier(' + supplier.id + ')" class="text-red-500 hover:text-red-700">\u00D7</button>' +
-                    '</div>';
-                container.appendChild(div);
-            });
-        }
-        function setSupplierActive(id, active) { var s = appData.suppliers.find(function(x){ return x.id === id; }); if (s) { s.active = active; saveData(); updateSuppliersList(); populateDropdowns(); } }
-
-        function editSupplier(id) {
-            const supplier = appData.suppliers.find(s => s.id === id);
-            if (supplier) {
-                editingSupplierId = id;
-                document.getElementById('supplierName').value = supplier.name;
-                document.getElementById('supplierMobile').value = supplier.mobile || '';
-                document.getElementById('supplierAddress').value = supplier.address;
-                document.getElementById('supplierAccount').value = supplier.account || '';
-                document.getElementById('supplierIFSC').value = supplier.ifsc || '';
-                var gstinEl = document.getElementById('supplierGSTIN');
-                if (gstinEl) gstinEl.value = supplier.gstin || '';
-            }
-        }
-
-        function removeSupplier(id) {
-            appData.suppliers = appData.suppliers.filter(supplier => supplier.id !== id);
-            saveData();
-            updateSuppliersList();
-            populateDropdowns();
-        }
-
-        function addCustomer() {
-            var rawName = document.getElementById('customerName').value;
-            const name = rawName ? String(rawName).trim() : '';
-            const mobile = (document.getElementById('customerMobile').value || '').trim();
-            const address = (document.getElementById('customerAddress').value || '').trim();
-            const account = (document.getElementById('customerAccount').value || '').trim();
-            var custGstinEl = document.getElementById('customerGSTIN');
-            const custGstin = custGstinEl ? (custGstinEl.value || '').trim() : '';
-            if (name && address) {
-                if (editingCustomerId) {
-                    if (isDuplicateCustomerName(name, editingCustomerId)) { alert('Another customer with this name already exists (including with different spaces).'); return; }
-                    const customer = appData.customers.find(c => c.id === editingCustomerId);
-                    if (customer) {
-                        customer.name = name;
-                        customer.mobile = mobile;
-                        customer.address = address;
-                        customer.account = account;
-                        customer.gstin = custGstin;
-                    }
-                    editingCustomerId = null;
-                } else {
-                    if (isDuplicateCustomerName(name)) { alert('Customer with this name already exists (including with different spaces).'); return; }
-                    const customer = {
-                        id: Date.now(),
-                        name: name,
-                        mobile: mobile,
-                        address: address,
-                        account: account,
-                        gstin: custGstin,
-                        active: true
-                    };
-                    appData.customers.push(customer);
-                }
-                saveData();
-                updateCustomersList();
-                populateDropdowns();
-                document.getElementById('customerName').value = '';
-                document.getElementById('customerMobile').value = '';
-                document.getElementById('customerAddress').value = '';
-                document.getElementById('customerAccount').value = '';
-                if (custGstinEl) custGstinEl.value = '';
-                hideCustomerForm();
-            } else {
-                alert('Please fill in Name and Address');
-            }
-        }
-
-        function showCustomerForm() {
-            document.getElementById('customersListView').classList.add('hidden');
-            document.getElementById('customerFormView').classList.remove('hidden');
-        }
-
-        function hideCustomerForm() {
-            document.getElementById('customersListView').classList.remove('hidden');
-            document.getElementById('customerFormView').classList.add('hidden');
-            // Clear form
-            document.getElementById('customerName').value = '';
-            document.getElementById('customerMobile').value = '';
-            document.getElementById('customerAddress').value = '';
-            document.getElementById('customerAccount').value = '';
-            var custGstinEl = document.getElementById('customerGSTIN');
-            if (custGstinEl) custGstinEl.value = '';
-            editingCustomerId = null;
-        }
-
-        function updateCustomersList() {
-            const container = document.getElementById('customersList');
-            if (!container) return;
-            var term = getMasterSearchTerm();
-            container.innerHTML = '';
-            var customers = (appData.customers || []).filter(function(c) {
-                if (!term) return true;
-                var n = (c.name || '').toLowerCase();
-                var m = (c.mobile || '').toLowerCase();
-                var a = (c.address || '').toLowerCase();
-                return n.indexOf(term) >= 0 || m.indexOf(term) >= 0 || a.indexOf(term) >= 0;
-            });
-            customers.forEach(function(customer) {
-                var active = customer.active !== false;
-                var div = document.createElement('div');
-                div.className = 'flex justify-between items-center p-2 bg-gray-50 rounded';
-                div.innerHTML = '<span>' + (active ? '' : '<span class="text-slate-400 line-through">') + customer.name + (active ? '' : '</span>') + '</span>' +
-                    '<div class="space-x-2">' +
-                    '<button onclick="editCustomer(' + customer.id + ')" class="text-blue-500 hover:text-blue-700">Edit</button>' +
-                    (active ? '<button onclick="setCustomerActive(' + customer.id + ', false)" class="text-amber-600 hover:text-amber-800">Deactivate</button>' : '<button onclick="setCustomerActive(' + customer.id + ', true)" class="text-green-600 hover:text-green-800">Activate</button>') +
-                    '<button onclick="removeCustomer(' + customer.id + ')" class="text-red-500 hover:text-red-700">\u00D7</button>' +
-                    '</div>';
-                container.appendChild(div);
-            });
-        }
-        function setCustomerActive(id, active) { var c = appData.customers.find(function(x){ return x.id === id; }); if (c) { c.active = active; saveData(); updateCustomersList(); populateDropdowns(); } }
-
-        function editCustomer(id) {
-            const customer = appData.customers.find(c => c.id === id);
-            if (customer) {
-                editingCustomerId = id;
-                document.getElementById('customerName').value = customer.name;
-                document.getElementById('customerMobile').value = customer.mobile || '';
-                document.getElementById('customerAddress').value = customer.address;
-                document.getElementById('customerAccount').value = customer.account || '';
-                var custGstinEl = document.getElementById('customerGSTIN');
-                if (custGstinEl) custGstinEl.value = customer.gstin || '';
-            }
-        }
-
-        function removeCustomer(id) {
-            appData.customers = appData.customers.filter(customer => customer.id !== id);
-            saveData();
-            updateCustomersList();
-            populateDropdowns();
-        }
-
-        function addBroker() {
-            var rawName = document.getElementById('brokerName').value;
-            const name = rawName ? String(rawName).trim() : '';
-            const mobile = (document.getElementById('brokerMobile').value || '').trim();
-            const details = (document.getElementById('brokerDetails').value || '').trim();
-            const account = (document.getElementById('brokerAccount').value || '').trim();
-            if (name && details) {
-                if (editingBrokerId) {
-                    if (isDuplicateBrokerName(name, editingBrokerId)) { alert('Another broker with this name already exists (including with different spaces).'); return; }
-                    const broker = appData.brokers.find(b => b.id === editingBrokerId);
-                    if (broker) {
-                        broker.name = name;
-                        broker.mobile = mobile;
-                        broker.details = details;
-                        broker.account = account;
-                    }
-                    editingBrokerId = null;
-                } else {
-                    if (isDuplicateBrokerName(name)) { alert('Broker with this name already exists (including with different spaces).'); return; }
-                    const broker = {
-                        id: Date.now(),
-                        name: name,
-                        mobile: mobile,
-                        details: details,
-                        account: account,
-                        active: true
-                    };
-                    appData.brokers.push(broker);
-                }
-                saveData();
-                updateBrokersList();
-                populateDropdowns();
-                
-                // Clear form
-                document.getElementById('brokerName').value = '';
-                document.getElementById('brokerMobile').value = '';
-                document.getElementById('brokerDetails').value = '';
-                document.getElementById('brokerAccount').value = '';
-                
-                // Hide form after adding
-                hideBrokerForm();
-            } else {
-                alert('Please fill in Name and Details');
-            }
-        }
-
-        function showBrokerForm() {
-            document.getElementById('brokersListView').classList.add('hidden');
-            document.getElementById('brokerFormView').classList.remove('hidden');
-        }
-
-        function hideBrokerForm() {
-            document.getElementById('brokersListView').classList.remove('hidden');
-            document.getElementById('brokerFormView').classList.add('hidden');
-            // Clear form
-            document.getElementById('brokerName').value = '';
-            document.getElementById('brokerMobile').value = '';
-            document.getElementById('brokerDetails').value = '';
-            document.getElementById('brokerAccount').value = '';
-            editingBrokerId = null;
-        }
-
-        function updateBrokersList() {
-            const container = document.getElementById('brokersList');
-            if (!container) return;
-            var term = getMasterSearchTerm();
-            container.innerHTML = '';
-            var brokers = (appData.brokers || []).filter(function(b) {
-                if (!term) return true;
-                var n = (b.name || '').toLowerCase();
-                var m = (b.mobile || '').toLowerCase();
-                var d = (b.details || '').toLowerCase();
-                return n.indexOf(term) >= 0 || m.indexOf(term) >= 0 || d.indexOf(term) >= 0;
-            });
-            brokers.forEach(function(broker) {
-                var active = broker.active !== false;
-                var div = document.createElement('div');
-                div.className = 'flex justify-between items-center p-2 bg-gray-50 rounded';
-                div.innerHTML = '<span>' + (active ? '' : '<span class="text-slate-400 line-through">') + broker.name + (active ? '' : '</span>') + '</span>' +
-                    '<div class="space-x-2">' +
-                    '<button onclick="editBroker(' + broker.id + ')" class="text-blue-500 hover:text-blue-700">Edit</button>' +
-                    (active ? '<button onclick="setBrokerActive(' + broker.id + ', false)" class="text-amber-600 hover:text-amber-800">Deactivate</button>' : '<button onclick="setBrokerActive(' + broker.id + ', true)" class="text-green-600 hover:text-green-800">Activate</button>') +
-                    '<button onclick="removeBroker(' + broker.id + ')" class="text-red-500 hover:text-red-700">\u00D7</button>' +
-                    '</div>';
-                container.appendChild(div);
-            });
-        }
-        function setBrokerActive(id, active) { var b = appData.brokers.find(function(x){ return x.id === id; }); if (b) { b.active = active; saveData(); updateBrokersList(); populateDropdowns(); } }
-
-        function editBroker(id) {
-            const broker = appData.brokers.find(b => b.id === id);
-            if (broker) {
-                editingBrokerId = id;
-                document.getElementById('brokerName').value = broker.name;
-                document.getElementById('brokerMobile').value = broker.mobile || '';
-                document.getElementById('brokerDetails').value = broker.details;
-                document.getElementById('brokerAccount').value = broker.account || '';
-            }
-        }
-
-        function removeBroker(id) {
-            appData.brokers = appData.brokers.filter(broker => broker.id !== id);
-            saveData();
-            updateBrokersList();
-            populateDropdowns();
-        }
-
-        // Populate dropdowns
-        function populateDropdowns() {
-            // Purchase page dropdowns
-            const purchaseSupplier = document.getElementById('purchaseSupplier');
-            const purchaseItem = document.getElementById('purchaseItem');
-            
-            if (purchaseSupplier) {
-                purchaseSupplier.innerHTML = '<option value="">Select Supplier</option>';
-                (appData.suppliers || []).filter(function(s){ return s.active !== false; }).forEach(supplier => {
-                    purchaseSupplier.innerHTML += `<option value="${supplier.id}">${supplier.name}</option>`;
-                });
-            }
-            
-            if (purchaseItem) {
-                purchaseItem.innerHTML = '<option value="">Select Item</option>';
-                (appData.items || []).filter(function(i){ return i.active !== false; }).forEach(item => {
-                    purchaseItem.innerHTML += `<option value="${item.id}">${item.name}</option>`;
-                });
-            }
-
-            // Sales page dropdowns
-            const saleCustomer = document.getElementById('saleCustomer');
-            const saleItem = document.getElementById('saleItem');
-            
-            if (saleCustomer) {
-                saleCustomer.innerHTML = '<option value="">Select Customer</option>';
-                (appData.customers || []).filter(function(c){ return c.active !== false; }).forEach(customer => {
-                    saleCustomer.innerHTML += `<option value="${customer.id}">${customer.name}</option>`;
-                });
-            }
-            
-            if (saleItem) {
-                saleItem.innerHTML = '<option value="">Select Item</option>';
-                Object.keys(appData.inventory).forEach(itemId => {
-                    const item = appData.items.find(i => i.id == itemId);
-                    if (item && appData.inventory[itemId].quantity > 0) {
-                        saleItem.innerHTML += `<option value="${item.id}">${item.name} (Available: ${appData.inventory[itemId].quantity})</option>`;
-                    }
-                });
-            }
-
-            // Broker page dropdowns
-            const brokeragebroker = document.getElementById('brokeragebroker');
-            const brokerageItem = document.getElementById('brokerageItem');
-            
-            if (brokeragebroker) {
-                brokeragebroker.innerHTML = '<option value="">Select Broker</option>';
-                (appData.brokers || []).filter(function(b){ return b.active !== false; }).forEach(broker => {
-                    brokeragebroker.innerHTML += `<option value="${broker.id}">${broker.name}</option>`;
-                });
-            }
-            
-            if (brokerageItem) {
-                brokerageItem.innerHTML = '<option value="">Select Item</option>';
-                (appData.items || []).filter(function(i){ return i.active !== false; }).forEach(item => {
-                    brokerageItem.innerHTML += `<option value="${item.id}">${item.name}</option>`;
-                });
-            }
-
-            // Deductions page dropdown
-            const deductionCustomer = document.getElementById('deductionCustomer');
-            if (deductionCustomer) {
-                deductionCustomer.innerHTML = '<option value="">Select Customer</option>';
-                (appData.customers || []).filter(function(c){ return c.active !== false; }).forEach(customer => {
-                    deductionCustomer.innerHTML += `<option value="${customer.id}">${customer.name}</option>`;
-                });
-            }
-            
-            const deductionInvoice = document.getElementById('deductionInvoice');
-            if (deductionInvoice) {
-                deductionInvoice.innerHTML = '<option value="">Select Sales Invoice</option>';
-                appData.sales.forEach(sale => {
-                    deductionInvoice.innerHTML += `<option value="${sale.invoice}">${sale.invoice} - ${sale.customerName}</option>`;
-                });
-            }
-            
-            // Opening balance dropdowns
-            populateOpeningBalanceDropdowns();
-            syncPurchaseSupplierDisplay();
-            syncSaleCustomerDisplay();
-            initPurchaseSupplierSearch();
-            initSaleCustomerSearch();
-        }
-
-        function syncPurchaseSupplierDisplay() {
-            var sel = document.getElementById('purchaseSupplier');
-            var inp = document.getElementById('purchaseSupplierInput');
-            if (sel && inp) { var opt = sel.options[sel.selectedIndex]; inp.value = (opt && opt.value) ? (opt.text || '') : ''; }
-        }
-        function syncSaleCustomerDisplay() {
-            var sel = document.getElementById('saleCustomer');
-            var inp = document.getElementById('saleCustomerInput');
-            if (sel && inp) { var opt = sel.options[sel.selectedIndex]; inp.value = (opt && opt.value) ? (opt.text || '') : ''; }
-        }
-        function renderPurchaseSupplierDropdown(filter) {
-            var list = (appData.suppliers || []).filter(function(s){ return s.active !== false; });
-            if (filter) { var f = String(filter).trim().toLowerCase(); list = list.filter(function(s) { return (s.name || '').toLowerCase().indexOf(f) >= 0; }); }
-            var dd = document.getElementById('purchaseSupplierDropdown');
-            if (!dd) return;
-            dd.innerHTML = list.map(function(s){ return '<div class="px-3 py-2 cursor-pointer hover:bg-slate-100 border-b border-slate-100 last:border-0" data-id="'+s.id+'">'+escapeHtml(s.name||'')+'</div>'; }).join('');
-            dd.classList.remove('hidden');
-        }
-        function renderSaleCustomerDropdown(filter) {
-            var list = (appData.customers || []).filter(function(c){ return c.active !== false; });
-            if (filter) { var f = String(filter).trim().toLowerCase(); list = list.filter(function(c) { return (c.name || '').toLowerCase().indexOf(f) >= 0; }); }
-            var dd = document.getElementById('saleCustomerDropdown');
-            if (!dd) return;
-            dd.innerHTML = list.map(function(c){ return '<div class="px-3 py-2 cursor-pointer hover:bg-slate-100 border-b border-slate-100 last:border-0" data-id="'+c.id+'">'+escapeHtml(c.name||'')+'</div>'; }).join('');
-            dd.classList.remove('hidden');
-        }
-        function initPurchaseSupplierSearch() {
-            var inp = document.getElementById('purchaseSupplierInput');
-            var dd = document.getElementById('purchaseSupplierDropdown');
-            if (!inp || !dd || inp._searchInited) return;
-            inp._searchInited = true;
-            inp.addEventListener('focus', function(){ renderPurchaseSupplierDropdown(inp.value); });
-            inp.addEventListener('input', function(){ renderPurchaseSupplierDropdown(inp.value); });
-            inp.addEventListener('keyup', function(){ renderPurchaseSupplierDropdown(inp.value); });
-            inp.addEventListener('blur', function(){ setTimeout(function(){ dd.classList.add('hidden'); }, 200); });
-            dd.addEventListener('click', function(e){
-                var row = e.target.closest('[data-id]');
-                if (row) {
-                    var id = row.getAttribute('data-id');
-                    var name = row.textContent;
-                    var sel = document.getElementById('purchaseSupplier');
-                    if (sel) sel.value = id;
-                    inp.value = name;
-                    dd.classList.add('hidden');
-                }
-            });
-        }
-        function initSaleCustomerSearch() {
-            var inp = document.getElementById('saleCustomerInput');
-            var dd = document.getElementById('saleCustomerDropdown');
-            if (!inp || !dd || inp._searchInited) return;
-            inp._searchInited = true;
-            inp.addEventListener('focus', function(){ renderSaleCustomerDropdown(inp.value); });
-            inp.addEventListener('input', function(){ renderSaleCustomerDropdown(inp.value); });
-            inp.addEventListener('keyup', function(){ renderSaleCustomerDropdown(inp.value); });
-            inp.addEventListener('blur', function(){ setTimeout(function(){ dd.classList.add('hidden'); }, 200); });
-            dd.addEventListener('click', function(e){
-                var row = e.target.closest('[data-id]');
-                if (row) {
-                    var id = row.getAttribute('data-id');
-                    var name = row.textContent;
-                    var sel = document.getElementById('saleCustomer');
-                    if (sel) sel.value = id;
-                    inp.value = name;
-                    dd.classList.add('hidden');
-                }
-            });
-        }
-        function openAddSupplierModalFromPurchase() {
-            document.getElementById('quickSupplierName').value = '';
-            document.getElementById('quickSupplierMobile').value = '';
-            document.getElementById('quickSupplierAddress').value = '';
-            document.getElementById('quickSupplierAccount').value = '';
-            document.getElementById('quickSupplierIFSC').value = '';
-            document.getElementById('quickSupplierGSTIN').value = '';
-            document.getElementById('quickAddSupplierModal').classList.remove('hidden');
-        }
-        function closeQuickAddSupplierModal() {
-            document.getElementById('quickAddSupplierModal').classList.add('hidden');
-        }
-        function saveQuickAddSupplier() {
-            var name = (document.getElementById('quickSupplierName').value || '').trim();
-            var address = (document.getElementById('quickSupplierAddress').value || '').trim();
-            if (!name || !address) { alert('Name and Address are required.'); return; }
-            if (isDuplicateSupplierName(name)) { alert('Supplier with this name already exists (including with different spaces).'); return; }
-            var supplier = {
-                id: Date.now(),
-                name: name,
-                mobile: (document.getElementById('quickSupplierMobile').value || '').trim(),
-                address: address,
-                account: (document.getElementById('quickSupplierAccount').value || '').trim(),
-                ifsc: (document.getElementById('quickSupplierIFSC').value || '').trim(),
-                gstin: (document.getElementById('quickSupplierGSTIN').value || '').trim(),
-                active: true
-            };
-            appData.suppliers = appData.suppliers || [];
-            appData.suppliers.push(supplier);
-            saveData();
-            updateSuppliersList();
-            populateDropdowns();
-            document.getElementById('purchaseSupplier').value = supplier.id;
-            document.getElementById('purchaseSupplierInput').value = supplier.name;
-            closeQuickAddSupplierModal();
-            alert('Supplier added to masters and selected.');
-        }
-        function openAddCustomerModalFromSale() {
-            document.getElementById('quickCustomerName').value = '';
-            document.getElementById('quickCustomerMobile').value = '';
-            document.getElementById('quickCustomerAddress').value = '';
-            document.getElementById('quickCustomerAccount').value = '';
-            document.getElementById('quickCustomerGSTIN').value = '';
-            document.getElementById('quickAddCustomerModal').classList.remove('hidden');
-        }
-        function closeQuickAddCustomerModal() {
-            document.getElementById('quickAddCustomerModal').classList.add('hidden');
-        }
-        function saveQuickAddCustomer() {
-            var name = (document.getElementById('quickCustomerName').value || '').trim();
-            var address = (document.getElementById('quickCustomerAddress').value || '').trim();
-            if (!name || !address) { alert('Name and Address are required.'); return; }
-            if (isDuplicateCustomerName(name)) { alert('Customer with this name already exists (including with different spaces).'); return; }
-            var customer = {
-                id: Date.now(),
-                name: name,
-                mobile: (document.getElementById('quickCustomerMobile').value || '').trim(),
-                address: address,
-                account: (document.getElementById('quickCustomerAccount').value || '').trim(),
-                gstin: (document.getElementById('quickCustomerGSTIN').value || '').trim(),
-                active: true
-            };
-            appData.customers = appData.customers || [];
-            appData.customers.push(customer);
-            saveData();
-            updateCustomersList();
-            populateDropdowns();
-            document.getElementById('saleCustomer').value = customer.id;
-            document.getElementById('saleCustomerInput').value = customer.name;
-            closeQuickAddCustomerModal();
-            alert('Customer added to masters and selected.');
-        }
-
-        // Purchase functions
-        function updatePurchaseInputs() {
-            const itemId = document.getElementById('purchaseItem').value;
-            const unitDisplay = document.getElementById('purchaseUnitDisplay');
-            const rateContainer = document.getElementById('purchaseRateContainer');
-            const amountContainer = document.getElementById('purchaseAmountContainer');
-            const rateLabel = document.getElementById('purchaseRateLabel');
-            const rateHelp = document.getElementById('purchaseRateHelp');
-            const discountQtyContainer = document.getElementById('purchaseDiscountQtyContainer');
-            const bagsContainer = document.getElementById('purchaseBagsContainer');
-            const discountContainer = document.getElementById('purchaseDiscountContainer');
-            
-            // Get labels to update
-            const grossLabel = document.querySelector('label[for="purchaseQuantity"]');
-            const netLabel = document.querySelector('label[for="purchaseNetWeight"]');
-            const netHelp = document.querySelector('#purchaseNetWeight').nextElementSibling;
-            
-            if (itemId) {
-                const item = appData.items.find(i => i.id == itemId);
-                if (item) {
-                    unitDisplay.textContent = `Unit: ${item.unit}`;
-                    
-                    // Special handling for coconut products
-                    if (item.name.toLowerCase().includes('coconut')) {
-                        bagsContainer.style.display = 'none';
-                        if (discountContainer) discountContainer.style.display = 'none';
-                        discountQtyContainer.style.display = 'block';
-                        rateContainer.style.display = 'block';
-                        amountContainer.style.display = 'none';
-                        
-                        // Update labels for coconut
-                        grossLabel.textContent = 'Gross Quantity';
-                        document.getElementById('purchaseQuantity').placeholder = 'Gross Quantity';
-                        netLabel.textContent = 'Net Quantity';
-                        document.getElementById('purchaseNetWeight').placeholder = 'Net Quantity';
-                        netHelp.textContent = 'Auto-calculated (Gross - Discount)';
-                        rateLabel.textContent = `Rate per ${item.unit}`;
-                        rateHelp.textContent = `Enter rate per ${item.unit}`;
-                        
-                        // Clear bags value for coconut
-                        document.getElementById('purchaseBags').value = '0';
-                    } else if (item.unit.toLowerCase() === 'qty' || item.unit.toLowerCase() === 'quantity') {
-                        // For quantity-based items, show amount input instead of rate
-                        rateContainer.style.display = 'none';
-                        amountContainer.style.display = 'block';
-                        bagsContainer.style.display = 'none';
-                        if (discountContainer) discountContainer.style.display = 'none';
-                        discountQtyContainer.style.display = 'none';
-                        document.getElementById('purchaseDiscountQty').value = '0';
-                        
-                        grossLabel.textContent = 'Gross Weight (kg)';
-                        document.getElementById('purchaseQuantity').placeholder = 'Gross Weight';
-                        netLabel.textContent = 'Net Weight';
-                        document.getElementById('purchaseNetWeight').placeholder = 'Net Weight';
-                        netHelp.textContent = 'Auto-calculated (Gross - Discount); you can edit';
-                    } else {
-                        rateContainer.style.display = 'block';
-                        amountContainer.style.display = 'none';
-                        bagsContainer.style.display = 'block';
-                        if (discountContainer) discountContainer.style.display = 'block';
-                        discountQtyContainer.style.display = 'none';
-                        document.getElementById('purchaseDiscountQty').value = '0';
-                        
-                        grossLabel.textContent = 'Gross Weight (kg)';
-                        document.getElementById('purchaseQuantity').placeholder = 'Gross Weight';
-                        netLabel.textContent = 'Net Weight';
-                        document.getElementById('purchaseNetWeight').placeholder = 'Net Weight';
-                        netHelp.textContent = 'Auto-calculated (Gross - Discount); you can edit';
-                        rateLabel.textContent = `Rate per ${item.unit}`;
-                        rateHelp.textContent = `Enter rate per ${item.unit}`;
-                    }
-                }
-            } else {
-                unitDisplay.textContent = 'Select item first';
-                rateContainer.style.display = 'block';
-                amountContainer.style.display = 'none';
-                bagsContainer.style.display = 'block';
-                if (discountContainer) discountContainer.style.display = 'block';
-                discountQtyContainer.style.display = 'none';
-                rateLabel.textContent = 'Rate per Unit';
-                rateHelp.textContent = 'Enter rate per unit';
-                grossLabel.textContent = 'Gross Weight (kg)';
-                document.getElementById('purchaseQuantity').placeholder = 'Gross Weight';
-                netLabel.textContent = 'Net Weight';
-                document.getElementById('purchaseNetWeight').placeholder = 'Net Weight';
-                netHelp.textContent = 'Auto-calculated (Gross - Discount); you can edit';
-            }
-            
-            calculatePurchaseItemTotal();
-        }
-
-        function calculatePurchaseItemTotal() {
-            const grossWeight = parseFloat(document.getElementById('purchaseQuantity').value) || 0;
-            const discount = parseFloat(document.getElementById('purchaseDiscount').value) || 0;
-            const discountQty = parseFloat(document.getElementById('purchaseDiscountQty').value) || 0;
-            const rate = parseFloat(document.getElementById('purchaseRate').value) || 0;
-            const amount = parseFloat(document.getElementById('purchaseAmount').value) || 0;
-            
-            const itemId = document.getElementById('purchaseItem').value;
-            if (!itemId) return;
-            
-            const item = appData.items.find(i => i.id == itemId);
-            let netWeight = grossWeight;
-            let total = 0;
-            
-            if (item.name.toLowerCase().includes('coconut')) {
-                netWeight = grossWeight - discountQty;
-                total = netWeight * rate;
-            } else if (item.unit.toLowerCase() === 'qty' || item.unit.toLowerCase() === 'quantity') {
-                total = amount;
-                netWeight = grossWeight;
-            } else {
-                // Weight-based: Net = Gross - Discount (Discount box; flows from Bags)
-                netWeight = grossWeight - discount;
-                total = netWeight * rate;
-            }
-            
-            document.getElementById('purchaseNetWeight').value = netWeight;
-            document.getElementById('purchaseItemTotal').value = total.toFixed(2);
-        }
-
-        function recalcPurchaseItemTotalFromNetWeight() {
-            var netInput = parseFloat(document.getElementById('purchaseNetWeight').value);
-            if (isNaN(netInput)) return;
-            var itemId = document.getElementById('purchaseItem').value;
-            if (!itemId) return;
-            var item = appData.items.find(i => i.id == itemId);
-            if (!item) return;
-            var rate = parseFloat(document.getElementById('purchaseRate').value) || 0;
-            var amount = parseFloat(document.getElementById('purchaseAmount').value) || 0;
-            if (item.name.toLowerCase().includes('coconut')) {
-                document.getElementById('purchaseItemTotal').value = (netInput * rate).toFixed(2);
-            } else if (item.unit.toLowerCase() === 'qty' || item.unit.toLowerCase() === 'quantity') {
-                document.getElementById('purchaseItemTotal').value = amount;
-            } else {
-                document.getElementById('purchaseItemTotal').value = (netInput * rate).toFixed(2);
-            }
-        }
-
-        function addItemToPurchase() {
-            const itemId = document.getElementById('purchaseItem').value;
-            const grossWeight = parseFloat(document.getElementById('purchaseQuantity').value);
-            const bags = parseFloat(document.getElementById('purchaseBags').value) || 0;
-            const discountQty = parseFloat(document.getElementById('purchaseDiscountQty').value) || 0;
-            const rate = parseFloat(document.getElementById('purchaseRate').value) || 0;
-            const amount = parseFloat(document.getElementById('purchaseAmount').value) || 0;
-            
-            if (!itemId || !grossWeight) {
-                alert('Please select item and enter gross weight');
-                return;
-            }
-            
-            const item = appData.items.find(i => i.id == itemId);
-            let netWeight = grossWeight;
-            let total = 0;
-            
-            if (item.name.toLowerCase().includes('coconut')) {
-                // For coconut: Net Quantity = Gross - Discount
-                if (!rate) {
-                    alert('Please enter rate per unit');
-                    return;
-                }
-                netWeight = grossWeight - discountQty;
-                total = netWeight * rate;
-            } else if (item.unit.toLowerCase() === 'qty' || item.unit.toLowerCase() === 'quantity') {
-                if (!amount) {
-                    alert('Please enter total amount for quantity items');
-                    return;
-                }
-                total = amount;
-                netWeight = grossWeight;
-            } else {
-                if (!rate) {
-                    alert('Please enter rate per unit');
-                    return;
-                }
-                var discountVal = parseFloat(document.getElementById('purchaseDiscount').value) || 0;
-                netWeight = grossWeight - discountVal;
-                total = netWeight * rate;
-            }
-            // Use edited net weight from input if user changed it
-            var inputNet = parseFloat(document.getElementById('purchaseNetWeight').value);
-            if (!isNaN(inputNet) && inputNet >= 0) {
-                netWeight = inputNet;
-                if (item.name.toLowerCase().includes('coconut')) total = netWeight * rate;
-                else if (item.unit.toLowerCase() !== 'qty' && item.unit.toLowerCase() !== 'quantity') total = netWeight * rate;
-            }
-            
-            const purchaseItem = {
-                id: Date.now(),
-                itemId: itemId,
-                itemName: item.name,
-                grossWeight: grossWeight,
-                bags: bags,
-                netWeight: netWeight,
-                discountQty: discountQty, // Store discount for reference
-                rate: rate,
-                total: total, // Invoice amount = rate x net quantity
-                isCoconut: item.name.toLowerCase().includes('coconut') // Flag for special handling
-            };
-            
-            currentPurchaseItems.push(purchaseItem);
-            updateCurrentPurchaseItemsDisplay();
-            calculatePurchaseTotals();
-            
-            // Clear item form
-            document.getElementById('purchaseItem').value = '';
-            document.getElementById('purchaseQuantity').value = '';
-            document.getElementById('purchaseBags').value = '';
-            document.getElementById('purchaseDiscount').value = '0';
-            document.getElementById('purchaseNetWeight').value = '';
-            document.getElementById('purchaseDiscountQty').value = '0';
-            document.getElementById('purchaseRate').value = '';
-            document.getElementById('purchaseAmount').value = '';
-            document.getElementById('purchaseItemTotal').value = '';
-            document.getElementById('purchaseDiscountQtyContainer').style.display = 'none';
-            document.getElementById('purchaseBagsContainer').style.display = 'block';
-        }
-
-        function updateCurrentPurchaseItemsDisplay() {
-            const tbody = document.getElementById('currentPurchaseItems');
-            tbody.innerHTML = '';
-            
-            if (currentPurchaseItems.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
-                return;
-            }
-            
-            const discountVal = (gross, net) => (gross != null && net != null && !isNaN(gross) && !isNaN(net)) ? (gross - net) : '';
-            
-            currentPurchaseItems.forEach((item, index) => {
-                const row = document.createElement('tr');
-                row.className = 'border-b border-slate-200';
-                const bagsDisplay = item.isCoconut ? (item.discountQty || 0) : (item.bags ?? '');
-                const discountDisplay = discountVal(item.grossWeight, item.netWeight);
-                
-                row.innerHTML = `
-                    <td class="px-4 py-3">${item.itemName}</td>
-                    <td class="px-4 py-3">${item.grossWeight}</td>
-                    <td class="px-4 py-3">${bagsDisplay}</td>
-                    <td class="px-4 py-3">${discountDisplay}</td>
-                    <td class="px-4 py-3">${item.netWeight}</td>
-                    <td class="px-4 py-3">${RU}${item.rate}</td>
-                    <td class="px-4 py-3">${RU}${item.total.toFixed(2)}</td>
-                    <td class="px-4 py-3">
-                        <button onclick="removeItemFromPurchase(${index})" class="text-red-500 hover:text-red-700 font-medium">Remove</button>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-        }
-
-        function removeItemFromPurchase(index) {
-            currentPurchaseItems.splice(index, 1);
-            updateCurrentPurchaseItemsDisplay();
-            calculatePurchaseTotals();
-        }
-
-        // Purchase Others management
-        let purchaseOthersIndex = 1;
-        
-        function addPurchaseOthersRow() {
-            const container = document.getElementById('purchaseOthersContainer');
-            const newRow = document.createElement('div');
-            newRow.className = 'purchase-others-row grid grid-cols-1 md:grid-cols-4 gap-4 mb-3';
-            newRow.setAttribute('data-index', purchaseOthersIndex);
-            newRow.innerHTML = `
-                <div>
-                    <input type="text" class="purchase-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason">
-                </div>
-                <div>
-                    <input type="number" class="purchase-others-amount w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter amount">
-                </div>
-                <div>
-                    <select class="purchase-others-operation w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                        <option value="add">Add (+)</option>
-                        <option value="reduce">Reduce (-)</option>
-                    </select>
-                </div>
-                <div class="flex items-end">
-                    <button type="button" onclick="removePurchaseOthersRow(${purchaseOthersIndex})" class="w-full p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">Remove</button>
-                </div>
-            `;
-            container.appendChild(newRow);
-            
-            // Add event listeners for real-time calculation
-            const inputs = newRow.querySelectorAll('input, select');
-            inputs.forEach(input => {
-                input.addEventListener('input', calculatePurchaseTotals);
-                input.addEventListener('change', calculatePurchaseTotals);
-            });
-            
-            purchaseOthersIndex++;
-        }
-        
-        function removePurchaseOthersRow(index) {
-            const row = document.querySelector(`.purchase-others-row[data-index="${index}"]`);
-            if (row) {
-                row.remove();
-                calculatePurchaseTotals();
-            }
-        }
-        
-        function getPurchaseOthersEntries() {
-            const rows = document.querySelectorAll('.purchase-others-row');
-            const entries = [];
-            
-            rows.forEach(row => {
-                const reason = row.querySelector('.purchase-others-reason').value;
-                const amount = parseFloat(row.querySelector('.purchase-others-amount').value) || 0;
-                const operation = row.querySelector('.purchase-others-operation').value;
-                
-                if (amount > 0 && reason) {
-                    entries.push({ reason, amount, operation });
-                }
-            });
-            
-            return entries;
-        }
-
-        function calculatePurchaseTotals() {
-            const itemsTotal = currentPurchaseItems.reduce((sum, item) => sum + item.total, 0);
-            const hammali = parseFloat(document.getElementById('purchaseHammali').value) || 0;
-            const advance = parseFloat(document.getElementById('purchaseAdvance').value) || 0;
-            
-            // Get all Others entries
-            const othersEntries = getPurchaseOthersEntries();
-            let othersTotal = 0;
-            
-            othersEntries.forEach(entry => {
-                if (entry.operation === 'add') {
-                    othersTotal += entry.amount;
-                } else {
-                    othersTotal -= entry.amount;
-                }
-            });
-            
-            // Calculate grand total with all Others
-            let grandTotal = itemsTotal + hammali - advance + othersTotal;
-            
-            // Display Others total if any entries exist
-            if (othersEntries.length > 0) {
-                document.getElementById('purchaseOthersDisplayContainer').style.display = 'block';
-                document.getElementById('purchaseOthersDisplay').textContent = Math.abs(othersTotal).toFixed(2);
-                document.getElementById('purchaseOthersSign').textContent = othersTotal >= 0 ? '+' : '-';
-            } else {
-                document.getElementById('purchaseOthersDisplayContainer').style.display = 'none';
-            }
-            
-            document.getElementById('purchaseItemsTotal').textContent = itemsTotal.toFixed(2);
-            document.getElementById('purchaseHammaliDisplay').textContent = hammali.toFixed(2);
-            document.getElementById('purchaseAdvanceDisplay').textContent = advance.toFixed(2);
-            document.getElementById('purchaseGrandTotal').textContent = grandTotal.toFixed(2);
-        }
-
-        function savePurchaseInvoice() {
-            const date = document.getElementById('purchaseDate').value;
-            const invoice = document.getElementById('purchaseInvoice').value;
-            const supplierId = document.getElementById('purchaseSupplier').value;
-            const truck = document.getElementById('purchaseTruck').value;
-            const lrNumber = (document.getElementById('purchaseLRNumber') && document.getElementById('purchaseLRNumber').value) ? document.getElementById('purchaseLRNumber').value.trim() : '';
-            const hammali = parseFloat(document.getElementById('purchaseHammali').value) || 0;
-            const advance = parseFloat(document.getElementById('purchaseAdvance').value) || 0;
-            const othersEntries = getPurchaseOthersEntries();
-            
-            if (!date || !invoice || !supplierId || currentPurchaseItems.length === 0) {
-                alert('Please fill in all required fields and add at least one item');
-                return;
-            }
-
-            const invoiceTrim = (invoice || '').trim().toUpperCase();
-            const duplicatePurchase = appData.purchases.find(p => (p.invoice || '').trim().toUpperCase() === invoiceTrim && p.id !== editingPurchaseId);
-            if (duplicatePurchase) {
-                alert('This Purchase invoice number is already used. Please use a unique invoice number.');
-                return;
-            }
-            
-            const supplier = appData.suppliers.find(s => s.id == supplierId);
-            if (!supplier) {
-                alert('Selected supplier not found');
-                return;
-            }
-            const itemsTotal = currentPurchaseItems.reduce((sum, item) => sum + item.total, 0);
-            
-            // Calculate grand total with Others
-            let grandTotal = itemsTotal + hammali - advance;
-            othersEntries.forEach(entry => {
-                if (entry.operation === 'add') {
-                    grandTotal += entry.amount;
-                } else {
-                    grandTotal -= entry.amount;
-                }
-            });
-            
-            if (editingPurchaseId) {
-                // Editing existing purchase
-                const existingPurchase = appData.purchases.find(p => p.id === editingPurchaseId);
-                if (existingPurchase) {
-                    // Reverse old inventory changes (using gross weight)
-                    if (existingPurchase.items) {
-                        existingPurchase.items.forEach(item => {
-                            if (appData.inventory[item.itemId]) {
-                                appData.inventory[item.itemId].quantity -= item.grossWeight;
-                                appData.inventory[item.itemId].totalCost -= item.total;
-                                if (appData.inventory[item.itemId].quantity <= 0) {
-                                    delete appData.inventory[item.itemId];
-                                }
-                            }
-                        });
-                    }
-                    
-                    // Update purchase with new data
-                    existingPurchase.date = date;
-                    existingPurchase.invoice = invoice;
-                    existingPurchase.supplierId = supplierId;
-                    existingPurchase.supplierName = supplier.name;
-                    existingPurchase.truck = truck;
-                    existingPurchase.lrNumber = lrNumber;
-                    existingPurchase.items = [...currentPurchaseItems];
-                    existingPurchase.itemsTotal = itemsTotal;
-                    existingPurchase.hammali = hammali;
-                    existingPurchase.advance = advance;
-                    existingPurchase.othersEntries = othersEntries;
-                    existingPurchase.grandTotal = grandTotal;
-                    existingPurchase.balance = grandTotal - (existingPurchase.paid || 0);
-                    Object.assign(existingPurchase, getAuditMeta(false));
-                    
-                    // Add new inventory for updated purchase (using gross weight)
-                    currentPurchaseItems.forEach(item => {
-                        if (!appData.inventory[item.itemId]) {
-                            appData.inventory[item.itemId] = { quantity: 0, totalCost: 0 };
-                        }
-                        appData.inventory[item.itemId].quantity += item.grossWeight;
-                        appData.inventory[item.itemId].totalCost += item.total;
-                    });
-                }
-                editingPurchaseId = null;
-            } else {
-                // Creating new purchase
-                const purchase = {
-                    id: Date.now(),
-                    date: date,
-                    invoice: invoice,
-                    supplierId: supplierId,
-                    supplierName: supplier.name,
-                    truck: truck,
-                    lrNumber: lrNumber,
-                    items: [...currentPurchaseItems],
-                    itemsTotal: itemsTotal,
-                    hammali: hammali,
-                    advance: advance,
-                    othersEntries: othersEntries,
-                    grandTotal: grandTotal,
-                    paid: 0, // Don't count advance as paid initially
-                    balance: grandTotal, // Full amount is balance initially
-                    ...getAuditMeta(true)
-                };
-                appData.purchases.push(purchase);
-                
-                // Update inventory for new purchase (using gross weight)
-                currentPurchaseItems.forEach(item => {
-                    if (!appData.inventory[item.itemId]) {
-                        appData.inventory[item.itemId] = { quantity: 0, totalCost: 0 };
-                    }
-                    appData.inventory[item.itemId].quantity += item.grossWeight;
-                    appData.inventory[item.itemId].totalCost += item.total;
-                });
-            }
-            
-            saveData();
-            updatePurchaseHistory();
-            updateDashboard();
-            
-            // Regenerate ledger only if type and entity are already selected (avoid "Please select ledger type and entity" alert)
-            const ledgerTypeEl = document.getElementById('ledgerType');
-            const ledgerEntityEl = document.getElementById('ledgerEntity');
-            if (typeof generateLedger === 'function' && ledgerTypeEl && ledgerEntityEl && ledgerTypeEl.value && ledgerEntityEl.value) {
-                generateLedger();
-            }
-            
-            // Hide cancel button
-            document.getElementById('cancelPurchaseEdit').classList.add('hidden');
-            
-            // Clear form and return to history view
-            clearPurchaseForm();
-            const wasEditing = editingPurchaseId !== null;
-            editingPurchaseId = null;
-            alert(wasEditing ? 'Purchase updated successfully!' : 'Purchase invoice saved successfully!');
-            
-            // Return to history view
-            hidePurchaseForm();
-        }
-
-        function clearPurchaseForm() {
-            document.getElementById('purchaseDate').value = new Date().toISOString().split('T')[0];
-            document.getElementById('purchaseInvoice').value = '';
-            document.getElementById('purchaseSupplier').value = '';
-            var psi = document.getElementById('purchaseSupplierInput');
-            if (psi) psi.value = '';
-            var psd = document.getElementById('purchaseSupplierDropdown');
-            if (psd) psd.classList.add('hidden');
-            document.getElementById('purchaseTruck').value = '';
-            var plr = document.getElementById('purchaseLRNumber');
-            if (plr) plr.value = '';
-            document.getElementById('purchaseHammali').value = '';
-            document.getElementById('purchaseAdvance').value = '';
-            var pdEl = document.getElementById('purchaseDiscount');
-            if (pdEl) pdEl.value = '0';
-            
-            // Clear all Others rows except the first one
-            const container = document.getElementById('purchaseOthersContainer');
-            container.innerHTML = `
-                <div class="purchase-others-row grid grid-cols-1 md:grid-cols-3 gap-4 mb-3" data-index="0">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Reason/Description</label>
-                        <input type="text" class="purchase-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason (e.g., Transport, Commission)">
+    </header>
+
+    <!-- Main Content Container -->
+    <div class="main-content-area">
+    <!-- Page 1: Home -->
+    <div id="home" class="page-content">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <!-- Header Row -->
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl flex items-center justify-center shadow-lg">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/></svg>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
-                        <input type="number" class="purchase-others-amount w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter amount">
+                        <h1 class="text-xl font-bold text-slate-900">Ishwar Trading Company</h1>
+                        <p class="text-xs text-slate-500">Enterprise Dashboard – Real-time Analytics</p>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Operation</label>
-                        <select class="purchase-others-operation w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                            <option value="add">Add (+)</option>
-                            <option value="reduce">Reduce (-)</option>
+                </div>
+                <div class="text-right">
+                    <p class="text-xs text-slate-400 uppercase tracking-wider">Last Updated</p>
+                    <p id="dashboardUpdateTime" class="text-sm font-semibold text-slate-600">--:--:--</p>
+                </div>
+            </div>
+
+            <!-- Key Metrics Row -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <!-- Net Receivables -->
+                <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Receivables</span>
+                        <div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                    </div>
+                    <p id="netReceivables" class="text-2xl font-bold">&#8377;0.00</p>
+                    <p class="text-xs opacity-75 mt-1">From customers</p>
+                </div>
+                
+                <!-- Net Payables -->
+                <div class="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Payables</span>
+                        <div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                        </div>
+                    </div>
+                    <p id="netPayables" class="text-2xl font-bold">&#8377;0.00</p>
+                    <p class="text-xs opacity-75 mt-1">To suppliers</p>
+                </div>
+                
+                <!-- Stock Value -->
+                <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Stock Value</span>
+                        <div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                        </div>
+                    </div>
+                    <p id="stockValue" class="text-2xl font-bold">&#8377;0.00</p>
+                    <p class="text-xs opacity-75 mt-1">Current inventory</p>
+                </div>
+                
+                <!-- Net Position -->
+                <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Net Position</span>
+                        <div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                        </div>
+                    </div>
+                    <p id="netPosition" class="text-2xl font-bold">&#8377;0.00</p>
+                    <p class="text-xs opacity-75 mt-1">Receivables - Payables</p>
+                </div>
+            </div>
+
+            <!-- Second Row: Charts and Quick Stats -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <!-- Sales vs Purchase Chart -->
+                <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Business Performance</h3>
+                        <select id="chartPeriod" class="text-xs border border-slate-200 rounded-lg px-2 py-1" onchange="updateDashboardCharts()">
+                            <option value="all" selected>All Time</option>
+                            <option value="7">Last 7 Days</option>
+                            <option value="30">Last 30 Days</option>
+                            <option value="90">Last 90 Days</option>
                         </select>
                     </div>
-                </div>
-            `;
-            purchaseOthersIndex = 1;
-            
-            currentPurchaseItems = [];
-            editingPurchaseId = null;
-            updateCurrentPurchaseItemsDisplay();
-            calculatePurchaseTotals();
-        }
-
-        function addPurchase() {
-            const date = document.getElementById('purchaseDate').value;
-            const invoice = document.getElementById('purchaseInvoice').value;
-            const supplierId = document.getElementById('purchaseSupplier').value;
-            const itemId = document.getElementById('purchaseItem').value;
-            const quantity = parseFloat(document.getElementById('purchaseQuantity').value);
-            
-            if (!date || !invoice || !supplierId || !itemId || !quantity) {
-                alert('Please fill in all required fields');
-                return;
-            }
-
-            const invoiceTrim = (invoice || '').trim().toUpperCase();
-            if (appData.purchases.some(p => (p.invoice || '').trim().toUpperCase() === invoiceTrim)) {
-                alert('This Purchase invoice number is already used. Please use a unique invoice number.');
-                return;
-            }
-            
-            const supplier = appData.suppliers.find(s => s.id == supplierId);
-            const item = appData.items.find(i => i.id == itemId);
-            
-            if (!supplier || !item) {
-                alert('Invalid supplier or item selected');
-                return;
-            }
-            
-            let total = 0;
-            let rate = 0;
-            
-            if (item.unit.toLowerCase() === 'qty' || item.unit.toLowerCase() === 'quantity') {
-                // For quantity-based items, use total amount
-                const amount = parseFloat(document.getElementById('purchaseAmount').value);
-                if (!amount) {
-                    alert('Please enter the total amount');
-                    return;
-                }
-                total = amount;
-                rate = amount / quantity; // Calculate rate per unit for storage
-            } else {
-                // For weight-based items, use rate * quantity
-                const unitRate = parseFloat(document.getElementById('purchaseRate').value);
-                if (!unitRate) {
-                    alert('Please enter the rate per unit');
-                    return;
-                }
-                rate = unitRate;
-                total = quantity * rate;
-            }
-            
-            const purchase = {
-                id: Date.now(),
-                date: date,
-                invoice: invoice,
-                supplierId: supplierId,
-                supplierName: supplier.name,
-                itemId: itemId,
-                itemName: item.name,
-                quantity: quantity,
-                rate: rate,
-                total: total,
-                ...getAuditMeta(true)
-            };
-            
-            appData.purchases.push(purchase);
-            
-            // Update inventory
-            if (!appData.inventory[itemId]) {
-                appData.inventory[itemId] = { quantity: 0, totalCost: 0 };
-            }
-            appData.inventory[itemId].quantity += quantity;
-            appData.inventory[itemId].totalCost += total;
-            
-            saveData();
-            updatePurchaseHistory();
-            updateDashboard();
-            
-            // Clear form
-            document.getElementById('purchaseDate').value = '';
-            document.getElementById('purchaseInvoice').value = '';
-            document.getElementById('purchaseSupplier').value = '';
-            document.getElementById('purchaseItem').value = '';
-            document.getElementById('purchaseQuantity').value = '';
-            document.getElementById('purchaseRate').value = '';
-            document.getElementById('purchaseAmount').value = '';
-            document.getElementById('purchaseTotal').textContent = '0';
-            
-            // Reset input visibility
-            document.getElementById('purchaseRateContainer').style.display = 'block';
-            document.getElementById('purchaseAmountContainer').style.display = 'none';
-            document.getElementById('purchaseUnitDisplay').textContent = 'Select item first';
-            
-            alert('Purchase added successfully!');
-        }
-
-        // Store for filtered data
-        let filteredPurchases = [];
-        let filteredSales = [];
-        let filteredBrokerage = [];
-        let filteredDeductions = [];
-        
-        // Populate filter dropdowns
-        function populateFilterDropdowns() {
-            // Purchase supplier filter
-            const purchaseSupplierFilter = document.getElementById('purchaseFilterSupplier');
-            if (purchaseSupplierFilter) {
-                const currentValue = purchaseSupplierFilter.value;
-                purchaseSupplierFilter.innerHTML = '<option value="">All Suppliers</option>';
-                appData.suppliers.forEach(s => {
-                    purchaseSupplierFilter.innerHTML += `<option value="${s.id}">${s.name}</option>`;
-                });
-                purchaseSupplierFilter.value = currentValue;
-            }
-            
-            // Sales customer filter
-            const salesCustomerFilter = document.getElementById('salesFilterCustomer');
-            if (salesCustomerFilter) {
-                const currentValue = salesCustomerFilter.value;
-                salesCustomerFilter.innerHTML = '<option value="">All Customers</option>';
-                appData.customers.forEach(c => {
-                    salesCustomerFilter.innerHTML += `<option value="${c.id}">${c.name}</option>`;
-                });
-                salesCustomerFilter.value = currentValue;
-            }
-            
-            // Brokerage broker filter
-            const brokerageFilterBroker = document.getElementById('brokerageFilterBroker');
-            if (brokerageFilterBroker) {
-                const currentValue = brokerageFilterBroker.value;
-                brokerageFilterBroker.innerHTML = '<option value="">All Brokers</option>';
-                appData.brokers.forEach(b => {
-                    brokerageFilterBroker.innerHTML += `<option value="${b.id}">${b.name}</option>`;
-                });
-                brokerageFilterBroker.value = currentValue;
-            }
-            
-            // Deductions customer filter
-            const deductionsCustomerFilter = document.getElementById('deductionsFilterCustomer');
-            if (deductionsCustomerFilter) {
-                const currentValue = deductionsCustomerFilter.value;
-                deductionsCustomerFilter.innerHTML = '<option value="">All Customers</option>';
-                appData.customers.forEach(c => {
-                    deductionsCustomerFilter.innerHTML += `<option value="${c.id}">${c.name}</option>`;
-                });
-                deductionsCustomerFilter.value = currentValue;
-            }
-        }
-        
-        // Filter Purchases
-        function filterPurchases() {
-            const search = (document.getElementById('purchaseSearch')?.value || '').toLowerCase();
-            const supplierId = document.getElementById('purchaseFilterSupplier')?.value || '';
-            const dateFrom = document.getElementById('purchaseDateFrom')?.value || '';
-            const dateTo = document.getElementById('purchaseDateTo')?.value || '';
-            const sortBy = document.getElementById('purchaseSort')?.value || 'date-desc';
-            
-            filteredPurchases = appData.purchases.filter(p => {
-                // Search filter
-                if (search) {
-                    const searchFields = [p.invoice, p.supplierName, p.truck || ''].join(' ').toLowerCase();
-                    if (!searchFields.includes(search)) return false;
-                }
-                // Supplier filter
-                if (supplierId && p.supplierId != supplierId) return false;
-                // Date filters
-                if (dateFrom && p.date < dateFrom) return false;
-                if (dateTo && p.date > dateTo) return false;
-                return true;
-            });
-            
-            // Sort
-            filteredPurchases.sort((a, b) => {
-                switch(sortBy) {
-                    case 'date-asc': return new Date(a.date) - new Date(b.date);
-                    case 'date-desc': return new Date(b.date) - new Date(a.date);
-                    case 'amount-desc': return (b.grandTotal || b.total || 0) - (a.grandTotal || a.total || 0);
-                    case 'amount-asc': return (a.grandTotal || a.total || 0) - (b.grandTotal || b.total || 0);
-                    case 'supplier-asc': return (a.supplierName || '').localeCompare(b.supplierName || '');
-                    case 'balance-desc': return ((b.grandTotal || 0) - (b.paid || 0)) - ((a.grandTotal || 0) - (a.paid || 0));
-                    default: return new Date(b.date) - new Date(a.date);
-                }
-            });
-            
-            // Update count
-            const countEl = document.getElementById('purchaseFilterCount');
-            if (countEl) {
-                countEl.textContent = `Showing ${filteredPurchases.length} of ${appData.purchases.length} purchases`;
-            }
-            
-            // Reset to page 1 and render
-            paginationState.purchases.currentPage = 1;
-            renderPurchaseTable();
-        }
-        
-        function clearPurchaseFilters() {
-            document.getElementById('purchaseSearch').value = '';
-            document.getElementById('purchaseFilterSupplier').value = '';
-            document.getElementById('purchaseDateFrom').value = '';
-            document.getElementById('purchaseDateTo').value = '';
-            document.getElementById('purchaseSort').value = 'date-desc';
-            filterPurchases();
-        }
-        
-        function renderPurchaseTable() {
-            const tbody = document.getElementById('purchaseHistory');
-            tbody.innerHTML = '';
-            
-            if (filteredPurchases.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="9" class="px-4 py-12 text-center">
-                            <div class="flex flex-col items-center text-slate-400">
-                                <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
-                                </svg>
-                                <p class="font-medium">No purchases found</p>
-                                <p class="text-sm">Try adjusting your filters</p>
-                            </div>
-                        </td>
-                    </tr>`;
-                document.getElementById('purchasePagination').innerHTML = '';
-                return;
-            }
-            
-            const { currentPage, pageSize } = paginationState.purchases;
-            const paginatedPurchases = getPaginatedData(filteredPurchases, currentPage, pageSize);
-            
-            paginatedPurchases.forEach((purchase, index) => {
-                const itemsCount = purchase.items ? purchase.items.length : 1;
-                const itemsText = purchase.items ? `${itemsCount} item${itemsCount > 1 ? 's' : ''}` : purchase.itemName || 'N/A';
-                const grandTotal = purchase.grandTotal || purchase.total || 0;
-                const paid = purchase.paid || 0;
-                const currentBalance = grandTotal - paid;
-                purchase.balance = currentBalance;
-                var linkedSales = (appData.sales || []).filter(function(s) { return s.linkedPurchases && s.linkedPurchases.some(function(lp) { return lp.purchaseId === purchase.id; }); });
-                var linkedBadge = linkedSales.length > 0 ? ' <span class="inline-block ml-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Linked to sale(s): ' + escapeHtml(linkedSales.map(function(s){ return s.invoice || s.id; }).join(', ')) + '">Linked</span>' : '';
-                
-                const row = document.createElement('tr');
-                row.className = 'hover:bg-blue-50/50 transition-colors';
-                row.innerHTML = `
-                    <td class="px-4 py-3 text-sm">
-                        <span class="text-slate-600">${purchase.date}</span>
-                    </td>
-                    <td class="px-4 py-3">
-                        <span class="font-mono text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">${purchase.invoice}</span>${linkedBadge}
-                    </td>
-                    <td class="px-4 py-3">
-                        <span class="font-medium text-slate-700 text-sm">${escapeHtml(purchase.supplierName)}</span>
-                    </td>
-                    <td class="px-4 py-3 text-sm text-slate-500">${purchase.truck || '-'}</td>
-                    <td class="px-4 py-3">
-                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
-                            ${itemsText}
-                        </span>
-                    </td>
-                    <td class="px-4 py-3 text-right">
-                        <span class="font-semibold text-slate-800">${RU}${grandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
-                    </td>
-                    <td class="px-4 py-3 text-right">
-                        <span class="text-green-600 font-medium">${RU}${paid.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
-                    </td>
-                    <td class="px-4 py-3 text-right">
-                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${currentBalance > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}">
-                            ${currentBalance > 0 ? RU + currentBalance.toLocaleString('en-IN', {minimumFractionDigits: 2}) : 'Paid ' + CHECK}
-                        </span>
-                    </td>
-                    <td class="px-4 py-3">
-                        <div class="flex items-center justify-center gap-1">
-                            <button onclick="viewPurchase(${purchase.id})" class="action-btn action-view" title="View"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg></button>
-                            <button onclick="printPurchaseInvoice(${purchase.id})" class="action-btn action-print" title="Print"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
-                            <button onclick="editPurchase(${purchase.id})" class="action-btn action-edit" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg></button>
-                            <button onclick="payPurchase(${purchase.id})" class="action-btn action-pay" title="Pay"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12v2H6V3zm0 4h12v2h-4.5c-.83 2.07-2.6 3.56-4.74 3.94L14 21h-2.5l-5.24-8H6v-2h4.5c1.38 0 2.56-.8 3.12-1.94L6 9V7z"/></svg></button>
-                            <button onclick="deletePurchase(${purchase.id})" class="action-btn action-delete" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd"/></svg></button>
+                    <div class="grid grid-cols-4 gap-2 mb-3">
+                        <div class="text-center p-1.5 bg-green-50 rounded-lg">
+                            <p class="text-xs text-green-600 font-medium">Sales</p>
+                            <p id="chartTotalSales" class="text-sm font-bold text-green-700">&#8377;0</p>
                         </div>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-            
-            renderPagination('purchasePagination', filteredPurchases.length, currentPage, pageSize, 'changePurchasePage', 'changePurchasePageSize');
-        }
-        
-        function updatePurchaseHistory() {
-            populateFilterDropdowns();
-            filteredPurchases = [...appData.purchases];
-            filterPurchases();
-            
-            // Update summary stats
-            const totalCount = appData.purchases.length;
-            const totalAmount = appData.purchases.reduce((sum, p) => sum + (p.grandTotal || p.total || 0), 0);
-            const totalPaid = appData.purchases.reduce((sum, p) => {
-                const payments = appData.payments.filter(pay => pay.type === 'purchase' && pay.invoiceId === p.id);
-                return sum + payments.reduce((s, pay) => s + pay.amount, 0);
-            }, 0);
-            const pendingAmount = totalAmount - totalPaid;
-            
-            const countEl = document.getElementById('purchaseTotalCount');
-            const amountEl = document.getElementById('purchaseTotalAmount');
-            const pendingEl = document.getElementById('purchasePendingAmount');
-            
-            if (countEl) countEl.textContent = totalCount;
-            if (amountEl) amountEl.textContent = `${RU}${(totalAmount/1000).toFixed(0)}K`;
-            if (pendingEl) pendingEl.textContent = `${RU}${(pendingAmount/1000).toFixed(0)}K`;
-        }
+                        <div class="text-center p-1.5 bg-red-50 rounded-lg">
+                            <p class="text-xs text-red-600 font-medium">Purchases</p>
+                            <p id="chartTotalPurchases" class="text-sm font-bold text-red-700">&#8377;0</p>
+                        </div>
+                        <div class="text-center p-1.5 bg-blue-50 rounded-lg">
+                            <p class="text-xs text-blue-600 font-medium">Net Profit</p>
+                            <p id="chartGrossProfit" class="text-sm font-bold text-blue-700">&#8377;0</p>
+                        </div>
+                        <div class="text-center p-1.5 bg-purple-50 rounded-lg">
+                            <p class="text-xs text-purple-600 font-medium">Txns</p>
+                            <p id="chartTransactions" class="text-sm font-bold text-purple-700">0</p>
+                        </div>
+                    </div>
+                    <div id="performanceChart" class="h-32 flex items-center justify-center gap-4 px-2 border-t border-slate-100 pt-2">
+                        <!-- Donut chart will be rendered here -->
+                        <div class="relative">
+                            <svg id="profitDonutChart" width="100" height="100" viewBox="0 0 160 160">
+                                <!-- Background circle -->
+                                <circle cx="80" cy="80" r="60" fill="none" stroke="#f1f5f9" stroke-width="20"/>
+                                <!-- Sales arc -->
+                                <circle id="salesArc" cx="80" cy="80" r="60" fill="none" stroke="#10b981" stroke-width="20" 
+                                    stroke-dasharray="0 377" stroke-dashoffset="94.25" transform="rotate(-90 80 80)"
+                                    style="transition: stroke-dasharray 0.8s ease;"/>
+                                <!-- Purchases arc -->
+                                <circle id="purchasesArc" cx="80" cy="80" r="60" fill="none" stroke="#ef4444" stroke-width="20" 
+                                    stroke-dasharray="0 377" stroke-dashoffset="94.25" transform="rotate(-90 80 80)"
+                                    style="transition: stroke-dasharray 0.8s ease;"/>
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <span class="text-xs text-slate-500 font-medium">PROFIT</span>
+                                <span id="donutCenterValue" class="text-sm font-bold text-slate-800">&#8377;0</span>
+                                <span id="donutProfitPercent" class="text-xs font-semibold text-green-600">0%</span>
+                            </div>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <div class="flex items-center gap-2">
+                                <div class="w-3 h-3 rounded-full bg-gradient-to-r from-green-500 to-emerald-500"></div>
+                                <div>
+                                    <p class="text-xs text-slate-500">Sales</p>
+                                    <p id="donutSalesValue" class="text-xs font-bold text-slate-700">&#8377;0</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-3 h-3 rounded-full bg-gradient-to-r from-red-500 to-rose-500"></div>
+                                <div>
+                                    <p class="text-xs text-slate-500">Purchases</p>
+                                    <p id="donutPurchasesValue" class="text-xs font-bold text-slate-700">&#8377;0</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="w-3 h-3 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+                                <div>
+                                    <p class="text-xs text-slate-500">Margin</p>
+                                    <p id="donutMarginValue" class="text-xs font-bold text-slate-700">0%</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-        // Calculate purchase total
-        function calculatePurchaseTotal() {
-            const itemId = document.getElementById('purchaseItem').value;
-            const quantity = parseFloat(document.getElementById('purchaseQuantity').value) || 0;
-            
-            if (!itemId || !quantity) {
-                document.getElementById('purchaseTotal').textContent = '0';
-                return;
-            }
-            
-            const item = appData.items.find(i => i.id == itemId);
-            let total = 0;
-            
-            if (item.unit.toLowerCase() === 'qty' || item.unit.toLowerCase() === 'quantity') {
-                // For quantity-based items, use total amount
-                const amount = parseFloat(document.getElementById('purchaseAmount').value) || 0;
-                total = amount;
-            } else {
-                // For weight-based items, use rate * quantity
-                const rate = parseFloat(document.getElementById('purchaseRate').value) || 0;
-                total = quantity * rate;
-            }
-            
-            document.getElementById('purchaseTotal').textContent = total.toFixed(2);
-        }
+                <!-- Quick Actions -->
+                <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-3">
+                    <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-2">Quick Actions</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="showPage('purchase'); showPurchaseForm();" class="flex flex-col items-center gap-1 p-2 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg hover:from-blue-50 hover:to-blue-100 transition-all group">
+                            <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                            </div>
+                            <span class="text-xs font-medium text-slate-600">New Purchase</span>
+                        </button>
+                        <button onclick="showPage('sales'); showSalesForm();" class="flex flex-col items-center gap-1 p-2 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg hover:from-green-50 hover:to-green-100 transition-all group">
+                            <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            </div>
+                            <span class="text-xs font-medium text-slate-600">New Sale</span>
+                        </button>
+                        <button onclick="showPage('pnl');" class="flex flex-col items-center gap-1 p-2 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg hover:from-purple-50 hover:to-purple-100 transition-all group">
+                            <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                                <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            </div>
+                            <span class="text-xs font-medium text-slate-600">P&L Report</span>
+                        </button>
+                        <button onclick="showPage('ledger');" class="flex flex-col items-center gap-1 p-2 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg hover:from-amber-50 hover:to-amber-100 transition-all group">
+                            <div class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center group-hover:bg-amber-200 transition-colors">
+                                <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                            </div>
+                            <span class="text-xs font-medium text-slate-600">Ledger</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
 
-        document.addEventListener('DOMContentLoaded', function() {
-            const quantityInput = document.getElementById('purchaseQuantity');
-            const rateInput = document.getElementById('purchaseRate');
-            const amountInput = document.getElementById('purchaseAmount');
-            
-            if (quantityInput && rateInput && amountInput) {
-                [quantityInput, rateInput, amountInput].forEach(input => {
-                    input.addEventListener('input', calculatePurchaseTotal);
-                });
-            }
-            
-            // Sales total calculation
-            const saleQuantityInput = document.getElementById('saleQuantity');
-            const saleRateInput = document.getElementById('saleRate');
-            
-            if (saleQuantityInput && saleRateInput) {
-                [saleQuantityInput, saleRateInput].forEach(input => {
-                    input.addEventListener('input', function() {
-                        const quantity = parseFloat(saleQuantityInput.value) || 0;
-                        const rate = parseFloat(saleRateInput.value) || 0;
-                        document.getElementById('saleTotal').textContent = (quantity * rate).toFixed(2);
-                    });
-                });
-            }
-        });
+            <!-- Third Row: Top Suppliers & Customers -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <!-- Top Suppliers -->
+                <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Top Suppliers</h3>
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    </div>
+                    <div id="topSuppliers" class="space-y-2">
+                        <div class="text-xs text-slate-400 italic text-center py-4">No purchase data</div>
+                    </div>
+                </div>
 
-        // Inventory functions
-        // Stock movement filtered data
-        let filteredStockMovements = [];
-        let allStockMovements = [];
-        
-        function refreshInventory() {
-            const grid = document.getElementById('inventoryGrid');
-            grid.innerHTML = '';
+                <!-- Top Customers -->
+                <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Top Customers</h3>
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    </div>
+                    <div id="topCustomers" class="space-y-2">
+                        <div class="text-xs text-slate-400 italic text-center py-4">No sales data</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fourth Row: Recent Activity & Alerts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <!-- Recent Transactions -->
+                <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Recent Transactions</h3>
+                        <button onclick="showPage('purchase');" class="text-xs text-blue-600 hover:text-blue-800 font-medium">View All</button>
+                    </div>
+                    <div id="recentTransactions" class="space-y-2 max-h-52 overflow-y-auto">
+                        <div class="text-xs text-slate-400 italic text-center py-4">No recent transactions</div>
+                    </div>
+                </div>
+
+                <!-- Payment Alerts -->
+                <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Payment Alerts</h3>
+                        <span id="paymentAlertsCount" class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-medium">0 pending</span>
+                    </div>
+                    <div id="paymentAlerts" class="space-y-2 max-h-52 overflow-y-auto">
+                        <div class="text-xs text-slate-400 italic text-center py-4">No payment alerts</div>
+                    </div>
+                </div>
+
+                <!-- Low Stock Alerts -->
+                <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Low Stock Alerts</h3>
+                        <span id="lowStockCount" class="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-medium">0</span>
+                    </div>
+                    <div id="lowStockAlerts" class="space-y-2 max-h-52 overflow-y-auto">
+                        <div class="text-xs text-slate-400 italic text-center py-4">No low stock items</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Business Summary Footer -->
+            <div class="mt-6 bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl p-4 text-white">
+                <div class="grid grid-cols-2 md:grid-cols-6 gap-4 text-center">
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase">Total Items</p>
+                        <p id="summaryItems" class="text-lg font-bold">0</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase">Suppliers</p>
+                        <p id="summarySuppliers" class="text-lg font-bold">0</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase">Customers</p>
+                        <p id="summaryCustomers" class="text-lg font-bold">0</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase">Purchases</p>
+                        <p id="summaryPurchases" class="text-lg font-bold">0</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase">Sales</p>
+                        <p id="summarySales" class="text-lg font-bold">0</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase">Brokers</p>
+                        <p id="summaryBrokers" class="text-lg font-bold">0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 2: Master -->
+    <div id="master" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="mb-6 border-l-4 border-blue-600 pl-4 flex flex-wrap items-center justify-between gap-4">
+                <h2 class="text-3xl font-bold text-slate-900">Master Data Management</h2>
+                <div class="flex items-center gap-2">
+                    <label for="masterDataSearch" class="text-sm text-slate-600 sr-only">Search masters</label>
+                    <input type="text" id="masterDataSearch" placeholder="Search Items, Suppliers, Customers, Brokers..." class="w-64 md:w-80 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm" oninput="applyMasterSearch()">
+                </div>
+            </div>
             
-            let totalItems = 0;
-            let totalQty = 0;
-            let totalValue = 0;
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Company Details -->
+                <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                    <h3 class="text-xl font-semibold mb-4 text-primary">Company Details</h3>
+                    <div class="space-y-4">
+                        <input type="text" id="companyName" placeholder="Company Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="companyGSTIN" placeholder="GSTIN (optional)" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="bankName1" placeholder="Bank 1 Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="bankAccount1" placeholder="Bank 1 Account Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="ifsc1" placeholder="Bank 1 IFSC Code" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="bankName2" placeholder="Bank 2 Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="bankAccount2" placeholder="Bank 2 Account Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="ifsc2" placeholder="Bank 2 IFSC Code" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="upiNumber" placeholder="UPI Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <button onclick="saveCompanyDetails()" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors">Save Company Details</button>
+                    </div>
+                </div>
+
+                <!-- Items & Categories -->
+                <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                    <h3 class="text-xl font-semibold mb-4 text-primary">Items & Categories</h3>
+                    <div class="space-y-4">
+                        <input type="text" id="itemName" placeholder="Item Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <select id="itemCategory" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Category</option>
+                            <option value="Vegetables">Vegetables</option>
+                            <option value="Fruits">Fruits</option>
+                            <option value="Grains">Grains</option>
+                            <option value="Spices">Spices</option>
+                        </select>
+                        <select id="itemUnit" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Unit</option>
+                            <option value="kg">Kilogram (kg)</option>
+                            <option value="qty">Quantity (qty)</option>
+                            <option value="ton">Ton</option>
+                            <option value="box">Box</option>
+                        </select>
+                        <input type="number" id="itemMinStock" placeholder="Min stock (low-stock alert)" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" min="0" step="any">
+                        <button onclick="addItem()" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors">Add Item</button>
+                        <div id="itemsList" class="mt-4 space-y-2 max-h-40 overflow-y-auto"></div>
+                    </div>
+                </div>
+
+                <!-- Suppliers -->
+                <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-primary">Suppliers</h3>
+                        <button onclick="showSupplierForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            <span>Add Supplier</span>
+                        </button>
+                    </div>
+                    <!-- Suppliers List View -->
+                    <div id="suppliersListView">
+                        <div id="suppliersList" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                    </div>
+                    <!-- Supplier Form (Hidden by default) -->
+                    <div id="supplierFormView" class="hidden space-y-4">
+                        <input type="text" id="supplierName" placeholder="Supplier Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="tel" id="supplierMobile" placeholder="Mobile Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <textarea id="supplierAddress" placeholder="Supplier Address" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" rows="3"></textarea>
+                        <input type="text" id="supplierAccount" placeholder="Account Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="supplierIFSC" placeholder="IFSC Code" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="supplierGSTIN" placeholder="GSTIN (optional)" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <div class="flex space-x-2">
+                            <button onclick="addSupplier()" class="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors">Save Supplier</button>
+                            <button onclick="hideSupplierForm()" class="flex-1 bg-gray-500 text-white py-3 rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Customers -->
+                <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-primary">Customers</h3>
+                        <button onclick="showCustomerForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            <span>Add Customer</span>
+                        </button>
+                    </div>
+                    <!-- Customers List View -->
+                    <div id="customersListView">
+                        <div id="customersList" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                    </div>
+                    <!-- Customer Form (Hidden by default) -->
+                    <div id="customerFormView" class="hidden space-y-4">
+                        <input type="text" id="customerName" placeholder="Customer Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="tel" id="customerMobile" placeholder="Mobile Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <textarea id="customerAddress" placeholder="Customer Address" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" rows="3"></textarea>
+                        <input type="text" id="customerAccount" placeholder="Account Details" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="customerGSTIN" placeholder="GSTIN (optional)" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <div class="flex space-x-2">
+                            <button onclick="addCustomer()" class="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors">Save Customer</button>
+                            <button onclick="hideCustomerForm()" class="flex-1 bg-gray-500 text-white py-3 rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Brokers -->
+                <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-primary">Brokers</h3>
+                        <button onclick="showBrokerForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            <span>Add Broker</span>
+                        </button>
+                    </div>
+                    <!-- Brokers List View -->
+                    <div id="brokersListView">
+                        <div id="brokersList" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                    </div>
+                    <!-- Broker Form (Hidden by default) -->
+                    <div id="brokerFormView" class="hidden space-y-4">
+                        <input type="text" id="brokerName" placeholder="Broker Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="tel" id="brokerMobile" placeholder="Mobile Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <textarea id="brokerDetails" placeholder="Broker Details" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" rows="3"></textarea>
+                        <input type="text" id="brokerAccount" placeholder="Account Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <div class="flex space-x-2">
+                            <button onclick="addBroker()" class="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors">Save Broker</button>
+                            <button onclick="hideBrokerForm()" class="flex-1 bg-gray-500 text-white py-3 rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 3: Purchase -->
+    <div id="purchase" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="flex justify-between items-center mb-8 border-l-4 border-blue-600 pl-4">
+                <h2 class="text-3xl font-bold text-slate-900">Purchase Management</h2>
+                <button onclick="showPurchaseForm()" id="addPurchaseBtn" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 shadow-md">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    <span>Add Purchase</span>
+                </button>
+            </div>
             
-            if (Object.keys(appData.inventory).length === 0) {
-                grid.innerHTML = `
+            <!-- Purchase History (Shown by default) -->
+            <div id="purchaseHistoryView" class="space-y-4">
+                <!-- Header Section with Stats -->
+                <div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-5 text-white shadow-lg">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <div>
+                            <h3 class="text-xl font-bold flex items-center gap-2">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                </svg>
+                                Purchase History
+                            </h3>
+                            <p class="text-blue-100 text-sm mt-1">Manage and track all your purchase invoices</p>
+                        </div>
+                        <div class="flex gap-3">
+                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                                <p class="text-2xl font-bold" id="purchaseTotalCount">0</p>
+                                <p class="text-xs text-blue-100">Total Invoices</p>
+                            </div>
+                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                                <p class="text-2xl font-bold" id="purchaseTotalAmount">&#8377;0</p>
+                                <p class="text-xs text-blue-100">Total Value</p>
+                            </div>
+                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                                <p class="text-2xl font-bold" id="purchasePendingAmount">&#8377;0</p>
+                                <p class="text-xs text-blue-100">Pending</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Filter Section -->
+                <div class="bg-white rounded-xl shadow-md border border-slate-200 p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                            </svg>
+                            Filters & Search
+                        </h4>
+                        <button onclick="clearPurchaseFilters()" class="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                            Clear All
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                        <div class="col-span-2 md:col-span-1">
+                            <div class="relative">
+                                <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                </svg>
+                                <input type="text" id="purchaseSearch" placeholder="Search..." 
+                                    class="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50"
+                                    onkeyup="filterPurchases()">
+                            </div>
+                        </div>
+                        <div>
+                            <select id="purchaseFilterSupplier" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()">
+                                <option value="">All Suppliers</option>
+                            </select>
+                        </div>
+                        <div>
+                            <input type="date" id="purchaseDateFrom" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()" title="From Date">
+                        </div>
+                        <div>
+                            <input type="date" id="purchaseDateTo" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()" title="To Date">
+                        </div>
+                        <div>
+                            <select id="purchaseSort" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()">
+                                <option value="date-desc">Newest First</option>
+                                <option value="date-asc">Oldest First</option>
+                                <option value="amount-desc">Amount (high)</option>
+                                <option value="amount-asc">Amount (low)</option>
+                                <option value="supplier-asc">Supplier A-Z</option>
+                                <option value="balance-desc">Balance (high)</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center">
+                            <span id="purchaseFilterCount" class="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">All</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Table Section -->
+                <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Invoice</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Supplier</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Truck</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Items</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Amount</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Paid</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Balance</th>
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="purchaseHistory" class="divide-y divide-slate-100">
+                                <tr>
+                                    <td colspan="9" class="px-4 py-12 text-center">
+                                        <div class="flex flex-col items-center text-slate-400">
+                                            <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                                            </svg>
+                                            <p class="font-medium">No purchases recorded yet</p>
+                                            <p class="text-sm">Start by adding your first purchase invoice</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="purchasePagination" class="pagination-container border-t border-slate-100"></div>
+                </div>
+            </div>
+
+            <!-- Purchase Entry Form (Hidden by default) -->
+            <div id="purchaseEntryView" class="hidden bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <h3 class="text-xl font-semibold mb-6 text-primary">New Purchase Entry</h3>
+                
+                <!-- Invoice Header -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 p-4 bg-gray-50 rounded-lg">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Purchase Date</label>
+                        <input type="date" id="purchaseDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Invoice Number <span class="text-xs text-green-600">(Auto)</span></label>
+                        <input type="text" id="purchaseInvoice" placeholder="PUR-2025-001" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-slate-100 font-bold text-slate-800" readonly>
+                    </div>
+                    <div class="flex gap-2 items-end flex-1">
+                        <div class="flex-1 relative">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Supplier</label>
+                            <input type="text" id="purchaseSupplierInput" placeholder="Type or select supplier" autocomplete="off" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <div id="purchaseSupplierDropdown" class="absolute left-0 right-0 top-full mt-0 bg-white border border-slate-300 rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto hidden"></div>
+                            <select id="purchaseSupplier" class="hidden" aria-hidden="true"><option value="">Select Supplier</option></select>
+                        </div>
+                        <button type="button" onclick="openAddSupplierModalFromPurchase()" class="px-4 py-3 bg-primary text-white rounded-lg hover:bg-green-700 whitespace-nowrap" title="Add new supplier">+ Add</button>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Truck Number</label>
+                        <input type="text" id="purchaseTruck" placeholder="Truck Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">LR Number</label>
+                        <input type="text" id="purchaseLRNumber" placeholder="LR Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                </div>
+
+                <!-- Item Entry Form -->
+                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 mb-6">
+                    <h4 class="text-lg font-semibold mb-4 text-slate-700">Add Item to Invoice</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Item</label>
+                            <select id="purchaseItem" onchange="updatePurchaseInputs()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <option value="">Select Item</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Gross Weight (kg)</label>
+                            <input type="number" id="purchaseQuantity" placeholder="Gross Weight" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500" id="purchaseUnitDisplay">Select item first</small>
+                        </div>
+                        <div id="purchaseBagsContainer">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Number of Bags</label>
+                            <input type="number" id="purchaseBags" placeholder="Number of Bags" oninput="document.getElementById('purchaseDiscount').value=this.value; calculatePurchaseItemTotal();" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Bags weight will be deducted</small>
+                        </div>
+                        <div id="purchaseDiscountContainer">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Discount</label>
+                            <input type="number" id="purchaseDiscount" placeholder="Discount" value="0" step="any" oninput="calculatePurchaseItemTotal()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Deducted from gross to get net weight (flows from Bags; editable)</small>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Net Weight</label>
+                            <input type="number" id="purchaseNetWeight" placeholder="Net Weight" step="any" oninput="recalcPurchaseItemTotalFromNetWeight()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Auto-calculated (Gross - Discount); you can edit</small>
+                        </div>
+                        <div id="purchaseDiscountQtyContainer" style="display: none;">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Discount Quantity (For Invoice Only)</label>
+                            <input type="number" id="purchaseDiscountQty" placeholder="Discount Quantity" value="0" class="w-full p-3 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent bg-yellow-50">
+                            <small class="text-slate-500">Deducted from invoice amount only, not from inventory</small>
+                        </div>
+                        <div id="purchaseRateContainer">
+                            <label class="block text-sm font-medium text-slate-700 mb-2" id="purchaseRateLabel">Rate per kg</label>
+                            <input type="number" id="purchaseRate" placeholder="Rate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500" id="purchaseRateHelp">Enter rate per kg</small>
+                        </div>
+                        <div id="purchaseAmountContainer" style="display: none;">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Total Amount</label>
+                            <input type="number" id="purchaseAmount" placeholder="Total Amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Enter total amount for this quantity</small>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Item Total</label>
+                            <input type="number" id="purchaseItemTotal" placeholder="Item Total" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-gray-100">
+                            <small class="text-slate-500">Auto-calculated</small>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <button onclick="addItemToPurchase()" class="bg-secondary text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">Add Item to Invoice</button>
+                    </div>
+                </div>
+
+                <!-- Items List -->
+                <div class="mb-6">
+                    <h4 class="text-lg font-semibold mb-4 text-slate-700">Items in Current Invoice</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-auto border border-slate-200 rounded-lg">
+                            <thead>
+                                <tr class="bg-slate-50">
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Item</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Gross Weight</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Bag/Quantity</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Discount</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Net Weight</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Rate</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Amount</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="currentPurchaseItems">
+                                <tr>
+                                    <td colspan="8" class="px-4 py-8 text-center text-slate-500">No items added yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Invoice Totals -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Hammali (Loading/Unloading)</label>
+                        <input type="number" id="purchaseHammali" placeholder="Hammali Amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Advance Given</label>
+                        <input type="number" id="purchaseAdvance" placeholder="Advance Amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                </div>
+
+                <!-- Others Section -->
+                <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-lg font-semibold text-slate-700">Others (Additional Charges/Deductions)</h4>
+                        <button type="button" onclick="addPurchaseOthersRow()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">
+                            + Add More
+                        </button>
+                    </div>
+                    <div id="purchaseOthersContainer">
+                        <!-- First row (always present) -->
+                        <div class="purchase-others-row grid grid-cols-1 md:grid-cols-3 gap-4 mb-3" data-index="0">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Reason/Description</label>
+                                <input type="text" class="purchase-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason (e.g., Transport, Commission)">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
+                                <input type="number" class="purchase-others-amount w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter amount">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Operation</label>
+                                <select class="purchase-others-operation w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    <option value="add">Add (+)</option>
+                                    <option value="reduce">Reduce (-)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-6 rounded-lg">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-lg font-semibold">
+                        <div>Items Total: &#8377;<span id="purchaseItemsTotal">0</span></div>
+                        <div>+ Hammali: &#8377;<span id="purchaseHammaliDisplay">0</span></div>
+                        <div>- Advance: &#8377;<span id="purchaseAdvanceDisplay">0</span></div>
+                        <div id="purchaseOthersDisplayContainer" style="display: none;">
+                            <span id="purchaseOthersSign">+</span> Others: &#8377;<span id="purchaseOthersDisplay">0</span>
+                        </div>
+                    </div>
+                    <div class="mt-4 text-xl font-bold text-primary">
+                        Grand Total: &#8377;<span id="purchaseGrandTotal">0</span>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end space-x-4">
+                    <button id="cancelPurchaseEdit" onclick="cancelPurchaseEdit()" class="bg-gray-500 text-white px-8 py-3 rounded-lg hover:bg-gray-600 transition-colors text-lg font-semibold">Cancel</button>
+                    <button onclick="savePurchaseInvoice()" class="bg-primary text-white px-8 py-3 rounded-lg hover:bg-green-700 transition-colors text-lg font-semibold">Save Purchase Invoice</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 4: Inventory -->
+    <div id="inventory" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <div class="mb-6 border-l-4 border-blue-600 pl-4"><h2 class="text-3xl font-bold text-slate-900">Inventory Management</h2></div>
+            
+            <!-- Inventory Summary Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Total Items</span>
+                        <svg class="w-5 h-5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                    </div>
+                    <p id="invTotalItems" class="text-2xl font-bold">0</p>
+                    <p class="text-xs opacity-75">Unique products</p>
+                </div>
+                <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Total Quantity</span>
+                        <svg class="w-5 h-5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+                    </div>
+                    <p id="invTotalQty" class="text-2xl font-bold">0</p>
+                    <p class="text-xs opacity-75">Units in stock</p>
+                </div>
+                <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Stock Value</span>
+                        <svg class="w-5 h-5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <p id="invTotalValue" class="text-2xl font-bold">&#8377;0</p>
+                    <p class="text-xs opacity-75">Current value</p>
+                </div>
+                <div class="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl p-4 text-white shadow-lg">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Movements</span>
+                        <svg class="w-5 h-5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                    </div>
+                    <p id="invTotalMovements" class="text-2xl font-bold">0</p>
+                    <p class="text-xs opacity-75">Total transactions</p>
+                </div>
+            </div>
+            
+            <!-- Current Stock Section -->
+            <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-800">Current Stock</h3>
+                            <p class="text-xs text-slate-500">Real-time inventory levels</p>
+                        </div>
+                    </div>
+                    <button onclick="refreshInventory()" class="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        Refresh
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="inventoryGrid">
                     <div class="text-center text-slate-500 col-span-full py-8">
                         <svg class="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
                         <p>No inventory items found</p>
                         <p class="text-xs text-slate-400 mt-1">Add some purchases to see inventory</p>
                     </div>
-                `;
-            } else {
-                Object.keys(appData.inventory).forEach(itemId => {
-                    const item = appData.items.find(i => i.id == itemId);
-                    const stock = appData.inventory[itemId];
-                    
-                    if (item && stock.quantity > 0) {
-                        totalItems++;
-                        totalQty += stock.quantity;
-                        totalValue += stock.totalCost;
-                        
-                        const avgCost = stock.totalCost / stock.quantity;
-                        const stockLevel = stock.quantity > 1000 ? 'high' : stock.quantity > 100 ? 'medium' : 'low';
-                        const stockColors = {
-                            high: 'from-green-500 to-emerald-500',
-                            medium: 'from-amber-500 to-orange-500',
-                            low: 'from-red-500 to-rose-500'
-                        };
-                        
-                        const card = document.createElement('div');
-                        card.className = 'bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow';
-                        card.innerHTML = `
-                            <div class="h-1 bg-gradient-to-r ${stockColors[stockLevel]}"></div>
-                            <div class="p-4">
-                                <div class="flex items-start justify-between mb-3">
-                                    <div>
-                                        <h4 class="font-bold text-slate-800">${item.name}</h4>
-                                        <span class="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">${item.category}</span>
-                                    </div>
-                                    <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
-                                    </div>
-                                </div>
-                                <div class="space-y-2">
-                                    <div class="flex justify-between items-center">
-                                        <span class="text-xs text-slate-500">Quantity</span>
-                                        <span class="text-lg font-bold text-blue-600">${stock.quantity.toLocaleString('en-IN')} ${item.unit}</span>
-                                    </div>
-                                    <div class="flex justify-between items-center">
-                                        <span class="text-xs text-slate-500">Avg Cost</span>
-                                        <span class="text-sm font-medium text-slate-700">${RU}${avgCost.toFixed(2)}/${item.unit}</span>
-                                    </div>
-                                    <div class="pt-2 border-t border-slate-100 flex justify-between items-center">
-                                        <span class="text-xs text-slate-500">Total Value</span>
-                                        <span class="text-sm font-bold text-emerald-600">${RU}${stock.totalCost.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                        grid.appendChild(card);
-                    }
-                });
-            }
-            
-            // Update summary cards
-            const invTotalItems = document.getElementById('invTotalItems');
-            const invTotalQty = document.getElementById('invTotalQty');
-            const invTotalValue = document.getElementById('invTotalValue');
-            if (invTotalItems) invTotalItems.textContent = totalItems;
-            if (invTotalQty) invTotalQty.textContent = totalQty.toLocaleString('en-IN');
-            if (invTotalValue) invTotalValue.textContent = `${RU}${(totalValue/1000).toFixed(0)}K`;
-            
-            // Update stock movement
-            updateStockMovement();
-        }
-        
-        function updateStockMovement() {
-            // Collect all stock movements from purchases and sales
-            allStockMovements = [];
-            
-            // Add purchase movements
-            appData.purchases.forEach(purchase => {
-                if (purchase.items) {
-                    purchase.items.forEach(item => {
-                        allStockMovements.push({
-                            date: purchase.date,
-                            itemName: item.itemName,
-                            itemId: item.itemId,
-                            type: 'Purchase',
-                            quantity: item.grossWeight,
-                            invoice: purchase.invoice,
-                            reference: purchase.supplierName,
-                            unit: item.unit || 'kg'
-                        });
-                    });
-                }
-            });
-            
-            // Add sale movements
-            appData.sales.forEach(sale => {
-                if (sale.items) {
-                    sale.items.forEach(item => {
-                        allStockMovements.push({
-                            date: sale.date,
-                            itemName: item.itemName,
-                            itemId: item.itemId,
-                            type: 'Sale',
-                            quantity: -item.grossWeight,
-                            invoice: sale.invoice,
-                            reference: sale.customerName,
-                            unit: item.unit || 'kg'
-                        });
-                    });
-                }
-            });
-            
-            // Populate item filter dropdown
-            const itemFilterEl = document.getElementById('stockMovementFilterItem');
-            if (itemFilterEl) {
-                const currentValue = itemFilterEl.value;
-                const uniqueItems = [...new Set(allStockMovements.map(m => m.itemName))].sort();
-                itemFilterEl.innerHTML = '<option value="">All Items</option>';
-                uniqueItems.forEach(item => {
-                    itemFilterEl.innerHTML += `<option value="${item}">${item}</option>`;
-                });
-                itemFilterEl.value = currentValue;
-            }
-            
-            // Update total movements count
-            const invTotalMovements = document.getElementById('invTotalMovements');
-            if (invTotalMovements) invTotalMovements.textContent = allStockMovements.length;
-            
-            // Apply filters
-            filterStockMovement();
-        }
-        
-        function filterStockMovement() {
-            const search = (document.getElementById('stockMovementSearch')?.value || '').toLowerCase();
-            const itemFilter = document.getElementById('stockMovementFilterItem')?.value || '';
-            const typeFilter = document.getElementById('stockMovementFilterType')?.value || '';
-            const dateFrom = document.getElementById('stockMovementDateFrom')?.value || '';
-            const sortBy = document.getElementById('stockMovementSort')?.value || 'date-desc';
-            
-            // Filter
-            filteredStockMovements = allStockMovements.filter(m => {
-                if (search && !m.itemName.toLowerCase().includes(search) && !m.reference.toLowerCase().includes(search)) return false;
-                if (itemFilter && m.itemName !== itemFilter) return false;
-                if (typeFilter && m.type !== typeFilter) return false;
-                if (dateFrom && m.date < dateFrom) return false;
-                return true;
-            });
-            
-            // Sort
-            filteredStockMovements.sort((a, b) => {
-                switch(sortBy) {
-                    case 'date-asc': return a.date.localeCompare(b.date);
-                    case 'date-desc': return b.date.localeCompare(a.date);
-                    case 'qty-desc': return Math.abs(b.quantity) - Math.abs(a.quantity);
-                    case 'qty-asc': return Math.abs(a.quantity) - Math.abs(b.quantity);
-                    case 'item-asc': return a.itemName.localeCompare(b.itemName);
-                    default: return b.date.localeCompare(a.date);
-                }
-            });
-            
-            // Update count
-            const countEl = document.getElementById('stockMovementFilterCount');
-            if (countEl) {
-                countEl.textContent = `Showing ${filteredStockMovements.length} of ${allStockMovements.length} movements`;
-            }
-            
-            paginationState.stockMovement.currentPage = 1;
-            renderStockMovementTable();
-        }
-        
-        function clearStockMovementFilters() {
-            document.getElementById('stockMovementSearch').value = '';
-            document.getElementById('stockMovementFilterItem').value = '';
-            document.getElementById('stockMovementFilterType').value = '';
-            document.getElementById('stockMovementDateFrom').value = '';
-            document.getElementById('stockMovementSort').value = 'date-desc';
-            filterStockMovement();
-        }
-        
-        function renderStockMovementTable() {
-            const tbody = document.getElementById('stockMovement');
-            tbody.innerHTML = '';
-            
-            if (filteredStockMovements.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="6" class="px-4 py-12 text-center text-slate-500">
-                            <svg class="w-10 h-10 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                            No stock movements found
-                        </td>
-                    </tr>
-                `;
-                document.getElementById('stockMovementPagination').innerHTML = '';
-                return;
-            }
-            
-            // Calculate running balances per item
-            const balances = {};
-            const movementsWithBalance = filteredStockMovements.map(m => {
-                if (!balances[m.itemName]) balances[m.itemName] = 0;
-                balances[m.itemName] += m.quantity;
-                return { ...m, balance: balances[m.itemName] };
-            });
-            
-            // Paginate
-            const { currentPage, pageSize } = paginationState.stockMovement;
-            const startIndex = (currentPage - 1) * pageSize;
-            const paginatedMovements = movementsWithBalance.slice(startIndex, startIndex + pageSize);
-            
-            paginatedMovements.forEach(m => {
-                const tr = document.createElement('tr');
-                tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
-                tr.innerHTML = `
-                    <td class="px-4 py-3">
-                        <span class="text-sm font-medium text-slate-700">${m.date}</span>
-                    </td>
-                    <td class="px-4 py-3">
-                        <span class="font-semibold text-slate-800">${m.itemName}</span>
-                    </td>
-                    <td class="px-4 py-3">
-                        <div class="flex items-center gap-2">
-                            <span class="w-6 h-6 rounded-full flex items-center justify-center ${m.type === 'Purchase' ? 'bg-green-100' : 'bg-red-100'}">
-                                <svg class="w-3 h-3 ${m.type === 'Purchase' ? 'text-green-600' : 'text-red-600'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${m.type === 'Purchase' ? 'M7 11l5-5m0 0l5 5m-5-5v12' : 'M17 13l-5 5m0 0l-5-5m5 5V6'}"/>
-                                </svg>
-                            </span>
-                            <span class="px-2 py-1 rounded-full text-xs font-semibold ${m.type === 'Purchase' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
-                                ${m.type === 'Purchase' ? 'IN' : 'OUT'}
-                            </span>
-                        </div>
-                    </td>
-                    <td class="px-4 py-3">
-                        <div class="text-xs">
-                            <span class="font-medium text-slate-700">${m.invoice}</span>
-                            <span class="text-slate-400 block">${m.reference}</span>
-                        </div>
-                    </td>
-                    <td class="px-4 py-3 text-right">
-                        <span class="font-bold ${m.quantity > 0 ? 'text-green-600' : 'text-red-600'}">
-                            ${m.quantity > 0 ? '+' : ''}${m.quantity.toLocaleString('en-IN', {minimumFractionDigits: 2})} ${m.unit}
-                        </span>
-                    </td>
-                    <td class="px-4 py-3 text-right">
-                        <span class="font-semibold text-slate-800 bg-slate-100 px-2 py-1 rounded">
-                            ${m.balance.toLocaleString('en-IN', {minimumFractionDigits: 2})} ${m.unit}
-                        </span>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-            
-            renderPagination('stockMovementPagination', filteredStockMovements.length, currentPage, pageSize, 'changeStockMovementPage', 'changeStockMovementPageSize');
-        }
-
-        // Sales functions
-        function updateAvailableStock() {
-            const itemId = document.getElementById('saleItem').value;
-            const availableStockElement = document.getElementById('availableStock');
-            const discountQtyContainer = document.getElementById('saleDiscountQtyContainer');
-            const bagsContainer = document.querySelector('#saleBags').parentElement;
-            
-            // Get labels to update
-            const grossLabel = document.querySelector('label[for="saleQuantity"]');
-            const netLabel = document.querySelector('label[for="saleNetWeight"]');
-            const netHelp = document.querySelector('#saleNetWeight').nextElementSibling;
-            
-            if (itemId && appData.inventory[itemId]) {
-                const item = appData.items.find(i => i.id == itemId);
-                availableStockElement.textContent = `Available: ${appData.inventory[itemId].quantity} ${item.unit}`;
-                
-                // Special handling for coconut products
-                if (item.name.toLowerCase().includes('coconut')) {
-                    bagsContainer.style.display = 'none';
-                    discountQtyContainer.style.display = 'block';
-                    
-                    // Update labels for coconut
-                    grossLabel.textContent = 'Gross Quantity (kg)';
-                    document.getElementById('saleQuantity').placeholder = 'Gross Quantity';
-                    netLabel.textContent = 'Net Quantity';
-                    document.getElementById('saleNetWeight').placeholder = 'Net Quantity';
-                    netHelp.textContent = 'Auto-calculated (Gross - Discount)';
-                    
-                    // Clear bags value for coconut
-                    document.getElementById('saleBags').value = '0';
-                } else {
-                    bagsContainer.style.display = 'block';
-                    discountQtyContainer.style.display = 'none';
-                    document.getElementById('saleDiscountQty').value = '0';
-                    
-                    // Reset labels
-                    grossLabel.textContent = 'Gross Weight (kg)';
-                    document.getElementById('saleQuantity').placeholder = 'Gross Weight';
-                    netLabel.textContent = 'Net Weight';
-                    document.getElementById('saleNetWeight').placeholder = 'Net Weight';
-                    netHelp.textContent = 'Auto-calculated (Gross - Bags)';
-                }
-            } else {
-                availableStockElement.textContent = 'Available: 0';
-                bagsContainer.style.display = 'block';
-                discountQtyContainer.style.display = 'none';
-                
-                // Reset labels
-                if (grossLabel) {
-                    grossLabel.textContent = 'Gross Weight (kg)';
-                    document.getElementById('saleQuantity').placeholder = 'Gross Weight';
-                    netLabel.textContent = 'Net Weight';
-                    document.getElementById('saleNetWeight').placeholder = 'Net Weight';
-                    netHelp.textContent = 'Auto-calculated (Gross - Bags)';
-                }
-            }
-            calculateSaleItemTotal();
-        }
-
-        function calculateSaleItemTotal() {
-            const itemId = document.getElementById('saleItem').value;
-            if (!itemId) return;
-            
-            const item = appData.items.find(i => i.id == itemId);
-            const grossWeight = parseFloat(document.getElementById('saleQuantity').value) || 0;
-            const discount = parseFloat(document.getElementById('saleDiscount').value) || 0;
-            const discountQty = parseFloat(document.getElementById('saleDiscountQty').value) || 0;
-            const rate = parseFloat(document.getElementById('saleRate').value) || 0;
-            
-            let netWeight = 0;
-            let total = 0;
-            
-            if (item && item.name.toLowerCase().includes('coconut')) {
-                netWeight = grossWeight - discountQty;
-                total = netWeight * rate;
-            } else {
-                // Net = Gross - Discount (Discount box; flows from Bags)
-                netWeight = grossWeight - discount;
-                total = netWeight * rate;
-            }
-            
-            document.getElementById('saleNetWeight').value = netWeight;
-            document.getElementById('saleItemTotal').value = total.toFixed(2);
-        }
-
-        function recalcSaleItemTotalFromNetWeight() {
-            var netInput = parseFloat(document.getElementById('saleNetWeight').value);
-            if (isNaN(netInput)) return;
-            var itemId = document.getElementById('saleItem').value;
-            if (!itemId) return;
-            var item = appData.items.find(i => i.id == itemId);
-            if (!item) return;
-            var rate = parseFloat(document.getElementById('saleRate').value) || 0;
-            if (item.name.toLowerCase().includes('coconut')) {
-                document.getElementById('saleItemTotal').value = (netInput * rate).toFixed(2);
-            } else {
-                document.getElementById('saleItemTotal').value = (netInput * rate).toFixed(2);
-            }
-        }
-
-        function addItemToSale() {
-            const itemId = document.getElementById('saleItem').value;
-            const grossWeight = parseFloat(document.getElementById('saleQuantity').value);
-            const bags = parseFloat(document.getElementById('saleBags').value) || 0;
-            const discountQty = parseFloat(document.getElementById('saleDiscountQty').value) || 0;
-            const rate = parseFloat(document.getElementById('saleRate').value);
-            
-            if (!itemId || !grossWeight || !rate) {
-                alert('Please select item, enter gross weight and rate');
-                return;
-            }
-            
-            const item = appData.items.find(i => i.id == itemId);
-            let netWeight = 0;
-            let total = 0;
-            
-            if (item.name.toLowerCase().includes('coconut')) {
-                netWeight = grossWeight - discountQty;
-                total = netWeight * rate;
-            } else {
-                var discountVal = parseFloat(document.getElementById('saleDiscount').value) || 0;
-                netWeight = grossWeight - discountVal;
-                total = netWeight * rate;
-            }
-            // Use edited net weight from input if user changed it
-            var inputNet = parseFloat(document.getElementById('saleNetWeight').value);
-            if (!isNaN(inputNet) && inputNet >= 0) {
-                netWeight = inputNet;
-                total = netWeight * rate;
-            }
-            
-            // Check if enough stock is available (using gross weight)
-            if (!appData.inventory[itemId] || appData.inventory[itemId].quantity < grossWeight) {
-                alert('Insufficient stock available!');
-                return;
-            }
-            
-            const saleItem = {
-                id: Date.now(),
-                itemId: itemId,
-                itemName: item.name,
-                grossWeight: grossWeight, // Gross quantity to be deducted from inventory
-                bags: bags,
-                netWeight: netWeight, // Net quantity after discount (for display)
-                discountQty: discountQty, // Store discount for reference
-                rate: rate,
-                total: total, // Invoice amount = rate x net quantity
-                isCoconut: item.name.toLowerCase().includes('coconut') // Flag for special handling
-            };
-            
-            currentSaleItems.push(saleItem);
-            updateCurrentSaleItemsDisplay();
-            calculateSaleTotals();
-            
-            // Clear item form
-            document.getElementById('saleItem').value = '';
-            document.getElementById('saleQuantity').value = '';
-            document.getElementById('saleBags').value = '';
-            document.getElementById('saleDiscount').value = '0';
-            document.getElementById('saleNetWeight').value = '';
-            document.getElementById('saleDiscountQty').value = '0';
-            document.getElementById('saleRate').value = '';
-            document.getElementById('saleItemTotal').value = '';
-            document.getElementById('availableStock').textContent = 'Available: 0';
-            document.getElementById('saleDiscountQtyContainer').style.display = 'none';
-        }
-
-        function updateCurrentSaleItemsDisplay() {
-            const tbody = document.getElementById('currentSaleItems');
-            tbody.innerHTML = '';
-            
-            if (currentSaleItems.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
-                return;
-            }
-            
-            currentSaleItems.forEach((item, index) => {
-                const row = document.createElement('tr');
-                row.className = 'border-b border-slate-200';
-                
-                // For coconut, show discount quantity instead of bags
-                const middleColumn = item.isCoconut 
-                    ? `<td class="px-4 py-3">${item.discountQty || 0}</td>` 
-                    : `<td class="px-4 py-3">${item.bags}</td>`;
-                
-                row.innerHTML = `
-                    <td class="px-4 py-3">${item.itemName}</td>
-                    <td class="px-4 py-3">${item.grossWeight}</td>
-                    ${middleColumn}
-                    <td class="px-4 py-3">${item.netWeight}</td>
-                    <td class="px-4 py-3">${RU}${item.rate}</td>
-                    <td class="px-4 py-3">${RU}${item.total.toFixed(2)}</td>
-                    <td class="px-4 py-3">
-                        <button onclick="removeItemFromSale(${index})" class="text-red-500 hover:text-red-700 font-medium">Remove</button>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-        }
-
-        function removeItemFromSale(index) {
-            currentSaleItems.splice(index, 1);
-            updateCurrentSaleItemsDisplay();
-            calculateSaleTotals();
-        }
-
-        // Sales Others management
-        let saleOthersIndex = 1;
-        
-        function addSaleOthersRow() {
-            const container = document.getElementById('saleOthersContainer');
-            const newRow = document.createElement('div');
-            newRow.className = 'sale-others-row grid grid-cols-1 md:grid-cols-4 gap-4 mb-3';
-            newRow.setAttribute('data-index', saleOthersIndex);
-            newRow.innerHTML = `
-                <div>
-                    <input type="text" class="sale-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason">
                 </div>
-                <div>
-                    <input type="number" class="sale-others-amount w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter amount">
-                </div>
-                <div>
-                    <select class="sale-others-operation w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                        <option value="add">Add (+)</option>
-                        <option value="reduce">Reduce (-)</option>
-                    </select>
-                </div>
-                <div class="flex items-end">
-                    <button type="button" onclick="removeSaleOthersRow(${saleOthersIndex})" class="w-full p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">Remove</button>
-                </div>
-            `;
-            container.appendChild(newRow);
-            
-            // Add event listeners for real-time calculation
-            const inputs = newRow.querySelectorAll('input, select');
-            inputs.forEach(input => {
-                input.addEventListener('input', calculateSaleTotals);
-                input.addEventListener('change', calculateSaleTotals);
-            });
-            
-            saleOthersIndex++;
-        }
-        
-        function removeSaleOthersRow(index) {
-            const row = document.querySelector(`.sale-others-row[data-index="${index}"]`);
-            if (row) {
-                row.remove();
-                calculateSaleTotals();
-            }
-        }
-        
-        function getSaleOthersEntries() {
-            const rows = document.querySelectorAll('.sale-others-row');
-            const entries = [];
-            
-            rows.forEach(row => {
-                const reason = row.querySelector('.sale-others-reason').value;
-                const amount = parseFloat(row.querySelector('.sale-others-amount').value) || 0;
-                const operation = row.querySelector('.sale-others-operation').value;
-                
-                if (amount > 0 && reason) {
-                    entries.push({ reason, amount, operation });
-                }
-            });
-            
-            return entries;
-        }
+            </div>
 
-        function calculateSaleTotals() {
-            const itemsTotal = currentSaleItems.reduce((sum, item) => sum + item.total, 0);
-            const hammali = parseFloat(document.getElementById('saleHammali').value) || 0;
-            const advance = parseFloat(document.getElementById('saleAdvance').value) || 0;
-            const truckAdvance = parseFloat(document.getElementById('saleTruckAdvance').value) || 0;
-            
-            // Get all Others entries
-            const othersEntries = getSaleOthersEntries();
-            let othersTotal = 0;
-            
-            othersEntries.forEach(entry => {
-                if (entry.operation === 'add') {
-                    othersTotal += entry.amount;
-                } else {
-                    othersTotal -= entry.amount;
-                }
-            });
-            
-            // Calculate grand total with all Others AND truck advance
-            let grandTotal = itemsTotal + hammali - advance + truckAdvance + othersTotal;
-            
-            // Display Others total if any entries exist
-            if (othersEntries.length > 0) {
-                document.getElementById('saleOthersDisplayContainer').style.display = 'block';
-                document.getElementById('saleOthersDisplay').textContent = Math.abs(othersTotal).toFixed(2);
-                document.getElementById('saleOthersSign').textContent = othersTotal >= 0 ? '+' : '-';
-            } else {
-                document.getElementById('saleOthersDisplayContainer').style.display = 'none';
-            }
-            
-            document.getElementById('saleItemsTotal').textContent = itemsTotal.toFixed(2);
-            document.getElementById('saleHammaliDisplay').textContent = hammali.toFixed(2);
-            document.getElementById('saleAdvanceDisplay').textContent = advance.toFixed(2);
-            document.getElementById('saleTruckAdvanceDisplay').textContent = truckAdvance.toFixed(2);
-            document.getElementById('saleGrandTotal').textContent = grandTotal.toFixed(2);
-        }
-
-        function saveSaleInvoice() {
-            const date = document.getElementById('saleDate').value;
-            const invoice = document.getElementById('saleInvoice').value;
-            const customerId = document.getElementById('saleCustomer').value;
-            const truck = document.getElementById('saleTruck').value;
-            const lrNumber = document.getElementById('saleLRNumber').value;
-            const hammali = parseFloat(document.getElementById('saleHammali').value) || 0;
-            const advance = parseFloat(document.getElementById('saleAdvance').value) || 0;
-            const truckAdvance = parseFloat(document.getElementById('saleTruckAdvance').value) || 0;
-            const othersEntries = getSaleOthersEntries();
-            
-            if (!date || !invoice || !customerId || currentSaleItems.length === 0) {
-                alert('Please fill in all required fields and add at least one item');
-                return;
-            }
-
-            const invoiceTrim = (invoice || '').trim().toUpperCase();
-            const duplicateSale = appData.sales.find(s => (s.invoice || '').trim().toUpperCase() === invoiceTrim && s.id !== editingSaleId);
-            if (duplicateSale) {
-                alert('This Sales invoice number is already used. Please use a unique invoice number.');
-                return;
-            }
-            
-            const customer = appData.customers.find(c => c.id == customerId);
-            if (!customer) {
-                alert('Selected customer not found');
-                return;
-            }
-            const itemsTotal = currentSaleItems.reduce((sum, item) => sum + item.total, 0);
-            
-            // Calculate grand total with Others AND truck advance
-            let grandTotal = itemsTotal + hammali - advance + truckAdvance;
-            othersEntries.forEach(entry => {
-                if (entry.operation === 'add') {
-                    grandTotal += entry.amount;
-                } else {
-                    grandTotal -= entry.amount;
-                }
-            });
-            
-            if (editingSaleId) {
-                // Editing existing sale
-                const existingSale = appData.sales.find(s => s.id === editingSaleId);
-                if (existingSale) {
-                    // Reverse old inventory changes (using gross weight)
-                    if (existingSale.items) {
-                        existingSale.items.forEach(item => {
-                            if (!appData.inventory[item.itemId]) {
-                                appData.inventory[item.itemId] = { quantity: 0, totalCost: 0 };
-                            }
-                            appData.inventory[item.itemId].quantity += item.grossWeight;
-                            const prevQty = appData.inventory[item.itemId].quantity - item.grossWeight;
-                            const avgCost = prevQty > 0 ? appData.inventory[item.itemId].totalCost / prevQty : 0;
-                            appData.inventory[item.itemId].totalCost += (avgCost * item.grossWeight);
-                        });
-                    }
-                    
-                    // Update sale with new data
-                    existingSale.date = date;
-                    existingSale.invoice = invoice;
-                    existingSale.customerId = customerId;
-                    existingSale.customerName = customer.name;
-                    existingSale.truck = truck;
-                    existingSale.lrNumber = lrNumber;
-                    existingSale.items = [...currentSaleItems];
-                    existingSale.itemsTotal = itemsTotal;
-                    existingSale.hammali = hammali;
-                    existingSale.advance = advance;
-                    existingSale.truckAdvance = truckAdvance;
-                    existingSale.othersEntries = othersEntries;
-                    existingSale.grandTotal = grandTotal;
-                    existingSale.balance = grandTotal - (existingSale.received || 0);
-                    existingSale.linkedPurchases = [...linkedPurchases]; // Add linked purchases
-                    Object.assign(existingSale, getAuditMeta(false));
-                    
-                    // Deduct new inventory for updated sale (using gross weight)
-                    currentSaleItems.forEach(item => {
-                        if (appData.inventory[item.itemId]) {
-                            appData.inventory[item.itemId].quantity -= item.grossWeight;
-                            const totalQty = appData.inventory[item.itemId].quantity + item.grossWeight;
-                            const avgCost = totalQty > 0 ? appData.inventory[item.itemId].totalCost / totalQty : 0;
-                            appData.inventory[item.itemId].totalCost -= (avgCost * item.grossWeight);
-                        }
-                    });
-                }
-                editingSaleId = null;
-            } else {
-                // Creating new sale
-                const sale = {
-                    id: Date.now(),
-                    date: date,
-                    invoice: invoice,
-                    customerId: customerId,
-                    customerName: customer.name,
-                    truck: truck,
-                    lrNumber: lrNumber,
-                    items: [...currentSaleItems],
-                    itemsTotal: itemsTotal,
-                    hammali: hammali,
-                    advance: advance,
-                    truckAdvance: truckAdvance,
-                    othersEntries: othersEntries,
-                    grandTotal: grandTotal,
-                    received: 0, // Don't count advance as received initially
-                    balance: grandTotal, // Full amount is balance initially
-                    linkedPurchases: [...linkedPurchases], // Add linked purchases
-                    ...getAuditMeta(true)
-                };
-                appData.sales.push(sale);
-                
-                // Update inventory for new sale (using gross weight)
-                currentSaleItems.forEach(item => {
-                    if (appData.inventory[item.itemId]) {
-                        appData.inventory[item.itemId].quantity -= item.grossWeight;
-                        const totalQty = appData.inventory[item.itemId].quantity + item.grossWeight;
-                        const avgCost = totalQty > 0 ? appData.inventory[item.itemId].totalCost / totalQty : 0;
-                        appData.inventory[item.itemId].totalCost -= (avgCost * item.grossWeight);
-                    }
-                });
-            }
-            
-            saveData();
-            updateSalesHistory();
-            updateDashboard();
-            populateDropdowns();
-            
-            // Regenerate ledger if on ledger page to show new entry immediately
-            if (typeof generateLedger === 'function') {
-                generateLedger();
-            }
-            
-            // Hide cancel button
-            document.getElementById('cancelSaleEdit').classList.add('hidden');
-            
-            // Clear form and return to history view
-            clearSaleForm();
-            const wasEditing = editingSaleId !== null;
-            editingSaleId = null;
-            alert(wasEditing ? 'Sale updated successfully!' : 'Sale invoice saved successfully!');
-            
-            // Return to history view
-            hideSalesForm();
-        }
-
-        function clearSaleForm() {
-            document.getElementById('saleDate').value = new Date().toISOString().split('T')[0];
-            document.getElementById('saleInvoice').value = '';
-            document.getElementById('saleCustomer').value = '';
-            var sci = document.getElementById('saleCustomerInput');
-            if (sci) sci.value = '';
-            var scd = document.getElementById('saleCustomerDropdown');
-            if (scd) scd.classList.add('hidden');
-            document.getElementById('saleTruck').value = '';
-            document.getElementById('saleLRNumber').value = '';
-            document.getElementById('saleHammali').value = '';
-            document.getElementById('saleAdvance').value = '';
-            document.getElementById('saleTruckAdvance').value = '';
-            var sdEl = document.getElementById('saleDiscount');
-            if (sdEl) sdEl.value = '0';
-            
-            // Clear all Others rows except the first one
-            const container = document.getElementById('saleOthersContainer');
-            container.innerHTML = `
-                <div class="sale-others-row grid grid-cols-1 md:grid-cols-3 gap-4 mb-3" data-index="0">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Reason/Description</label>
-                        <input type="text" class="sale-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason (e.g., Transport, Commission)">
+            <!-- Stock Movement Section -->
+            <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-6">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
-                        <input type="number" class="sale-others-amount w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter amount">
+                        <h3 class="text-lg font-bold text-slate-800">Stock Movement</h3>
+                        <p class="text-xs text-slate-500">Track all inventory transactions</p>
+                    </div>
+                </div>
+                
+                <!-- Filter Controls -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Search</label>
+                        <input type="text" id="stockMovementSearch" placeholder="Search items..." 
+                            class="w-full p-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                            onkeyup="filterStockMovement()">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Operation</label>
-                        <select class="sale-others-operation w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                            <option value="add">Add (+)</option>
-                            <option value="reduce">Reduce (-)</option>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Item</label>
+                        <select id="stockMovementFilterItem" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterStockMovement()">
+                            <option value="">All Items</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Type</label>
+                        <select id="stockMovementFilterType" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterStockMovement()">
+                            <option value="">All Types</option>
+                            <option value="Purchase">Purchases (IN)</option>
+                            <option value="Sale">Sales (OUT)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Date From</label>
+                        <input type="date" id="stockMovementDateFrom" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterStockMovement()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Sort By</label>
+                        <select id="stockMovementSort" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterStockMovement()">
+                            <option value="date-desc">Date (Newest)</option>
+                            <option value="date-asc">Date (Oldest)</option>
+                            <option value="qty-desc">Quantity (High-Low)</option>
+                            <option value="qty-asc">Quantity (Low-High)</option>
+                            <option value="item-asc">Item (A-Z)</option>
                         </select>
                     </div>
                 </div>
-            `;
-            saleOthersIndex = 1;
-            
-            currentSaleItems = [];
-            editingSaleId = null;
-            updateCurrentSaleItemsDisplay();
-            calculateSaleTotals();
-            
-            // Clear linked purchases
-            linkedPurchases = [];
-            updateLinkedPurchasesDisplay();
-        }
-
-        // Purchase Linking Functions
-        function showPurchaseLinkingModal() {
-            // Reset temporary linked purchases to current state
-            tempLinkedPurchases = JSON.parse(JSON.stringify(linkedPurchases));
-            
-            // Populate available purchases
-            const container = document.getElementById('availablePurchasesList');
-            container.innerHTML = '';
-            
-            if (appData.purchases.length === 0) {
-                container.innerHTML = '<p class="text-slate-500 text-center py-4">No purchase invoices available</p>';
-            } else {
-                appData.purchases.forEach(purchase => {
-                    const isLinked = tempLinkedPurchases.some(lp => lp.purchaseId === purchase.id);
-                    
-                    const div = document.createElement('div');
-                    div.className = 'border border-slate-300 rounded-lg p-4 ' + (isLinked ? 'bg-blue-50 border-blue-400' : 'bg-white');
-                    
-                    // Calculate available quantity for this purchase
-                    const totalPurchased = purchase.items ? purchase.items.reduce((sum, item) => sum + item.grossWeight, 0) : 0;
-                    const alreadyLinked = appData.sales ? appData.sales.reduce((sum, sale) => {
-                        if (sale.linkedPurchases && sale.id !== editingSaleId) {
-                            const linked = sale.linkedPurchases.find(lp => lp.purchaseId === purchase.id);
-                            return sum + (linked ? linked.quantityUsed : 0);
-                        }
-                        return sum;
-                    }, 0) : 0;
-                    const currentlyLinked = tempLinkedPurchases.find(lp => lp.purchaseId === purchase.id);
-                    const currentLinkedQty = currentlyLinked ? currentlyLinked.quantityUsed : 0;
-                    const availableQty = totalPurchased - alreadyLinked + currentLinkedQty;
-                    
-                    div.innerHTML = `
-                        <div class="flex justify-between items-start mb-2">
-                            <div class="flex-1">
-                                <div class="font-semibold text-slate-800">Invoice: ${purchase.invoice}</div>
-                                <div class="text-sm text-slate-600">Date: ${purchase.date} | Supplier: ${purchase.supplierName}</div>
-                                <div class="text-sm text-slate-600">Total Amount: ${RU}${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</div>
-                                <div class="text-sm font-medium ${availableQty > 0 ? 'text-green-600' : 'text-red-600'}">
-                                    Available Quantity: ${availableQty.toFixed(2)} kg
-                                </div>
-                            </div>
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="checkbox" 
-                                       id="purchase_${purchase.id}" 
-                                       ${isLinked ? 'checked' : ''}
-                                       ${availableQty <= 0 && !isLinked ? 'disabled' : ''}
-                                       onchange="togglePurchaseLink(${purchase.id})"
-                                       class="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500">
-                                <span class="text-sm font-medium">Link</span>
-                            </label>
-                        </div>
-                        <div id="quantity_container_${purchase.id}" class="${isLinked ? '' : 'hidden'} mt-3 pt-3 border-t border-slate-200">
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Quantity to use from this purchase (kg):</label>
-                            <input type="number" 
-                                   id="quantity_${purchase.id}" 
-                                   value="${currentLinkedQty}"
-                                   max="${availableQty}"
-                                   step="0.01"
-                                   class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                   placeholder="Enter quantity">
-                        </div>
-                    `;
-                    container.appendChild(div);
-                });
-            }
-            
-            document.getElementById('purchaseLinkingModal').classList.remove('hidden');
-        }
-
-        function togglePurchaseLink(purchaseId) {
-            const checkbox = document.getElementById(`purchase_${purchaseId}`);
-            const quantityContainer = document.getElementById(`quantity_container_${purchaseId}`);
-            
-            if (checkbox.checked) {
-                quantityContainer.classList.remove('hidden');
-                // Add to temp linked purchases if not already there
-                if (!tempLinkedPurchases.some(lp => lp.purchaseId === purchaseId)) {
-                    tempLinkedPurchases.push({
-                        purchaseId: purchaseId,
-                        quantityUsed: 0
-                    });
-                }
-            } else {
-                quantityContainer.classList.add('hidden');
-                // Remove from temp linked purchases
-                tempLinkedPurchases = tempLinkedPurchases.filter(lp => lp.purchaseId !== purchaseId);
-            }
-        }
-
-        function confirmPurchaseLinking() {
-            // Validate and collect quantities
-            const validatedLinks = [];
-            let hasError = false;
-            
-            for (const link of tempLinkedPurchases) {
-                const quantityInput = document.getElementById(`quantity_${link.purchaseId}`);
-                const quantity = parseFloat(quantityInput.value) || 0;
+                <div class="flex justify-between items-center mb-4">
+                    <span id="stockMovementFilterCount" class="text-sm text-slate-500">Showing all movements</span>
+                    <button onclick="clearStockMovementFilters()" class="text-sm text-purple-600 hover:text-purple-800 font-medium">Clear Filters</button>
+                </div>
                 
-                if (quantity <= 0) {
-                    alert('Please enter a valid quantity for all linked purchases');
-                    hasError = true;
-                    break;
-                }
-                
-                validatedLinks.push({
-                    purchaseId: link.purchaseId,
-                    quantityUsed: quantity
-                });
-            }
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto">
+                        <thead>
+                            <tr class="bg-gradient-to-r from-slate-100 to-slate-50">
+                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Date</th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Item</th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Type</th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Reference</th>
+                                <th class="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Quantity</th>
+                                <th class="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Running Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stockMovement">
+                            <tr>
+                                <td colspan="6" class="px-4 py-12 text-center text-slate-500">
+                                    <svg class="w-10 h-10 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                                    No stock movements recorded yet
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="stockMovementPagination" class="pagination-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 5: Sales -->
+    <div id="sales" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="flex justify-between items-center mb-8 border-l-4 border-blue-600 pl-4">
+                <h2 class="text-3xl font-bold text-slate-900">Sales Management</h2>
+                <button onclick="showSalesForm()" id="addSalesBtn" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 shadow-md">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    <span>Add Sale</span>
+                </button>
+            </div>
             
-            if (!hasError) {
-                linkedPurchases = validatedLinks;
-                updateLinkedPurchasesDisplay();
-                closePurchaseLinkingModal();
-            }
-        }
-
-        function updateLinkedPurchasesDisplay() {
-            const container = document.getElementById('linkedPurchasesList');
-            
-            if (linkedPurchases.length === 0) {
-                container.innerHTML = '<p class="text-slate-500 text-sm italic">No purchases linked yet. Click "Link Purchase" to add.</p>';
-            } else {
-                container.innerHTML = '';
-                linkedPurchases.forEach(link => {
-                    const purchase = appData.purchases.find(p => p.id === link.purchaseId);
-                    if (purchase) {
-                        const div = document.createElement('div');
-                        div.className = 'flex justify-between items-center p-3 bg-white border border-blue-300 rounded-lg';
-                        div.innerHTML = `
-                            <div class="flex-1">
-                                <div class="font-medium text-slate-800">ðŸ“„ Invoice: ${purchase.invoice} | Supplier: ${purchase.supplierName}</div>
-                                <div class="text-sm text-slate-600">Quantity: ${link.quantityUsed} kg | Amount: ${RU}${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</div>
-                            </div>
-                            <button onclick="removePurchaseLink(${link.purchaseId})" class="text-red-600 hover:text-red-800 font-bold">\u2716</button>
-                        `;
-                        container.appendChild(div);
-                    }
-                });
-            }
-        }
-
-        function removePurchaseLink(purchaseId) {
-            linkedPurchases = linkedPurchases.filter(lp => lp.purchaseId !== purchaseId);
-            updateLinkedPurchasesDisplay();
-        }
-
-        function closePurchaseLinkingModal() {
-            document.getElementById('purchaseLinkingModal').classList.add('hidden');
-        }
-
-        // Deduction Transaction Linking Functions
-        function showDeductionPurchaseLinkingModal() {
-            const container = document.getElementById('deductionAvailablePurchasesList');
-            container.innerHTML = '';
-            
-            if (appData.purchases.length === 0) {
-                container.innerHTML = '<p class="text-slate-500 text-center py-4">No purchase invoices available</p>';
-            } else {
-                appData.purchases.forEach(purchase => {
-                    const isSelected = deductionLinkedPurchase && deductionLinkedPurchase.purchaseId === purchase.id;
-                    
-                    const div = document.createElement('div');
-                    div.className = 'border border-slate-300 rounded-lg p-4 cursor-pointer hover:bg-orange-50 transition-colors ' + (isSelected ? 'bg-orange-100 border-orange-400' : 'bg-white');
-                    div.onclick = () => selectDeductionPurchase(purchase.id);
-                    
-                    div.innerHTML = `
-                        <div class="flex justify-between items-start">
-                            <div class="flex-1">
-                                <div class="font-semibold text-slate-800">Invoice: ${purchase.invoice}</div>
-                                <div class="text-sm text-slate-600">Date: ${purchase.date} | Supplier: ${purchase.supplierName}</div>
-                                <div class="text-sm text-slate-600">Total Amount: ${RU}${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</div>
-                            </div>
-                            ${isSelected ? '<div class="text-orange-600 font-bold text-2xl">' + CHECK + '</div>' : ''}
-                        </div>
-                    `;
-                    container.appendChild(div);
-                });
-            }
-            
-            document.getElementById('deductionPurchaseLinkingModal').classList.remove('hidden');
-        }
-
-        let tempDeductionPurchase = null;
-
-        function selectDeductionPurchase(purchaseId) {
-            tempDeductionPurchase = purchaseId;
-            // Refresh display to show selection
-            showDeductionPurchaseLinkingModal();
-        }
-
-        function confirmDeductionPurchaseLinking() {
-            if (tempDeductionPurchase) {
-                const purchase = appData.purchases.find(p => p.id === tempDeductionPurchase);
-                deductionLinkedPurchase = {
-                    purchaseId: purchase.id,
-                    invoice: purchase.invoice,
-                    supplier: purchase.supplierName,
-                    amount: purchase.grandTotal || purchase.total || 0
-                };
-                updateDeductionLinkedTransactionsDisplay();
-            }
-            closeDeductionPurchaseLinkingModal();
-        }
-
-        function closeDeductionPurchaseLinkingModal() {
-            document.getElementById('deductionPurchaseLinkingModal').classList.add('hidden');
-            tempDeductionPurchase = null;
-        }
-
-        function showDeductionSaleLinkingModal() {
-            const container = document.getElementById('deductionAvailableSalesList');
-            container.innerHTML = '';
-            
-            if (appData.sales.length === 0) {
-                container.innerHTML = '<p class="text-slate-500 text-center py-4">No sale invoices available</p>';
-            } else {
-                appData.sales.forEach(sale => {
-                    const isSelected = deductionLinkedSale && deductionLinkedSale.saleId === sale.id;
-                    
-                    const div = document.createElement('div');
-                    div.className = 'border border-slate-300 rounded-lg p-4 cursor-pointer hover:bg-blue-50 transition-colors ' + (isSelected ? 'bg-blue-100 border-blue-400' : 'bg-white');
-                    div.onclick = () => selectDeductionSale(sale.id);
-                    
-                    div.innerHTML = `
-                        <div class="flex justify-between items-start">
-                            <div class="flex-1">
-                                <div class="font-semibold text-slate-800">Invoice: ${sale.invoice}</div>
-                                <div class="text-sm text-slate-600">Date: ${sale.date} | Customer: ${sale.customerName}</div>
-                                <div class="text-sm text-slate-600">Total Amount: ${RU}${(sale.grandTotal || sale.total || 0).toFixed(2)}</div>
-                            </div>
-                            ${isSelected ? '<div class="text-blue-600 font-bold text-2xl">' + CHECK + '</div>' : ''}
-                        </div>
-                    `;
-                    container.appendChild(div);
-                });
-            }
-            
-            document.getElementById('deductionSaleLinkingModal').classList.remove('hidden');
-        }
-
-        let tempDeductionSale = null;
-
-        function selectDeductionSale(saleId) {
-            tempDeductionSale = saleId;
-            // Refresh display to show selection
-            showDeductionSaleLinkingModal();
-        }
-
-        function confirmDeductionSaleLinking() {
-            if (tempDeductionSale) {
-                const sale = appData.sales.find(s => s.id === tempDeductionSale);
-                deductionLinkedSale = {
-                    saleId: sale.id,
-                    invoice: sale.invoice,
-                    customer: sale.customerName,
-                    amount: sale.grandTotal || sale.total || 0
-                };
-                updateDeductionLinkedTransactionsDisplay();
-            }
-            closeDeductionSaleLinkingModal();
-        }
-
-        function closeDeductionSaleLinkingModal() {
-            document.getElementById('deductionSaleLinkingModal').classList.add('hidden');
-            tempDeductionSale = null;
-        }
-
-        function updateDeductionLinkedTransactionsDisplay() {
-            const container = document.getElementById('deductionLinkedTransactionsList');
-            
-            if (!deductionLinkedPurchase && !deductionLinkedSale) {
-                container.innerHTML = '<p class="text-slate-500 text-sm italic">No transactions linked yet.</p>';
-            } else {
-                container.innerHTML = '';
-                
-                if (deductionLinkedPurchase) {
-                    const div = document.createElement('div');
-                    div.className = 'flex justify-between items-center p-3 bg-white border border-orange-300 rounded-lg';
-                    div.innerHTML = `
-                        <div class="flex-1">
-                            <div class="font-medium text-slate-800">Purchase: ${escapeHtml(deductionLinkedPurchase.invoice)}</div>
-                            <div class="text-sm text-slate-600">Supplier: ${deductionLinkedPurchase.supplier} | Amount: ${RU}${deductionLinkedPurchase.amount.toFixed(2)}</div>
-                        </div>
-                        <button onclick="removeDeductionPurchaseLink()" class="text-red-600 hover:text-red-800 font-bold">\u2716</button>
-                    `;
-                    container.appendChild(div);
-                }
-                
-                if (deductionLinkedSale) {
-                    const div = document.createElement('div');
-                    div.className = 'flex justify-between items-center p-3 bg-white border border-blue-300 rounded-lg';
-                    div.innerHTML = `
-                        <div class="flex-1">
-                            <div class="font-medium text-slate-800">Sale: ${escapeHtml(deductionLinkedSale.invoice)}</div>
-                            <div class="text-sm text-slate-600">Customer: ${deductionLinkedSale.customer} | Amount: ${RU}${deductionLinkedSale.amount.toFixed(2)}</div>
-                        </div>
-                        <button onclick="removeDeductionSaleLink()" class="text-red-600 hover:text-red-800 font-bold">\u2716</button>
-                    `;
-                    container.appendChild(div);
-                }
-            }
-        }
-
-        function removeDeductionPurchaseLink() {
-            deductionLinkedPurchase = null;
-            updateDeductionLinkedTransactionsDisplay();
-        }
-
-        function removeDeductionSaleLink() {
-            deductionLinkedSale = null;
-            updateDeductionLinkedTransactionsDisplay();
-        }
-
-        function addSale() {
-            const date = document.getElementById('saleDate').value;
-            const invoice = document.getElementById('saleInvoice').value;
-            const customerId = document.getElementById('saleCustomer').value;
-            const itemId = document.getElementById('saleItem').value;
-            const quantity = parseFloat(document.getElementById('saleQuantity').value);
-            const rate = parseFloat(document.getElementById('saleRate').value);
-            
-            if (date && invoice && customerId && itemId && quantity && rate) {
-                const invoiceTrim = (invoice || '').trim().toUpperCase();
-                if (appData.sales.some(s => (s.invoice || '').trim().toUpperCase() === invoiceTrim)) {
-                    alert('This Sales invoice number is already used. Please use a unique invoice number.');
-                    return;
-                }
-                // Check if enough stock is available
-                if (!appData.inventory[itemId] || appData.inventory[itemId].quantity < quantity) {
-                    alert('Insufficient stock available!');
-                    return;
-                }
-                
-                const customer = appData.customers.find(c => c.id == customerId);
-                const item = appData.items.find(i => i.id == itemId);
-                const total = quantity * rate;
-                
-                const sale = {
-                    id: Date.now(),
-                    date: date,
-                    invoice: invoice,
-                    customerId: customerId,
-                    customerName: customer.name,
-                    itemId: itemId,
-                    itemName: item.name,
-                    quantity: quantity,
-                    rate: rate,
-                    total: total,
-                    ...getAuditMeta(true)
-                };
-                
-                appData.sales.push(sale);
-                
-                // Update inventory
-                appData.inventory[itemId].quantity -= quantity;
-                const totalQty = appData.inventory[itemId].quantity + quantity;
-                const avgCost = totalQty > 0 ? appData.inventory[itemId].totalCost / totalQty : 0;
-                appData.inventory[itemId].totalCost -= (avgCost * quantity);
-                
-                saveData();
-                updateSalesHistory();
-                updateDashboard();
-                populateDropdowns();
-                
-                // Clear form
-                document.getElementById('saleDate').value = '';
-                document.getElementById('saleInvoice').value = '';
-                document.getElementById('saleCustomer').value = '';
-                document.getElementById('saleItem').value = '';
-                document.getElementById('saleQuantity').value = '';
-                document.getElementById('saleRate').value = '';
-                document.getElementById('saleTotal').textContent = '0';
-                document.getElementById('availableStock').textContent = 'Available: 0';
-                
-                alert('Sale added successfully!');
-            }
-        }
-
-        // Filter Sales
-        function filterSales() {
-            const search = (document.getElementById('salesSearch')?.value || '').toLowerCase();
-            const customerId = document.getElementById('salesFilterCustomer')?.value || '';
-            const dateFrom = document.getElementById('salesDateFrom')?.value || '';
-            const dateTo = document.getElementById('salesDateTo')?.value || '';
-            const sortBy = document.getElementById('salesSort')?.value || 'date-desc';
-            
-            filteredSales = appData.sales.filter(s => {
-                // Search filter
-                if (search) {
-                    const searchFields = [s.invoice, s.customerName, s.truck || ''].join(' ').toLowerCase();
-                    if (!searchFields.includes(search)) return false;
-                }
-                // Customer filter
-                if (customerId && s.customerId != customerId) return false;
-                // Date filters
-                if (dateFrom && s.date < dateFrom) return false;
-                if (dateTo && s.date > dateTo) return false;
-                return true;
-            });
-            
-            // Sort
-            filteredSales.sort((a, b) => {
-                switch(sortBy) {
-                    case 'date-asc': return new Date(a.date) - new Date(b.date);
-                    case 'date-desc': return new Date(b.date) - new Date(a.date);
-                    case 'amount-desc': return (b.grandTotal || b.total || 0) - (a.grandTotal || a.total || 0);
-                    case 'amount-asc': return (a.grandTotal || a.total || 0) - (b.grandTotal || b.total || 0);
-                    case 'customer-asc': return (a.customerName || '').localeCompare(b.customerName || '');
-                    case 'balance-desc': return ((b.grandTotal || 0) - (b.received || 0)) - ((a.grandTotal || 0) - (a.received || 0));
-                    default: return new Date(b.date) - new Date(a.date);
-                }
-            });
-            
-            // Update count
-            const countEl = document.getElementById('salesFilterCount');
-            if (countEl) {
-                countEl.textContent = `Showing ${filteredSales.length} of ${appData.sales.length} sales`;
-            }
-            
-            // Reset to page 1 and render
-            paginationState.sales.currentPage = 1;
-            renderSalesTable();
-        }
-        
-        function clearSalesFilters() {
-            document.getElementById('salesSearch').value = '';
-            document.getElementById('salesFilterCustomer').value = '';
-            document.getElementById('salesDateFrom').value = '';
-            document.getElementById('salesDateTo').value = '';
-            document.getElementById('salesSort').value = 'date-desc';
-            filterSales();
-        }
-        
-        function renderSalesTable() {
-            const tbody = document.getElementById('salesHistory');
-            tbody.innerHTML = '';
-            
-            if (filteredSales.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="9" class="px-4 py-12 text-center">
-                            <div class="flex flex-col items-center text-slate-400">
-                                <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+            <!-- Sales History (Shown by default) -->
+            <div id="salesHistoryView" class="space-y-4">
+                <!-- Header Section with Stats -->
+                <div class="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-5 text-white shadow-lg">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <div>
+                            <h3 class="text-xl font-bold flex items-center gap-2">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
-                                <p class="font-medium">No sales found</p>
-                                <p class="text-sm">Try adjusting your filters</p>
+                                Sales History
+                            </h3>
+                            <p class="text-green-100 text-sm mt-1">Manage and track all your sales invoices</p>
+                        </div>
+                        <div class="flex gap-3">
+                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                                <p class="text-2xl font-bold" id="salesTotalCount">0</p>
+                                <p class="text-xs text-green-100">Total Invoices</p>
                             </div>
-                        </td>
-                    </tr>`;
-                document.getElementById('salesPagination').innerHTML = '';
-                return;
-            }
-            
-            const { currentPage, pageSize } = paginationState.sales;
-            const paginatedSales = getPaginatedData(filteredSales, currentPage, pageSize);
-            
-            paginatedSales.forEach((sale, index) => {
-                const itemsCount = sale.items ? sale.items.length : 1;
-                const itemsText = sale.items ? `${itemsCount} item${itemsCount > 1 ? 's' : ''}` : sale.itemName || 'N/A';
-                const grandTotal = sale.grandTotal || sale.total || 0;
-                const received = sale.received || 0;
-                const currentBalance = grandTotal - received;
-                sale.balance = currentBalance;
-                
-                const row = document.createElement('tr');
-                row.className = 'hover:bg-green-50/50 transition-colors';
-                row.innerHTML = `
-                    <td class="px-4 py-3 text-sm">
-                        <span class="text-slate-600">${sale.date}</span>
-                    </td>
-                    <td class="px-4 py-3">
-                        <span class="font-mono text-sm font-medium text-green-600 bg-green-50 px-2 py-1 rounded">${sale.invoice}</span>
-                    </td>
-                    <td class="px-4 py-3">
-                        <span class="font-medium text-slate-700 text-sm">${escapeHtml(sale.customerName)}</span>
-                    </td>
-                    <td class="px-4 py-3 text-sm text-slate-500">${sale.truck || '-'}</td>
-                    <td class="px-4 py-3">
-                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
-                            ${itemsText}
-                        </span>
-                    </td>
-                    <td class="px-4 py-3 text-right">
-                        <span class="font-semibold text-slate-800">${RU}${grandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
-                    </td>
-                    <td class="px-4 py-3 text-right">
-                        <span class="text-green-600 font-medium">${RU}${received.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
-                    </td>
-                    <td class="px-4 py-3 text-right">
-                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${currentBalance > 0 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}">
-                            ${currentBalance > 0 ? RU + currentBalance.toLocaleString('en-IN', {minimumFractionDigits: 2}) : 'Received ' + CHECK}
-                        </span>
-                    </td>
-                    <td class="px-4 py-3">
-                        <div class="flex items-center justify-center gap-1">
-                            <button onclick="viewSale(${sale.id})" class="action-btn action-view" title="View"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg></button>
-                            <button onclick="printSaleInvoice(${sale.id})" class="action-btn action-print" title="Print Invoice"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
-                            <button onclick="printDeliveryChallan(${sale.id})" class="action-btn" title="Delivery Challan"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/><path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z"/></svg></button>
-                            <button onclick="editSale(${sale.id})" class="action-btn action-edit" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg></button>
-                            <button onclick="receiveSale(${sale.id})" class="action-btn action-pay" title="Receive Payment"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12v2H6V3zm0 4h12v2h-4.5c-.83 2.07-2.6 3.56-4.74 3.94L14 21h-2.5l-5.24-8H6v-2h4.5c1.38 0 2.56-.8 3.12-1.94L6 9V7z"/></svg></button>
-                            <button onclick="deleteSale(${sale.id})" class="action-btn action-delete" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd"/></svg></button>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-            
-            renderPagination('salesPagination', filteredSales.length, currentPage, pageSize, 'changeSalesPage', 'changeSalesPageSize');
-        }
-        
-        function updateSalesHistory() {
-            populateFilterDropdowns();
-            filteredSales = [...appData.sales];
-            filterSales();
-            
-            // Update summary stats
-            const totalCount = appData.sales.length;
-            const totalAmount = appData.sales.reduce((sum, s) => sum + (s.grandTotal || s.total || 0), 0);
-            const totalReceived = appData.sales.reduce((sum, s) => {
-                const payments = appData.payments.filter(pay => pay.type === 'sale' && pay.invoiceId === s.id);
-                return sum + payments.reduce((r, pay) => r + pay.amount, 0);
-            }, 0);
-            const pendingAmount = totalAmount - totalReceived;
-            
-            const countEl = document.getElementById('salesTotalCount');
-            const amountEl = document.getElementById('salesTotalAmount');
-            const pendingEl = document.getElementById('salesPendingAmount');
-            
-            if (countEl) countEl.textContent = totalCount;
-            if (amountEl) amountEl.textContent = `${RU}${(totalAmount/1000).toFixed(0)}K`;
-            if (pendingEl) pendingEl.textContent = `${RU}${(pendingAmount/1000).toFixed(0)}K`;
-        }
-
-        // Brokerage functions
-        function updateBrokerageInvoices() {
-            const type = document.getElementById('brokerageType').value;
-            const referenceSelect = document.getElementById('brokerageReference');
-            
-            referenceSelect.innerHTML = '<option value="">Select Invoice</option>';
-            
-            if (type === 'Purchase') {
-                appData.purchases.forEach(purchase => {
-                    referenceSelect.innerHTML += `<option value="${purchase.invoice}">${purchase.invoice} - ${purchase.supplierName}</option>`;
-                });
-            } else if (type === 'Sale') {
-                appData.sales.forEach(sale => {
-                    referenceSelect.innerHTML += `<option value="${sale.invoice}">${sale.invoice} - ${sale.customerName}</option>`;
-                });
-            }
-        }
-
-        function addBrokerage() {
-            const date = document.getElementById('brokerageDate').value;
-            const brokerId = document.getElementById('brokeragebroker').value;
-            const itemId = document.getElementById('brokerageItem').value;
-            const type = document.getElementById('brokerageType').value;
-            const amount = parseFloat(document.getElementById('brokerageAmount').value);
-            const reference = document.getElementById('brokerageReference').value;
-            
-            if (date && brokerId && itemId && type && amount) {
-                const broker = appData.brokers.find(b => b.id == brokerId);
-                const item = appData.items.find(i => i.id == itemId);
-                
-                const brokerage = {
-                    id: Date.now(),
-                    date: date,
-                    brokerId: brokerId,
-                    brokerName: broker.name,
-                    itemId: itemId,
-                    itemName: item.name,
-                    type: type,
-                    amount: amount,
-                    reference: reference
-                };
-                
-                appData.brokerage.push(brokerage);
-                saveData();
-                updateBrokerageHistory();
-                
-                // Regenerate ledger if on ledger page to show new entry immediately
-                if (typeof generateLedger === 'function') {
-                    generateLedger();
-                }
-                
-                // Clear form
-                document.getElementById('brokerageDate').value = '';
-                document.getElementById('brokeragebroker').value = '';
-                document.getElementById('brokerageItem').value = '';
-                document.getElementById('brokerageType').value = '';
-                document.getElementById('brokerageAmount').value = '';
-                document.getElementById('brokerageReference').value = '';
-                
-                alert('Brokerage entry added successfully!');
-            }
-        }
-
-        // Filter Brokerage
-        function filterBrokerage() {
-            const search = (document.getElementById('brokerageSearch')?.value || '').toLowerCase();
-            const brokerId = document.getElementById('brokerageFilterBroker')?.value || '';
-            const type = document.getElementById('brokerageFilterType')?.value || '';
-            const dateFrom = document.getElementById('brokerageDateFrom')?.value || '';
-            const sortBy = document.getElementById('brokerageSort')?.value || 'date-desc';
-            
-            filteredBrokerage = appData.brokerage.filter(b => {
-                // Search filter
-                if (search) {
-                    const searchFields = [b.brokerName, b.itemName, b.reference || ''].join(' ').toLowerCase();
-                    if (!searchFields.includes(search)) return false;
-                }
-                // Broker filter
-                if (brokerId && b.brokerId != brokerId) return false;
-                // Type filter
-                if (type && b.type?.toLowerCase() !== type.toLowerCase()) return false;
-                // Date filter
-                if (dateFrom && b.date < dateFrom) return false;
-                return true;
-            });
-            
-            // Sort
-            filteredBrokerage.sort((a, b) => {
-                switch(sortBy) {
-                    case 'date-asc': return new Date(a.date) - new Date(b.date);
-                    case 'date-desc': return new Date(b.date) - new Date(a.date);
-                    case 'amount-desc': return (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0);
-                    case 'amount-asc': return (parseFloat(a.amount) || 0) - (parseFloat(b.amount) || 0);
-                    case 'broker-asc': return (a.brokerName || '').localeCompare(b.brokerName || '');
-                    default: return new Date(b.date) - new Date(a.date);
-                }
-            });
-            
-            // Update count
-            const countEl = document.getElementById('brokerageFilterCount');
-            if (countEl) {
-                countEl.textContent = `Showing ${filteredBrokerage.length} of ${appData.brokerage.length} entries`;
-            }
-            
-            paginationState.brokerage.currentPage = 1;
-            renderBrokerageTable();
-        }
-        
-        function clearBrokerageFilters() {
-            document.getElementById('brokerageSearch').value = '';
-            document.getElementById('brokerageFilterBroker').value = '';
-            document.getElementById('brokerageFilterType').value = '';
-            document.getElementById('brokerageDateFrom').value = '';
-            document.getElementById('brokerageSort').value = 'date-desc';
-            filterBrokerage();
-        }
-        
-        function renderBrokerageTable() {
-            const tbody = document.getElementById('brokerageHistory');
-            tbody.innerHTML = '';
-            
-            if (filteredBrokerage.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No brokerage entries found</td></tr>';
-                document.getElementById('brokeragePagination').innerHTML = '';
-                return;
-            }
-            
-            const { currentPage, pageSize } = paginationState.brokerage;
-            const paginatedBrokerage = getPaginatedData(filteredBrokerage, currentPage, pageSize);
-            
-            paginatedBrokerage.forEach(entry => {
-                const row = document.createElement('tr');
-                row.className = 'border-b border-slate-200 hover:bg-slate-50';
-                row.innerHTML = `
-                    <td class="px-4 py-3">${entry.date}</td>
-                    <td class="px-4 py-3">${entry.brokerName}</td>
-                    <td class="px-4 py-3">${entry.itemName}</td>
-                    <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded-full ${entry.type === 'Purchase' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}">${entry.type}</span></td>
-                    <td class="px-4 py-3">${RU}${entry.amount}</td>
-                    <td class="px-4 py-3">${entry.reference}</td>
-                    <td class="px-4 py-3">
-                        <div class="flex items-center gap-1">
-                            <button onclick="printBrokerageEntry(${entry.id})" class="action-btn action-print" title="Print"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
-                            <button onclick="editBrokerage(${entry.id})" class="action-btn action-edit" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg></button>
-                            <button onclick="payBrokerage(${entry.id})" class="action-btn action-pay" title="Pay"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12v2H6V3zm0 4h12v2h-4.5c-.83 2.07-2.6 3.56-4.74 3.94L14 21h-2.5l-5.24-8H6v-2h4.5c1.38 0 2.56-.8 3.12-1.94L6 9V7z"/></svg></button>
-                            <button onclick="deleteBrokerage(${entry.id})" class="action-btn action-delete" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd"/></svg></button>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-            
-            renderPagination('brokeragePagination', filteredBrokerage.length, currentPage, pageSize, 'changeBrokeragePage', 'changeBrokeragePageSize');
-        }
-        
-        function updateBrokerageHistory() {
-            populateFilterDropdowns();
-            filteredBrokerage = [...appData.brokerage];
-            filterBrokerage();
-        }
-
-        // Brokerage action functions
-        function printBrokerageEntry(brokerageId) {
-            const entry = appData.brokerage.find(b => b.id === brokerageId);
-            if (!entry) return;
-            
-            const printWindow = window.open('', '_blank');
-            const company = appData.company;
-            
-            printWindow.document.write(`
-                <html>
-                <head>
-                    <title>Brokerage Entry - ${entry.reference}</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; }
-                        .header { text-align: center; margin-bottom: 20px; }
-                        .details { margin-bottom: 20px; }
-                        .font-bold { font-weight: bold; }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h1>${company.name || 'ITCO Trade Management'}</h1>
-                        <h2>BROKERAGE ENTRY</h2></div>
-                    </div>
-                    
-                    <div class="details">
-                        <p><strong>Date:</strong> ${entry.date}</p>
-                        <p><strong>Broker:</strong> ${entry.brokerName}</p>
-                        <p><strong>Item:</strong> ${entry.itemName}</p>
-                        <p><strong>Type:</strong> ${entry.type}</p>
-                        <p><strong>Amount:</strong> ${RU}${entry.amount}</p>
-                        <p><strong>Reference Invoice:</strong> ${entry.reference}</p>
-                    </div>
-                </body>
-                </html>
-            `);
-            
-            printWindow.document.close();
-            printWindow.print();
-        }
-
-        function editBrokerage(brokerageId) {
-            const entry = appData.brokerage.find(b => b.id === brokerageId);
-            if (!entry) return;
-            
-            document.getElementById('brokerageDate').value = entry.date;
-            document.getElementById('brokeragebroker').value = entry.brokerId;
-            document.getElementById('brokerageItem').value = entry.itemId;
-            document.getElementById('brokerageType').value = entry.type;
-            document.getElementById('brokerageAmount').value = entry.amount;
-            
-            // Update invoice dropdown and select the reference
-            updateBrokerageInvoices();
-            setTimeout(() => {
-                document.getElementById('brokerageReference').value = entry.reference;
-            }, 100);
-            
-            // Remove the old entry
-            appData.brokerage = appData.brokerage.filter(b => b.id !== brokerageId);
-            updateBrokerageHistory();
-            
-            showPage('broker');
-            alert('Brokerage entry loaded for editing. Make changes and save to update.');
-        }
-
-        function payBrokerage(brokerageId) {
-            const entry = appData.brokerage.find(b => b.id === brokerageId);
-            if (!entry) return;
-            
-            currentPaymentData = {
-                type: 'brokerage',
-                id: brokerageId,
-                invoice: entry.reference,
-                party: entry.brokerName,
-                balance: entry.amount
-            };
-            
-            document.getElementById('paymentModalTitle').textContent = 'Pay Brokerage to Broker';
-            document.getElementById('balanceDisplay').textContent = `Amount: ${RU}${entry.amount.toFixed(2)}`;
-            document.getElementById('paymentAmount').value = entry.amount;
-            document.getElementById('paymentMode').value = '';
-            document.getElementById('paidThrough').value = '';
-            document.getElementById('paymentRemarks').value = '';
-            
-            document.getElementById('paymentModal').classList.remove('hidden');
-        }
-
-        function deleteBrokerage(brokerageId) {
-            if (confirm('Are you sure you want to delete this brokerage entry?')) {
-                appData.brokerage = appData.brokerage.filter(b => b.id !== brokerageId);
-                saveData();
-                updateBrokerageHistory();
-                alert('Brokerage entry deleted successfully!');
-            }
-        }
-
-        // Adjustment fields function
-        function showAdjustmentFields() {
-            const adjustmentType = document.getElementById('adjustmentType').value;
-            const adjustmentFields = document.getElementById('adjustmentFields');
-            const splitAdjustmentFields = document.getElementById('splitAdjustmentFields');
-            const adjustmentEntityLabel = document.getElementById('adjustmentEntityLabel');
-            const adjustmentEntity = document.getElementById('adjustmentEntity');
-            const adjustmentAmountHelp = document.getElementById('adjustmentAmountHelp');
-            
-            // Hide all fields first
-            adjustmentFields.style.display = 'none';
-            splitAdjustmentFields.style.display = 'none';
-            
-            if (adjustmentType === 'Supplier' || adjustmentType === 'Broker') {
-                adjustmentFields.style.display = 'grid';
-                
-                if (adjustmentType === 'Supplier') {
-                    adjustmentEntityLabel.textContent = 'Select Supplier';
-                    adjustmentEntity.innerHTML = '<option value="">Select Supplier</option>';
-                    appData.suppliers.forEach(supplier => {
-                        adjustmentEntity.innerHTML += `<option value="${supplier.id}">${supplier.name}</option>`;
-                    });
-                    adjustmentAmountHelp.textContent = 'Amount to adjust with supplier';
-                } else if (adjustmentType === 'Broker') {
-                    adjustmentEntityLabel.textContent = 'Select Broker';
-                    adjustmentEntity.innerHTML = '<option value="">Select Broker</option>';
-                    appData.brokers.forEach(broker => {
-                        adjustmentEntity.innerHTML += `<option value="${broker.id}">${broker.name}</option>`;
-                    });
-                    adjustmentAmountHelp.textContent = 'Amount to adjust with broker';
-                }
-            } else if (adjustmentType === 'Split') {
-                splitAdjustmentFields.style.display = 'grid';
-                
-                // Populate broker dropdown
-                const splitBroker = document.getElementById('splitBroker');
-                splitBroker.innerHTML = '<option value="">Select Broker</option>';
-                appData.brokers.forEach(broker => {
-                    splitBroker.innerHTML += `<option value="${broker.id}">${broker.name}</option>`;
-                });
-                
-                // Populate supplier dropdown
-                const splitSupplier = document.getElementById('splitSupplier');
-                splitSupplier.innerHTML = '<option value="">Select Supplier</option>';
-                appData.suppliers.forEach(supplier => {
-                    splitSupplier.innerHTML += `<option value="${supplier.id}">${supplier.name}</option>`;
-                });
-            }
-        }
-
-        // Deductions functions
-        function addDeduction() {
-            const date = document.getElementById('deductionDate').value;
-            const customerId = document.getElementById('deductionCustomer').value;
-            const invoice = document.getElementById('deductionInvoice').value;
-            const amount = parseFloat(document.getElementById('deductionAmount').value);
-            const reason = document.getElementById('deductionReason').value;
-            const adjustmentType = document.getElementById('adjustmentType').value;
-            
-            if (date && customerId && amount && reason) {
-                const customer = appData.customers.find(c => c.id == customerId);
-                let adjustmentEntityId = null;
-                let adjustmentEntityName = '';
-                let adjustmentAmount = 0;
-                let lossAmount = amount;
-                let splitAdjustments = null;
-                
-                // Handle adjustments
-                if (adjustmentType === 'Supplier' || adjustmentType === 'Broker') {
-                    adjustmentEntityId = document.getElementById('adjustmentEntity').value;
-                    adjustmentAmount = parseFloat(document.getElementById('adjustmentAmount').value) || 0;
-                    
-                    if (!adjustmentEntityId || adjustmentAmount <= 0) {
-                        alert('Please select entity and enter adjustment amount');
-                        return;
-                    }
-                    
-                    if (adjustmentAmount > amount) {
-                        alert('Adjustment amount cannot exceed deduction amount');
-                        return;
-                    }
-                    
-                    lossAmount = amount - adjustmentAmount;
-                    
-                    if (adjustmentType === 'Supplier') {
-                        const supplier = appData.suppliers.find(s => s.id == adjustmentEntityId);
-                        adjustmentEntityName = supplier.name;
-                        
-                        // Create adjustment entry for supplier ledger
-                        if (!appData.adjustments) appData.adjustments = [];
-                        appData.adjustments.push({
-                            id: Date.now(),
-                            date: date,
-                            type: 'supplier_adjustment',
-                            entityId: adjustmentEntityId,
-                            entityName: adjustmentEntityName,
-                            amount: adjustmentAmount,
-                            reference: `Deduction adjustment - ${invoice}`,
-                            deductionId: Date.now() + 1
-                        });
-                    } else if (adjustmentType === 'Broker') {
-                        const broker = appData.brokers.find(b => b.id == adjustmentEntityId);
-                        adjustmentEntityName = broker.name;
-                        
-                        // Create adjustment entry for broker ledger
-                        if (!appData.adjustments) appData.adjustments = [];
-                        appData.adjustments.push({
-                            id: Date.now(),
-                            date: date,
-                            type: 'broker_adjustment',
-                            entityId: adjustmentEntityId,
-                            entityName: adjustmentEntityName,
-                            amount: adjustmentAmount,
-                            reference: `Deduction adjustment - ${invoice}`,
-                            deductionId: Date.now() + 1
-                        });
-                    }
-                } else if (adjustmentType === 'Split') {
-                    const splitBrokerId = document.getElementById('splitBroker').value;
-                    const splitBrokerAmount = parseFloat(document.getElementById('splitBrokerAmount').value) || 0;
-                    const splitSupplierId = document.getElementById('splitSupplier').value;
-                    const splitSupplierAmount = parseFloat(document.getElementById('splitSupplierAmount').value) || 0;
-                    
-                    if (!splitBrokerId || !splitSupplierId || splitBrokerAmount <= 0 || splitSupplierAmount <= 0) {
-                        alert('Please select both broker and supplier with valid amounts');
-                        return;
-                    }
-                    
-                    const totalSplitAmount = splitBrokerAmount + splitSupplierAmount;
-                    if (totalSplitAmount > amount) {
-                        alert('Total split adjustment amount cannot exceed deduction amount');
-                        return;
-                    }
-                    
-                    lossAmount = amount - totalSplitAmount;
-                    adjustmentAmount = totalSplitAmount;
-                    
-                    const broker = appData.brokers.find(b => b.id == splitBrokerId);
-                    const supplier = appData.suppliers.find(s => s.id == splitSupplierId);
-                    
-                    splitAdjustments = {
-                        broker: { id: splitBrokerId, name: broker.name, amount: splitBrokerAmount },
-                        supplier: { id: splitSupplierId, name: supplier.name, amount: splitSupplierAmount }
-                    };
-                    
-                    adjustmentEntityName = `${broker.name} (${RU}${splitBrokerAmount}) + ${supplier.name} (${RU}${splitSupplierAmount})`;
-                    
-                    // Create adjustment entries
-                    if (!appData.adjustments) appData.adjustments = [];
-                    
-                    // Broker adjustment
-                    appData.adjustments.push({
-                        id: Date.now(),
-                        date: date,
-                        type: 'broker_adjustment',
-                        entityId: splitBrokerId,
-                        entityName: broker.name,
-                        amount: splitBrokerAmount,
-                        reference: `Split deduction adjustment - ${invoice}`,
-                        deductionId: Date.now() + 1
-                    });
-                    
-                    // Supplier adjustment
-                    appData.adjustments.push({
-                        id: Date.now() + 1,
-                        date: date,
-                        type: 'supplier_adjustment',
-                        entityId: splitSupplierId,
-                        entityName: supplier.name,
-                        amount: splitSupplierAmount,
-                        reference: `Split deduction adjustment - ${invoice}`,
-                        deductionId: Date.now() + 1
-                    });
-                }
-                
-                const deduction = {
-                    id: Date.now() + 1,
-                    date: date,
-                    customerId: customerId,
-                    customerName: customer.name,
-                    invoice: invoice,
-                    amount: amount,
-                    reason: reason,
-                    adjustmentType: adjustmentType,
-                    adjustmentEntityId: adjustmentEntityId,
-                    adjustmentEntityName: adjustmentEntityName,
-                    adjustmentAmount: adjustmentAmount,
-                    splitAdjustments: splitAdjustments,
-                    lossAmount: lossAmount,
-                    linkedPurchase: deductionLinkedPurchase,
-                    linkedSale: deductionLinkedSale
-                };
-                
-                appData.deductions.push(deduction);
-                saveData();
-                updateDeductionsHistory();
-                
-                // Regenerate ledger if on ledger page to show new entry immediately
-                if (typeof generateLedger === 'function') {
-                    generateLedger();
-                }
-                
-                // Clear form
-                document.getElementById('deductionDate').value = '';
-                document.getElementById('deductionCustomer').value = '';
-                document.getElementById('deductionInvoice').value = '';
-                document.getElementById('deductionAmount').value = '';
-                document.getElementById('deductionReason').value = '';
-                document.getElementById('adjustmentType').value = '';
-                document.getElementById('adjustmentEntity').value = '';
-                document.getElementById('adjustmentAmount').value = '';
-                document.getElementById('splitBroker').value = '';
-                document.getElementById('splitBrokerAmount').value = '';
-                document.getElementById('splitSupplier').value = '';
-                document.getElementById('splitSupplierAmount').value = '';
-                document.getElementById('adjustmentFields').style.display = 'none';
-                document.getElementById('splitAdjustmentFields').style.display = 'none';
-                
-                // Clear linked transactions
-                deductionLinkedPurchase = null;
-                deductionLinkedSale = null;
-                updateDeductionLinkedTransactionsDisplay();
-                
-                alert(`Deduction entry added successfully! Loss amount: ${RU}${lossAmount.toFixed(2)}`);
-            }
-        }
-
-        // Filter Deductions
-        function filterDeductions() {
-            const search = (document.getElementById('deductionsSearch')?.value || '').toLowerCase();
-            const customerId = document.getElementById('deductionsFilterCustomer')?.value || '';
-            const dateFrom = document.getElementById('deductionsDateFrom')?.value || '';
-            const dateTo = document.getElementById('deductionsDateTo')?.value || '';
-            const sortBy = document.getElementById('deductionsSort')?.value || 'date-desc';
-            
-            filteredDeductions = appData.deductions.filter(d => {
-                // Search filter
-                if (search) {
-                    const searchFields = [d.customerName, d.invoice, d.reason || ''].join(' ').toLowerCase();
-                    if (!searchFields.includes(search)) return false;
-                }
-                // Customer filter
-                if (customerId && d.customerId != customerId) return false;
-                // Date filters
-                if (dateFrom && d.date < dateFrom) return false;
-                if (dateTo && d.date > dateTo) return false;
-                return true;
-            });
-            
-            // Sort
-            filteredDeductions.sort((a, b) => {
-                switch(sortBy) {
-                    case 'date-asc': return new Date(a.date) - new Date(b.date);
-                    case 'date-desc': return new Date(b.date) - new Date(a.date);
-                    case 'amount-desc': return (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0);
-                    case 'amount-asc': return (parseFloat(a.amount) || 0) - (parseFloat(b.amount) || 0);
-                    case 'customer-asc': return (a.customerName || '').localeCompare(b.customerName || '');
-                    default: return new Date(b.date) - new Date(a.date);
-                }
-            });
-            
-            // Update count
-            const countEl = document.getElementById('deductionsFilterCount');
-            if (countEl) {
-                countEl.textContent = `Showing ${filteredDeductions.length} of ${appData.deductions.length} deductions`;
-            }
-            
-            paginationState.deductions.currentPage = 1;
-            renderDeductionsTable();
-        }
-        
-        function clearDeductionsFilters() {
-            document.getElementById('deductionsSearch').value = '';
-            document.getElementById('deductionsFilterCustomer').value = '';
-            document.getElementById('deductionsDateFrom').value = '';
-            document.getElementById('deductionsDateTo').value = '';
-            document.getElementById('deductionsSort').value = 'date-desc';
-            filterDeductions();
-        }
-        
-        function renderDeductionsTable() {
-            const tbody = document.getElementById('deductionsHistory');
-            tbody.innerHTML = '';
-            
-            if (filteredDeductions.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No deductions found</td></tr>';
-                document.getElementById('deductionsPagination').innerHTML = '';
-                return;
-            }
-            
-            const { currentPage, pageSize } = paginationState.deductions;
-            const paginatedDeductions = getPaginatedData(filteredDeductions, currentPage, pageSize);
-            
-            paginatedDeductions.forEach(deduction => {
-                let adjustmentText = deduction.adjustmentType || 'Loss';
-                if (deduction.adjustmentEntityName && deduction.adjustmentAmount) {
-                    adjustmentText += ` (${deduction.adjustmentEntityName}: ${RU}${deduction.adjustmentAmount})`;
-                }
-                
-                const row = document.createElement('tr');
-                row.className = 'border-b border-slate-200 hover:bg-slate-50';
-                row.innerHTML = `
-                    <td class="px-4 py-3">${deduction.date}</td>
-                    <td class="px-4 py-3">${deduction.customerName}</td>
-                    <td class="px-4 py-3">${deduction.invoice}</td>
-                    <td class="px-4 py-3">${RU}${deduction.amount}</td>
-                    <td class="px-4 py-3">${deduction.reason}</td>
-                    <td class="px-4 py-3">${adjustmentText}</td>
-                    <td class="px-4 py-3 text-red-600 font-medium">${RU}${(deduction.lossAmount || deduction.amount).toFixed(2)}</td>
-                    <td class="px-4 py-3">
-                        <div class="flex items-center gap-1">
-                            <button onclick="editDeduction(${deduction.id})" class="action-btn action-edit" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg></button>
-                            <button onclick="deleteDeduction(${deduction.id})" class="action-btn action-delete" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd"/></svg></button>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-            
-            renderPagination('deductionsPagination', filteredDeductions.length, currentPage, pageSize, 'changeDeductionsPage', 'changeDeductionsPageSize');
-        }
-        
-        function updateDeductionsHistory() {
-            populateFilterDropdowns();
-            filteredDeductions = [...appData.deductions];
-            filterDeductions();
-        }
-
-        // Dashboard update
-        function updateDashboard() {
-            // Calculate net payables (to suppliers) - includes opening balances
-            const totalPurchases = appData.purchases.reduce((sum, purchase) => sum + (purchase.grandTotal || purchase.total || 0), 0);
-            const openingPayables = (appData.openingBalances || [])
-                .filter(ob => ob.type === 'payable')
-                .reduce((sum, ob) => sum + (ob.amount || 0), 0);
-            const supplierPayments = appData.payments
-                .filter(payment => payment.type === 'purchase' || (payment.type === 'ledger_payment' && payment.entityType === 'supplier'))
-                .reduce((sum, payment) => sum + (payment.amount || 0), 0);
-            const netPayables = Math.max(0, totalPurchases + openingPayables - supplierPayments);
-            
-            // Calculate net receivables (from customers)
-            const totalSales = appData.sales.reduce((sum, sale) => sum + (sale.grandTotal || sale.total || 0), 0);
-            const openingReceivables = (appData.openingBalances || [])
-                .filter(ob => ob.type === 'receivable')
-                .reduce((sum, ob) => sum + (ob.amount || 0), 0);
-            const totalDeductions = appData.deductions.reduce((sum, deduction) => sum + (deduction.amount || 0), 0);
-            const customerPayments = appData.payments
-                .filter(payment => payment.type === 'sale' || (payment.type === 'ledger_receipt' && payment.entityType === 'customer'))
-                .reduce((sum, payment) => sum + (payment.amount || 0), 0);
-            const netReceivables = Math.max(0, totalSales + openingReceivables - totalDeductions - customerPayments);
-            
-            // Calculate stock value
-            let stockValue = 0;
-            const stockDetails = [];
-            Object.keys(appData.inventory || {}).forEach(itemId => {
-                const inventory = appData.inventory[itemId];
-                if (inventory && inventory.quantity > 0) {
-                    const item = appData.items.find(i => i.id == itemId);
-                    if (item) {
-                        stockValue += (inventory.totalCost || 0);
-                        stockDetails.push({ name: item.name, quantity: inventory.quantity, unit: item.unit, value: inventory.totalCost || 0 });
-                    }
-                }
-            });
-            
-            // Update key metrics
-            document.getElementById('netPayables').textContent = `${RU}${(netPayables || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-            document.getElementById('netReceivables').textContent = `${RU}${(netReceivables || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-            document.getElementById('stockValue').textContent = `${RU}${(stockValue || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-            
-            // Net Position
-            const netPosition = netReceivables - netPayables;
-            const netPositionEl = document.getElementById('netPosition');
-            if (netPositionEl) {
-                netPositionEl.textContent = `${netPosition >= 0 ? '+' : ''}${RU}${netPosition.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-            }
-            
-            // Update last updated time
-            const updateTimeEl = document.getElementById('dashboardUpdateTime');
-            if (updateTimeEl) {
-                updateTimeEl.textContent = new Date().toLocaleTimeString('en-IN');
-            }
-            
-            // Update inventory status
-            const stockDetailsContainer = document.getElementById('stockDetails');
-            const inventoryCountEl = document.getElementById('inventoryItemCount');
-            if (stockDetailsContainer) {
-                if (stockDetails.length === 0) {
-                    stockDetailsContainer.innerHTML = '<div class="text-xs text-slate-400 italic text-center py-4">No items in stock</div>';
-                } else {
-                    stockDetailsContainer.innerHTML = stockDetails.map(detail => `
-                        <div class="flex justify-between items-center text-xs py-2 px-2 bg-slate-50 rounded-lg mb-1">
-                            <span class="font-medium text-slate-700">${detail.name}</span>
-                            <div class="flex items-center gap-2">
-                                <span class="text-slate-500">${detail.quantity.toFixed(1)} ${detail.unit}</span>
-                                <span class="text-amber-600 font-bold">${RU}${detail.value.toLocaleString('en-IN')}</span>
+                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                                <p class="text-2xl font-bold" id="salesTotalAmount">&#8377;0</p>
+                                <p class="text-xs text-green-100">Total Value</p>
+                            </div>
+                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                                <p class="text-2xl font-bold" id="salesPendingAmount">&#8377;0</p>
+                                <p class="text-xs text-green-100">Receivable</p>
                             </div>
                         </div>
-                    `).join('');
-                }
-                if (inventoryCountEl) inventoryCountEl.textContent = `${stockDetails.length} items`;
-            }
-            
-            // Update Top Suppliers
-            const supplierTotals = {};
-            appData.purchases.forEach(p => {
-                if (!supplierTotals[p.supplierId]) supplierTotals[p.supplierId] = { name: p.supplierName, total: 0, count: 0 };
-                supplierTotals[p.supplierId].total += (p.grandTotal || p.total || 0);
-                supplierTotals[p.supplierId].count++;
-            });
-            const topSuppliersEl = document.getElementById('topSuppliers');
-            if (topSuppliersEl) {
-                const topSuppliers = Object.values(supplierTotals).sort((a, b) => b.total - a.total).slice(0, 5);
-                if (topSuppliers.length === 0) {
-                    topSuppliersEl.innerHTML = '<div class="text-xs text-slate-400 italic text-center py-4">No purchase data</div>';
-                } else {
-                    topSuppliersEl.innerHTML = topSuppliers.map((s, i) => `
-                        <div class="flex items-center gap-2 text-xs py-2 px-2 bg-slate-50 rounded-lg">
-                            <span class="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">${i + 1}</span>
-                            <span class="flex-1 font-medium text-slate-700 truncate">${s.name}</span>
-                            <span class="text-slate-500">${s.count} orders</span>
-                            <span class="text-blue-600 font-bold">${RU}${(s.total/1000).toFixed(0)}K</span>
-                        </div>
-                    `).join('');
-                }
-            }
-            
-            // Update Top Customers
-            const customerTotals = {};
-            appData.sales.forEach(s => {
-                if (!customerTotals[s.customerId]) customerTotals[s.customerId] = { name: s.customerName, total: 0, count: 0 };
-                customerTotals[s.customerId].total += (s.grandTotal || s.total || 0);
-                customerTotals[s.customerId].count++;
-            });
-            const topCustomersEl = document.getElementById('topCustomers');
-            if (topCustomersEl) {
-                const topCustomers = Object.values(customerTotals).sort((a, b) => b.total - a.total).slice(0, 5);
-                if (topCustomers.length === 0) {
-                    topCustomersEl.innerHTML = '<div class="text-xs text-slate-400 italic text-center py-4">No sales data</div>';
-                } else {
-                    topCustomersEl.innerHTML = topCustomers.map((c, i) => `
-                        <div class="flex items-center gap-2 text-xs py-2 px-2 bg-slate-50 rounded-lg">
-                            <span class="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-xs">${i + 1}</span>
-                            <span class="flex-1 font-medium text-slate-700 truncate">${c.name}</span>
-                            <span class="text-slate-500">${c.count} orders</span>
-                            <span class="text-green-600 font-bold">${RU}${(c.total/1000).toFixed(0)}K</span>
-                        </div>
-                    `).join('');
-                }
-            }
-            
-            // Update Recent Transactions
-            const recentTransactionsEl = document.getElementById('recentTransactions');
-            if (recentTransactionsEl) {
-                const allTransactions = [
-                    ...appData.purchases.map(p => ({ type: 'purchase', date: p.date, desc: `Purchase from ${p.supplierName}`, amount: p.grandTotal || p.total, invoice: p.invoice })),
-                    ...appData.sales.map(s => ({ type: 'sale', date: s.date, desc: `Sale to ${s.customerName}`, amount: s.grandTotal || s.total, invoice: s.invoice }))
-                ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 8);
+                    </div>
+                </div>
                 
-                if (allTransactions.length === 0) {
-                    recentTransactionsEl.innerHTML = '<div class="text-xs text-slate-400 italic text-center py-4">No recent transactions</div>';
-                } else {
-                    recentTransactionsEl.innerHTML = allTransactions.map(t => `
-                        <div class="flex items-center gap-3 text-xs py-2 px-2 rounded-lg hover:bg-slate-50 transition-colors">
-                            <div class="w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'sale' ? 'bg-green-100' : 'bg-red-100'}">
-                                <svg class="w-4 h-4 ${t.type === 'sale' ? 'text-green-600' : 'text-red-600'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${t.type === 'sale' ? 'M7 11l5-5m0 0l5 5m-5-5v12' : 'M17 13l-5 5m0 0l-5-5m5 5V6'}"/>
+                <!-- Filter Section -->
+                <div class="bg-white rounded-xl shadow-md border border-slate-200 p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                            </svg>
+                            Filters & Search
+                        </h4>
+                        <button onclick="clearSalesFilters()" class="text-xs text-green-600 hover:text-green-800 font-medium flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                            Clear All
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                        <div class="col-span-2 md:col-span-1">
+                            <div class="relative">
+                                <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                </svg>
+                                <input type="text" id="salesSearch" placeholder="Search..." 
+                                    class="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-slate-50"
+                                    onkeyup="filterSales()">
+                            </div>
+                        </div>
+                        <div>
+                            <select id="salesFilterCustomer" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()">
+                                <option value="">All Customers</option>
+                            </select>
+                        </div>
+                        <div>
+                            <input type="date" id="salesDateFrom" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()" title="From Date">
+                        </div>
+                        <div>
+                            <input type="date" id="salesDateTo" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()" title="To Date">
+                        </div>
+                        <div>
+                            <select id="salesSort" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()">
+                                <option value="date-desc">Newest First</option>
+                                <option value="date-asc">Oldest First</option>
+                                <option value="amount-desc">Amount (high)</option>
+                                <option value="amount-asc">Amount (low)</option>
+                                <option value="customer-asc">Customer A-Z</option>
+                                <option value="balance-desc">Balance (high)</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center">
+                            <span id="salesFilterCount" class="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">All</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Table Section -->
+                <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Invoice</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Customer</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Truck</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Items</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Amount</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Received</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Balance</th>
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="salesHistory" class="divide-y divide-slate-100">
+                                <tr>
+                                    <td colspan="9" class="px-4 py-12 text-center">
+                                        <div class="flex flex-col items-center text-slate-400">
+                                            <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                                            </svg>
+                                            <p class="font-medium">No sales recorded yet</p>
+                                            <p class="text-sm">Start by adding your first sales invoice</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="salesPagination" class="pagination-container border-t border-slate-100"></div>
+                </div>
+            </div>
+
+            <!-- Sales Entry Form (Hidden by default) -->
+            <div id="salesEntryView" class="hidden bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <h3 class="text-xl font-semibold mb-6 text-primary">New Sale Entry</h3>
+                
+                <!-- Purchase Linking Section (NEW) -->
+                <div class="bg-blue-50 border-2 border-blue-300 rounded-lg p-6 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-lg font-semibold text-slate-800">Link to Purchase Invoice(s)</h4>
+                        <button type="button" onclick="showPurchaseLinkingModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                            + Link Purchase
+                        </button>
+                    </div>
+                    <p class="text-sm text-slate-600 mb-3">Link this sale to purchase invoice(s) to track inventory flow and calculate accurate profit/loss</p>
+                    <div id="linkedPurchasesList" class="space-y-2">
+                        <p class="text-slate-500 text-sm italic">No purchases linked yet. Click "Link Purchase" to add.</p>
+                    </div>
+                </div>
+                
+                <!-- Invoice Header -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 p-4 bg-gray-50 rounded-lg">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Sale Date</label>
+                        <input type="date" id="saleDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Invoice Number <span class="text-xs text-green-600">(Auto)</span></label>
+                        <input type="text" id="saleInvoice" placeholder="SALE-2025-001" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-slate-100 font-bold text-slate-800" readonly>
+                    </div>
+                    <div class="flex gap-2 items-end flex-1">
+                        <div class="flex-1 relative">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Customer</label>
+                            <input type="text" id="saleCustomerInput" placeholder="Type or select customer" autocomplete="off" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <div id="saleCustomerDropdown" class="absolute left-0 right-0 top-full mt-0 bg-white border border-slate-300 rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto hidden"></div>
+                            <select id="saleCustomer" class="hidden" aria-hidden="true"><option value="">Select Customer</option></select>
+                        </div>
+                        <button type="button" onclick="openAddCustomerModalFromSale()" class="px-4 py-3 bg-primary text-white rounded-lg hover:bg-green-700 whitespace-nowrap" title="Add new customer">+ Add</button>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Truck Number</label>
+                        <input type="text" id="saleTruck" placeholder="Truck Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">LR Number</label>
+                        <input type="text" id="saleLRNumber" placeholder="LR Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                </div>
+
+                <!-- Item Entry Form -->
+                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 mb-6">
+                    <h4 class="text-lg font-semibold mb-4 text-slate-700">Add Item to Invoice</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Item</label>
+                            <select id="saleItem" onchange="updateAvailableStock()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <option value="">Select Item</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Gross Weight (kg)</label>
+                            <input type="number" id="saleQuantity" placeholder="Gross Weight" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500" id="availableStock">Available: 0</small>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Number of Bags</label>
+                            <input type="number" id="saleBags" placeholder="Number of Bags" oninput="document.getElementById('saleDiscount').value=this.value; calculateSaleItemTotal();" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Bags weight will be deducted</small>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Discount</label>
+                            <input type="number" id="saleDiscount" placeholder="Discount" value="0" step="any" oninput="calculateSaleItemTotal()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Deducted from gross to get net weight (flows from Bags; editable)</small>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Net Weight</label>
+                            <input type="number" id="saleNetWeight" placeholder="Net Weight" step="any" oninput="recalcSaleItemTotalFromNetWeight()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Auto-calculated (Gross - Discount); you can edit</small>
+                        </div>
+                        <div id="saleDiscountQtyContainer" style="display: none;">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Discount Quantity (For Invoice Only)</label>
+                            <input type="number" id="saleDiscountQty" placeholder="Discount Quantity" value="0" class="w-full p-3 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent bg-yellow-50">
+                            <small class="text-slate-500">Deducted from invoice amount only, not from inventory</small>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Rate per kg</label>
+                            <input type="number" id="saleRate" placeholder="Rate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Item Total</label>
+                            <input type="number" id="saleItemTotal" placeholder="Item Total" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-gray-100">
+                            <small class="text-slate-500">Auto-calculated</small>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <button onclick="addItemToSale()" class="bg-secondary text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">Add Item to Invoice</button>
+                    </div>
+                </div>
+
+                <!-- Items List -->
+                <div class="mb-6">
+                    <h4 class="text-lg font-semibold mb-4 text-slate-700">Items in Current Invoice</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-auto border border-slate-200 rounded-lg">
+                            <thead>
+                                <tr class="bg-slate-50">
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Item</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Gross Weight</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Bags/Discount</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Net Weight</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Rate</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Amount</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="currentSaleItems">
+                                <tr>
+                                    <td colspan="7" class="px-4 py-8 text-center text-slate-500">No items added yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Invoice Totals -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Hammali (Loading/Unloading)</label>
+                        <input type="number" id="saleHammali" placeholder="Hammali Amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Advance Received</label>
+                        <input type="number" id="saleAdvance" placeholder="Advance Amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Truck Advance Paid</label>
+                        <input type="number" id="saleTruckAdvance" placeholder="Truck Advance Paid" class="w-full p-3 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-orange-50">
+                        <small class="text-orange-600 font-medium">Included in invoice but NOT in profit calculation</small>
+                    </div>
+                </div>
+
+                <!-- Others Section -->
+                <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-lg font-semibold text-slate-700">Others (Additional Charges/Deductions)</h4>
+                        <button type="button" onclick="addSaleOthersRow()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">
+                            + Add More
+                        </button>
+                    </div>
+                    <div id="saleOthersContainer">
+                        <!-- First row (always present) -->
+                        <div class="sale-others-row grid grid-cols-1 md:grid-cols-3 gap-4 mb-3" data-index="0">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Reason/Description</label>
+                                <input type="text" class="sale-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason (e.g., Transport, Commission)">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
+                                <input type="number" class="sale-others-amount w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter amount">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Operation</label>
+                                <select class="sale-others-operation w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    <option value="add">Add (+)</option>
+                                    <option value="reduce">Reduce (-)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 p-6 rounded-lg">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-lg font-semibold">
+                        <div>Items Total: &#8377;<span id="saleItemsTotal">0</span></div>
+                        <div>+ Hammali: &#8377;<span id="saleHammaliDisplay">0</span></div>
+                        <div>- Advance: &#8377;<span id="saleAdvanceDisplay">0</span></div>
+                        <div class="text-orange-600">+ Truck Adv: &#8377;<span id="saleTruckAdvanceDisplay">0</span></div>
+                        <div id="saleOthersDisplayContainer" style="display: none;">
+                            <span id="saleOthersSign">+</span> Others: &#8377;<span id="saleOthersDisplay">0</span>
+                        </div>
+                    </div>
+                    <div class="mt-4 text-xl font-bold text-primary">
+                        Grand Total: &#8377;<span id="saleGrandTotal">0</span>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end space-x-4">
+                    <button id="cancelSaleEdit" onclick="cancelSaleEdit()" class="bg-gray-500 text-white px-8 py-3 rounded-lg hover:bg-gray-600 transition-colors text-lg font-semibold">Cancel</button>
+                    <button onclick="saveSaleInvoice()" class="bg-primary text-white px-8 py-3 rounded-lg hover:bg-green-700 transition-colors text-lg font-semibold">Save Sale Invoice</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Purchase Linking Modal -->
+    <div id="purchaseLinkingModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-white">Link Purchase Invoice(s)</h3>
+                <button onclick="closePurchaseLinkingModal()" class="text-white hover:text-slate-200 text-2xl font-bold">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                <p class="text-slate-600 mb-4">Select purchase invoice(s) that this sale is linked to. You can link multiple purchases.</p>
+                
+                <div id="availablePurchasesList" class="space-y-3">
+                    <!-- Purchase invoices will be listed here -->
+                </div>
+            </div>
+            <div class="bg-slate-50 px-6 py-4 flex justify-end space-x-3">
+                <button onclick="closePurchaseLinkingModal()" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+                <button onclick="confirmPurchaseLinking()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Confirm Linking</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deduction Purchase Linking Modal -->
+    <div id="deductionPurchaseLinkingModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div class="bg-gradient-to-r from-orange-600 to-orange-700 px-6 py-4 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-white">Link Purchase Invoice</h3>
+                <button onclick="closeDeductionPurchaseLinkingModal()" class="text-white hover:text-slate-200 text-2xl font-bold">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                <p class="text-slate-600 mb-4">Select a purchase invoice that this deduction is related to.</p>
+                
+                <div id="deductionAvailablePurchasesList" class="space-y-3">
+                    <!-- Purchase invoices will be listed here -->
+                </div>
+            </div>
+            <div class="bg-slate-50 px-6 py-4 flex justify-end space-x-3">
+                <button onclick="closeDeductionPurchaseLinkingModal()" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+                <button onclick="confirmDeductionPurchaseLinking()" class="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">Confirm Linking</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deduction Sale Linking Modal -->
+    <div id="deductionSaleLinkingModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-white">Link Sale Invoice</h3>
+                <button onclick="closeDeductionSaleLinkingModal()" class="text-white hover:text-slate-200 text-2xl font-bold">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                <p class="text-slate-600 mb-4">Select a sale invoice that this deduction is related to.</p>
+                
+                <div id="deductionAvailableSalesList" class="space-y-3">
+                    <!-- Sale invoices will be listed here -->
+                </div>
+            </div>
+            <div class="bg-slate-50 px-6 py-4 flex justify-end space-x-3">
+                <button onclick="closeDeductionSaleLinkingModal()" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
+                <button onclick="confirmDeductionSaleLinking()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Confirm Linking</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 6: Broker -->
+    <div id="broker" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="mb-8 border-l-4 border-blue-600 pl-4"><h2 class="text-3xl font-bold text-slate-900">Broker Management</h2></div>
+            
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <h3 class="text-xl font-semibold mb-6 text-primary">Brokerage Entry</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Date</label>
+                        <input type="date" id="brokerageDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Broker</label>
+                        <select id="brokeragebroker" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Broker</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Item</label>
+                        <select id="brokerageItem" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Item</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Transaction Type</label>
+                        <select id="brokerageType" onchange="updateBrokerageInvoices()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Type</option>
+                            <option value="Purchase">Purchase Brokerage</option>
+                            <option value="Sale">Sale Commission</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
+                        <input type="number" id="brokerageAmount" placeholder="Brokerage Amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Reference Invoice</label>
+                        <select id="brokerageReference" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Invoice</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-6">
+                    <button onclick="addBrokerage()" class="bg-primary text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors">Add Brokerage</button>
+                </div>
+            </div>
+
+            <div class="mt-8 bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-xl font-semibold mb-4 text-primary">Brokerage History</h3>
+                
+                <!-- Filter, Search, Sort Controls -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Search</label>
+                        <input type="text" id="brokerageSearch" placeholder="Broker, Item, Reference..." 
+                            class="w-full p-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            onkeyup="filterBrokerage()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Broker</label>
+                        <select id="brokerageFilterBroker" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterBrokerage()">
+                            <option value="">All Brokers</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Type</label>
+                        <select id="brokerageFilterType" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterBrokerage()">
+                            <option value="">All Types</option>
+                            <option value="purchase">Purchase</option>
+                            <option value="sale">Sale</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Date From</label>
+                        <input type="date" id="brokerageDateFrom" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterBrokerage()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Sort By</label>
+                        <select id="brokerageSort" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterBrokerage()">
+                            <option value="date-desc">Date (Newest)</option>
+                            <option value="date-asc">Date (Oldest)</option>
+                            <option value="amount-desc">Amount (High-Low)</option>
+                            <option value="amount-asc">Amount (Low-High)</option>
+                            <option value="broker-asc">Broker (A-Z)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center mb-4">
+                    <span id="brokerageFilterCount" class="text-sm text-slate-500">Showing all entries</span>
+                    <button onclick="clearBrokerageFilters()" class="text-sm text-blue-600 hover:text-blue-800 font-medium">Clear Filters</button>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto">
+                        <thead>
+                            <tr class="bg-slate-50">
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Date</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Broker</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Item</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Type</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Amount</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Reference</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="brokerageHistory">
+                            <tr>
+                                <td colspan="7" class="px-4 py-8 text-center text-slate-500">No brokerage entries recorded yet</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="brokeragePagination" class="pagination-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 7: Deductions -->
+    <div id="deductions" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="mb-8 border-l-4 border-blue-600 pl-4"><h2 class="text-3xl font-bold text-slate-900">Deductions Management</h2></div>
+            
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <h3 class="text-xl font-semibold mb-6 text-primary">New Deduction Entry</h3>
+                
+                <!-- Transaction Linking Section (NEW) -->
+                <div class="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-6 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-lg font-semibold text-slate-800">Link to Transactions</h4>
+                        <div class="space-x-2">
+                            <button type="button" onclick="showDeductionPurchaseLinkingModal()" class="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium">
+                                + Link Purchase
+                            </button>
+                            <button type="button" onclick="showDeductionSaleLinkingModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                                + Link Sale
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-sm text-slate-600 mb-3">Link this deduction to specific purchase and/or sale transactions</p>
+                    <div id="deductionLinkedTransactionsList" class="space-y-2">
+                        <p class="text-slate-500 text-sm italic">No transactions linked yet.</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Date</label>
+                        <input type="date" id="deductionDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Customer</label>
+                        <select id="deductionCustomer" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Customer</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Invoice Reference</label>
+                        <select id="deductionInvoice" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Sales Invoice</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Deduction Amount</label>
+                        <input type="number" id="deductionAmount" placeholder="Amount Deducted" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Reason</label>
+                        <input type="text" id="deductionReason" placeholder="Reason for Deduction" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Adjustment Type</label>
+                        <select id="adjustmentType" onchange="showAdjustmentFields()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Adjustment</option>
+                            <option value="Broker">Adjust with Broker</option>
+                            <option value="Supplier">Adjust with Supplier</option>
+                            <option value="Split">Split Adjustment (Broker + Supplier)</option>
+                            <option value="Loss">Record as Loss</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Adjustment Fields (Hidden by default) -->
+                <div id="adjustmentFields" class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6" style="display: none;">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2" id="adjustmentEntityLabel">Select Entity</label>
+                        <select id="adjustmentEntity" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Entity</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Adjustment Amount</label>
+                        <input type="number" id="adjustmentAmount" placeholder="Amount to adjust" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <small class="text-slate-500" id="adjustmentAmountHelp">Enter amount to adjust with selected entity</small>
+                    </div>
+                </div>
+                
+                <!-- Split Adjustment Fields (Hidden by default) -->
+                <div id="splitAdjustmentFields" class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6" style="display: none;">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Select Broker</label>
+                        <select id="splitBroker" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Broker</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Broker Adjustment Amount</label>
+                        <input type="number" id="splitBrokerAmount" placeholder="Amount to adjust with broker" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Select Supplier</label>
+                        <select id="splitSupplier" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">Select Supplier</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Supplier Adjustment Amount</label>
+                        <input type="number" id="splitSupplierAmount" placeholder="Amount to adjust with supplier" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                </div>
+                <div class="mt-6">
+                    <button onclick="addDeduction()" class="bg-primary text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors">Add Deduction</button>
+                </div>
+            </div>
+
+            <div class="mt-8 bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-xl font-semibold mb-4 text-primary">Deductions History</h3>
+                
+                <!-- Filter, Search, Sort Controls -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Search</label>
+                        <input type="text" id="deductionsSearch" placeholder="Customer, Invoice, Reason..." 
+                            class="w-full p-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            onkeyup="filterDeductions()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Customer</label>
+                        <select id="deductionsFilterCustomer" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterDeductions()">
+                            <option value="">All Customers</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Date From</label>
+                        <input type="date" id="deductionsDateFrom" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterDeductions()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Date To</label>
+                        <input type="date" id="deductionsDateTo" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterDeductions()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Sort By</label>
+                        <select id="deductionsSort" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterDeductions()">
+                            <option value="date-desc">Date (Newest)</option>
+                            <option value="date-asc">Date (Oldest)</option>
+                            <option value="amount-desc">Amount (High-Low)</option>
+                            <option value="amount-asc">Amount (Low-High)</option>
+                            <option value="customer-asc">Customer (A-Z)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center mb-4">
+                    <span id="deductionsFilterCount" class="text-sm text-slate-500">Showing all deductions</span>
+                    <button onclick="clearDeductionsFilters()" class="text-sm text-blue-600 hover:text-blue-800 font-medium">Clear Filters</button>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto">
+                        <thead>
+                            <tr class="bg-slate-50">
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Date</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Customer</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Invoice</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Amount</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Reason</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Adjustment</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Loss Amount</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deductionsHistory">
+                            <tr>
+                                <td colspan="8" class="px-4 py-8 text-center text-slate-500">No deductions recorded yet</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="deductionsPagination" class="pagination-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page: Payment Tracking -->
+    <div id="payments" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="mb-8 border-l-4 border-blue-600 pl-4">
+                <h2 class="text-3xl font-bold text-slate-900">Payment Tracking</h2>
+                <p class="text-slate-600 text-sm mt-1">Monitor all payments (purchase, sale &amp; ledger) in one place</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-4">
+                    <h4 class="text-sm font-medium text-slate-500 uppercase tracking-wide mb-1">Outstanding Payables</h4>
+                    <p class="text-xl font-bold text-red-600" id="paymentsOutstandingPayables">0</p>
+                    <p class="text-xs text-slate-500 mt-1">Amount you owe to suppliers</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-4">
+                    <h4 class="text-sm font-medium text-slate-500 uppercase tracking-wide mb-1">Outstanding Receivables</h4>
+                    <p class="text-xl font-bold text-green-600" id="paymentsOutstandingReceivables">0</p>
+                    <p class="text-xs text-slate-500 mt-1">Amount customers owe you</p>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+                <h3 class="text-xl font-semibold mb-4 text-primary">Filters</h3>
+                <div class="flex flex-wrap items-end gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Type</label>
+                        <select id="paymentsFilterType" onchange="onPaymentsFilterChange()" class="p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="">All</option>
+                            <option value="purchase_payments">Purchase payments</option>
+                            <option value="sales_payments">Sales payments</option>
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1">Purchase = paid on invoice or from Ledger (supplier). Sales = received on invoice or from Ledger (customer).</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">From</label>
+                        <input type="date" id="paymentsDateFrom" onchange="onPaymentsFilterChange()" class="p-2 border border-slate-300 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">To</label>
+                        <input type="date" id="paymentsDateTo" onchange="onPaymentsFilterChange()" class="p-2 border border-slate-300 rounded-lg">
+                    </div>
+                    <button type="button" onclick="onPaymentsFilterChange()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg font-medium">Apply</button>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <div class="flex flex-wrap justify-between items-center gap-4 mb-4">
+                    <h3 class="text-xl font-semibold text-primary">Payment History</h3>
+                    <button type="button" onclick="exportPaymentsToCsv()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportPaymentsBtn">Export to CSV</button>
+                </div>
+                <div class="mb-4 flex flex-wrap items-center gap-3">
+                    <label class="text-sm font-medium text-slate-700">Search</label>
+                    <input type="text" id="paymentsSearch" placeholder="Search by party, invoice, mode, remarks..." oninput="onPaymentsFilterChange()" class="flex-1 min-w-[200px] p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    <button type="button" onclick="document.getElementById('paymentsSearch').value=''; onPaymentsFilterChange();" class="px-3 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 text-sm">Clear</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto">
+                        <thead>
+                            <tr class="bg-slate-50 border-b-2 border-slate-200">
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Date</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Type</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Party</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Invoice / Ref</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-slate-700">Amount</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Mode</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody id="paymentsTableBody">
+                            <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Select filters and apply, or view all payments.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 flex flex-wrap justify-between items-center gap-2">
+                    <p class="text-sm text-slate-600" id="paymentsSummary">Total: 0 payments</p>
+                </div>
+                <div id="paymentsPagination" class="pagination-container mt-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 8: Profit & Loss -->
+    <div id="pnl" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="mb-8 border-l-4 border-blue-600 pl-4"><h2 class="text-3xl font-bold text-slate-900">Profit & Loss Statement</h2></div>
+            
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+                <h3 class="text-xl font-semibold mb-6 text-primary">Filters</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                   <select id="pnlFilterType" onchange="onPnLFilterChange()" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+  <option value="all">All Transactions</option>
+  <option value="thismonth">This Month</option>
+  <option value="last30days">Last 30 Days</option>
+  <option value="last3months">Last 3 Months</option>
+  <option value="last6months">Last 6 Months</option>
+  <option value="custom">Custom Date Range</option>
+</select>
+                    <button onclick="generatePnL()" class="bg-primary text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors">Generate Report</button>
+                </div>
+            </div>
+<div id="customDateRange" style="display:none; margin-top:8px; gap:10px;">
+  <label>From: <input type="date" id="pnlStartDate"></label>
+  <label>To: <input type="date" id="pnlEndDate"></label>
+  <button type="button" onclick="generatePnL()">Apply</button>
+</div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
+                    <h4 class="text-lg font-semibold text-slate-700 mb-2">Total Revenue</h4>
+                    <p class="text-2xl font-bold text-green-500" id="totalRevenue">&#8377;0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-red-500">
+                    <h4 class="text-lg font-semibold text-slate-700 mb-2">Total Costs</h4>
+                    <p class="text-2xl font-bold text-red-500" id="totalCosts">&#8377;0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
+                    <h4 class="text-lg font-semibold text-slate-700 mb-2">Net Profit</h4>
+                    <p class="text-2xl font-bold text-blue-500" id="netProfit">&#8377;0</p>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold text-primary">Detailed P&L Statement</h3>
+                    <button onclick="exportPnLReport()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportPnLBtn" style="display: none;">Export to CSV</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto">
+                        <thead>
+                            <tr class="bg-slate-50">
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-blue-50 border-b-2 border-blue-200">Purchase Date</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-blue-50 border-b-2 border-blue-200">Purchase Invoice</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-blue-50 border-b-2 border-blue-200">Supplier</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-blue-50 border-b-2 border-blue-200 border-r-2 border-r-slate-400">Purchase Total</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-green-50 border-b-2 border-green-200">Sale Date</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-green-50 border-b-2 border-green-200">Sale Invoice</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-green-50 border-b-2 border-green-200">Customer</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-green-50 border-b-2 border-green-200 border-r-2 border-r-slate-400">Sale Total</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 bg-amber-50 border-b-2 border-amber-200">Profit/Loss</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pnlDetails">
+                            <tr>
+                                <td colspan="9" class="px-4 py-8 text-center text-slate-500">Generate a report to view P&L details</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="pnlPagination" class="pagination-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 9: Ledger -->
+    <div id="ledger" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="mb-8 border-l-4 border-blue-600 pl-4"><h2 class="text-3xl font-bold text-slate-900">Ledger Management</h2></div>
+            
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+                <h3 class="text-xl font-semibold mb-6 text-primary">Ledger Filters</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <select id="ledgerType" onchange="updateLedgerOptions()" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="">Select Ledger Type</option>
+                        <option value="supplier">Supplier Ledger</option>
+                        <option value="customer">Customer Ledger</option>
+                        <option value="broker">Broker Ledger</option>
+                    </select>
+                    <select id="ledgerEntity" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="">Select Entity</option>
+                    </select>
+                    <button onclick="generateLedger()" class="bg-primary text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors">Generate Ledger</button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold text-primary">Ledger Statement</h3>
+                    <button onclick="exportLedgerStatement()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportLedgerBtn" style="display: none;">Export to CSV</button>
+                </div>
+                
+                <!-- Balance Display Section -->
+                <div id="ledgerBalanceSection" class="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200" style="display: none;">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center space-x-4">
+                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8"/>
                                 </svg>
                             </div>
-                            <div class="flex-1 min-w-0">
-                                <p class="font-medium text-slate-700 truncate">${escapeHtml(t.desc)}</p>
-                                <p class="text-slate-400">${escapeHtml(t.date)} ${BULLET} ${escapeHtml(t.invoice)}</p>
+                            <div>
+                                <h4 class="text-lg font-semibold text-gray-800" id="ledgerEntityName">Entity Name</h4>
+                                <p class="text-2xl font-bold text-blue-600" id="ledgerBalance">&#8377;0.00</p>
+                                <p class="text-sm text-slate-500" id="ledgerBalanceType">Current Balance</p>
                             </div>
-                            <span class="${t.type === 'sale' ? 'text-green-600' : 'text-red-600'} font-bold flex-shrink-0">
-                                ${t.type === 'sale' ? '+' : '-'}${RU}${(t.amount || 0).toLocaleString('en-IN')}
-                            </span>
                         </div>
-                    `).join('');
-                }
-            }
-            
-            // Update Payment Alerts
-            const paymentAlertsEl = document.getElementById('paymentAlerts');
-            const alertsCountEl = document.getElementById('paymentAlertsCount');
-            if (paymentAlertsEl) {
-                const unpaidPurchases = appData.purchases.filter(p => {
-                    const balance = (p.grandTotal || p.total || 0) - (p.paid || 0);
-                    return balance > 0;
-                }).slice(0, 5);
+                        <div class="flex space-x-3">
+                            <button id="ledgerPayButton" onclick="payFromLedger()" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors font-medium" style="display: none;">
+                                Pay
+                            </button>
+                            <button id="ledgerReceiveButton" onclick="receiveFromLedger()" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors font-medium" style="display: none;">
+                                Receive
+                            </button>
+                        </div>
+                    </div>
+                </div>
                 
-                const unpaidSales = appData.sales.filter(s => {
-                    const balance = (s.grandTotal || s.total || 0) - (s.received || 0);
-                    return balance > 0;
-                }).slice(0, 5);
-                
-                const totalAlerts = unpaidPurchases.length + unpaidSales.length;
-                if (alertsCountEl) alertsCountEl.textContent = `${totalAlerts} pending`;
-                
-                if (totalAlerts === 0) {
-                    paymentAlertsEl.innerHTML = '<div class="text-xs text-green-500 italic text-center py-4">' + CHECK + ' All payments cleared</div>';
-                } else {
-                    let alertsHtml = '';
-                    unpaidPurchases.forEach(p => {
-                        const balance = (p.grandTotal || p.total || 0) - (p.paid || 0);
-                        const daysOld = p.date ? Math.floor((Date.now() - new Date(p.date)) / (24 * 60 * 60 * 1000)) : 0;
-                        const isOverdue = daysOld > 30;
-                        alertsHtml += `
-                            <div class="flex items-center gap-2 text-xs py-2 px-2 bg-red-50 rounded-lg border border-red-100">
-                                <svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                <span class="flex-1 text-slate-700">Pay <strong>${escapeHtml(p.supplierName)}</strong>${isOverdue ? ' <span class="inline-block px-1.5 py-0.5 rounded text-red-700 bg-red-200 font-semibold">Overdue</span>' : ''}</span>
-                                <span class="text-red-600 font-bold">${RU}${balance.toLocaleString('en-IN')}</span>
-                            </div>
-                        `;
-                    });
-                    unpaidSales.forEach(s => {
-                        const balance = (s.grandTotal || s.total || 0) - (s.received || 0);
-                        const daysOld = s.date ? Math.floor((Date.now() - new Date(s.date)) / (24 * 60 * 60 * 1000)) : 0;
-                        const isOverdue = daysOld > 30;
-                        alertsHtml += `
-                            <div class="flex items-center gap-2 text-xs py-2 px-2 bg-amber-50 rounded-lg border border-amber-100">
-                                <svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                <span class="flex-1 text-slate-700">Collect from <strong>${escapeHtml(s.customerName)}</strong>${isOverdue ? ' <span class="inline-block px-1.5 py-0.5 rounded text-amber-800 bg-amber-200 font-semibold">Overdue</span>' : ''}</span>
-                                <span class="text-amber-600 font-bold">${RU}${balance.toLocaleString('en-IN')}</span>
-                            </div>
-                        `;
-                    });
-                    paymentAlertsEl.innerHTML = alertsHtml;
-                }
-            }
-            
-            // Low Stock Alerts (items with minStock set and current qty below it)
-            var lowStockAlertsEl = document.getElementById('lowStockAlerts');
-            var lowStockCountEl = document.getElementById('lowStockCount');
-            if (lowStockAlertsEl && lowStockCountEl) {
-                var lowStockList = [];
-                (appData.items || []).forEach(function(item) {
-                    if (item.active === false) return;
-                    var minStock = parseFloat(item.minStock);
-                    if (!minStock || minStock <= 0) return;
-                    var inv = appData.inventory[item.id];
-                    var qty = inv ? inv.quantity : 0;
-                    if (qty < minStock) lowStockList.push({ name: item.name, qty: qty, min: minStock, unit: item.unit || 'kg' });
-                });
-                lowStockCountEl.textContent = lowStockList.length;
-                if (lowStockList.length === 0) {
-                    lowStockAlertsEl.innerHTML = '<div class="text-xs text-slate-400 italic text-center py-4">No low stock items</div>';
-                } else {
-                    lowStockAlertsEl.innerHTML = lowStockList.map(function(l) {
-                        return '<div class="flex items-center gap-2 text-xs py-2 px-2 bg-amber-50 rounded-lg border border-amber-100">' +
-                            '<span class="flex-1 font-medium text-slate-700">' + l.name + '</span>' +
-                            '<span class="text-amber-600 font-bold">' + l.qty + ' / ' + l.min + ' ' + l.unit + '</span></div>';
-                    }).join('');
-                }
-            }
-            
-            // Update Business Summary Footer
-            const summaryItems = document.getElementById('summaryItems');
-            const summarySuppliers = document.getElementById('summarySuppliers');
-            const summaryCustomers = document.getElementById('summaryCustomers');
-            const summaryPurchases = document.getElementById('summaryPurchases');
-            const summarySales = document.getElementById('summarySales');
-            const summaryBrokers = document.getElementById('summaryBrokers');
-            
-            if (summaryItems) summaryItems.textContent = appData.items.length;
-            if (summarySuppliers) summarySuppliers.textContent = appData.suppliers.length;
-            if (summaryCustomers) summaryCustomers.textContent = appData.customers.length;
-            if (summaryPurchases) summaryPurchases.textContent = appData.purchases.length;
-            if (summarySales) summarySales.textContent = appData.sales.length;
-            if (summaryBrokers) summaryBrokers.textContent = appData.brokers.length;
-            
-            // Update Performance Chart
-            updateDashboardCharts();
-        }
-        
-        // Dashboard Charts
-        function updateDashboardCharts() {
-            const periodValue = document.getElementById('chartPeriod')?.value || 'all';
-            const today = new Date();
-            
-            let periodPurchases, periodSales, periodBrokerage, periodDeductions;
-            
-            if (periodValue === 'all') {
-                // All time - no date filter
-                periodPurchases = appData.purchases;
-                periodSales = appData.sales;
-                periodBrokerage = appData.brokerage;
-                periodDeductions = appData.deductions;
-            } else {
-                const days = parseInt(periodValue);
-                const startDate = new Date(today);
-                startDate.setDate(startDate.getDate() - days);
-                
-                // Filter data by date range
-                periodPurchases = appData.purchases.filter(p => new Date(p.date) >= startDate);
-                periodSales = appData.sales.filter(s => new Date(s.date) >= startDate);
-                periodBrokerage = appData.brokerage.filter(b => new Date(b.date) >= startDate);
-                periodDeductions = appData.deductions.filter(d => new Date(d.date) >= startDate);
-            }
-            
-            // Calculate totals accurately (matching P&L calculation)
-            const totalPurchasesInPeriod = periodPurchases.reduce((sum, p) => sum + (p.grandTotal || p.total || 0), 0);
-            
-            // Sales revenue excluding truck advance
-            const totalSalesInPeriod = periodSales.reduce((sum, s) => {
-                const saleTotal = s.grandTotal || s.total || 0;
-                const truckAdvance = s.truckAdvance || 0;
-                return sum + saleTotal - truckAdvance;
-            }, 0);
-            
-            // Brokerage and deductions
-            const totalBrokerage = periodBrokerage.reduce((sum, b) => sum + (b.amount || 0), 0);
-            const totalDeductions = periodDeductions.reduce((sum, d) => sum + (d.amount || 0), 0);
-            
-            // Net Profit = Revenue - Purchases - Brokerage - Deductions
-            const grossProfit = totalSalesInPeriod - totalPurchasesInPeriod - totalBrokerage - totalDeductions;
-            const totalTransactions = periodPurchases.length + periodSales.length;
-            const profitMargin = totalSalesInPeriod > 0 ? ((grossProfit / totalSalesInPeriod) * 100) : 0;
-            
-            // Update summary cards
-            const chartTotalSales = document.getElementById('chartTotalSales');
-            const chartTotalPurchases = document.getElementById('chartTotalPurchases');
-            const chartGrossProfit = document.getElementById('chartGrossProfit');
-            const chartTransactions = document.getElementById('chartTransactions');
-            
-            if (chartTotalSales) chartTotalSales.textContent = `${RU}${(totalSalesInPeriod/1000).toFixed(0)}K`;
-            if (chartTotalPurchases) chartTotalPurchases.textContent = `${RU}${(totalPurchasesInPeriod/1000).toFixed(0)}K`;
-            if (chartGrossProfit) {
-                chartGrossProfit.textContent = `${grossProfit >= 0 ? '+' : ''}${RU}${(grossProfit/1000).toFixed(0)}K`;
-                chartGrossProfit.className = `text-lg font-bold ${grossProfit >= 0 ? 'text-blue-700' : 'text-red-700'}`;
-            }
-            if (chartTransactions) chartTransactions.textContent = totalTransactions;
-            
-            // Update Donut Chart
-            const circumference = 2 * Math.PI * 60; // 377
-            const total = totalSalesInPeriod + totalPurchasesInPeriod;
-            
-            const salesArc = document.getElementById('salesArc');
-            const purchasesArc = document.getElementById('purchasesArc');
-            const donutCenterValue = document.getElementById('donutCenterValue');
-            const donutProfitPercent = document.getElementById('donutProfitPercent');
-            const donutSalesValue = document.getElementById('donutSalesValue');
-            const donutPurchasesValue = document.getElementById('donutPurchasesValue');
-            const donutMarginValue = document.getElementById('donutMarginValue');
-            
-            if (salesArc && purchasesArc && total > 0) {
-                const salesPercent = totalSalesInPeriod / total;
-                const purchasesPercent = totalPurchasesInPeriod / total;
-                
-                const salesDash = salesPercent * circumference;
-                const purchasesDash = purchasesPercent * circumference;
-                
-                // Sales arc starts at top
-                salesArc.setAttribute('stroke-dasharray', `${salesDash} ${circumference}`);
-                
-                // Purchases arc starts where sales ends
-                purchasesArc.setAttribute('stroke-dasharray', `${purchasesDash} ${circumference}`);
-                purchasesArc.setAttribute('stroke-dashoffset', -salesDash + (circumference * 0.25));
-            } else if (salesArc && purchasesArc) {
-                salesArc.setAttribute('stroke-dasharray', `0 ${circumference}`);
-                purchasesArc.setAttribute('stroke-dasharray', `0 ${circumference}`);
-            }
-            
-            // Update center value and legend
-            if (donutCenterValue) {
-                const profitK = grossProfit / 1000;
-                donutCenterValue.textContent = `${grossProfit >= 0 ? '' : '-'}${RU}${Math.abs(profitK).toFixed(0)}K`;
-                donutCenterValue.className = `text-xl font-bold ${grossProfit >= 0 ? 'text-green-600' : 'text-red-600'}`;
-            }
-            if (donutProfitPercent) {
-                donutProfitPercent.textContent = `${profitMargin >= 0 ? '+' : ''}${profitMargin.toFixed(1)}%`;
-                donutProfitPercent.className = `text-xs font-semibold ${profitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`;
-            }
-            if (donutSalesValue) donutSalesValue.textContent = `${RU}${(totalSalesInPeriod/1000).toFixed(0)}K`;
-            if (donutPurchasesValue) donutPurchasesValue.textContent = `${RU}${(totalPurchasesInPeriod/1000).toFixed(0)}K`;
-            if (donutMarginValue) {
-                donutMarginValue.textContent = `${profitMargin.toFixed(1)}%`;
-                donutMarginValue.className = `text-sm font-bold ${profitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`;
-            }
-        }
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto">
+                        <thead>
+                            <tr class="bg-slate-50">
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Date</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Description</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Invoice</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Debit</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Credit</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Balance</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ledgerEntries">
+                            <tr>
+                                <td colspan="6" class="px-4 py-8 text-center text-slate-500">Select filters and generate ledger to view entries</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="ledgerPagination" class="pagination-container"></div>
+            </div>
+        </div>
+    </div>
 
-        // Payment reminders function
-        function updatePaymentReminders() {
-            const reminderContainer = document.getElementById('paymentReminders');
-            if (!reminderContainer) return;
-            reminderContainer.innerHTML = '';
-            
-            const oneWeekAgo = new Date();
-            oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-            
-            // Calculate customer balances and last payment dates
-            const customerBalances = {};
-            
-            // Add sales to customer balances
-            appData.sales.forEach(sale => {
-                if (!customerBalances[sale.customerId]) {
-                    customerBalances[sale.customerId] = {
-                        customerName: sale.customerName,
-                        balance: 0,
-                        lastPaymentDate: null,
-                        lastSaleDate: sale.date
-                    };
-                }
-                customerBalances[sale.customerId].balance += sale.total;
+    <!-- Page 10: Opening Balance Entry -->
+    <div id="opening" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-6 py-8">
+            <div class="mb-8">
+                <h2 class="text-4xl font-bold bg-gradient-to-r from-dark to-primary bg-clip-text text-transparent mb-2">Opening Balance Entry</h2></div>
+                <p class="text-slate-600 font-medium">Add old pending balances (receivables & payables) when migrating to this system</p>
+            </div>
+
+            <!-- Info Card -->
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-lg mb-8">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <svg class="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-lg font-semibold text-blue-800 mb-2">How to Use Opening Balance</h3>
+                        <ul class="text-blue-700 text-sm space-y-1 list-disc list-inside">
+                            <li><strong>Receivables:</strong> Money that customers owe you from old sales</li>
+                            <li><strong>Payables:</strong> Money that you owe to suppliers from old purchases</li>
+                            <li>These entries will appear in ledger accounts as "Opening Balance"</li>
+                            <li>Use the date when you're starting to use this system (or your financial year start date)</li>
+                            <li>These entries won't affect inventory or sales/purchase statistics</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Two Column Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Receivables Section -->
+                <div class="bg-white rounded-xl shadow-soft p-8">
+                    <div class="flex items-center mb-6">
+                        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
+                            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">Receivables</h3>
+                            <p class="text-sm text-slate-600">Old sales pending collection</p>
+                        </div>
+                    </div>
+
+                    <form id="receivableForm" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Date</label>
+                            <input type="date" id="receivableDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" required>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Customer</label>
+                            <select id="receivableCustomer" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" required>
+                                <option value="">Select Customer</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Amount (&#8377;)</label>
+                            <input type="number" id="receivableAmount" step="0.01" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Enter pending amount" required>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Reference/Invoice No.</label>
+                            <input type="text" id="receivableReference" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Old invoice or reference">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Description</label>
+                            <textarea id="receivableDescription" rows="2" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Notes about this old balance"></textarea>
+                        </div>
+
+                        <button type="submit" class="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors font-medium shadow-md">
+                            Add Receivable Entry
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Payables Section -->
+                <div class="bg-white rounded-xl shadow-soft p-8">
+                    <div class="flex items-center mb-6">
+                        <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mr-4">
+                            <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">Payables</h3>
+                            <p class="text-sm text-slate-600">Old purchases pending payment</p>
+                        </div>
+                    </div>
+
+                    <form id="payableForm" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Date</label>
+                            <input type="date" id="payableDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" required>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Supplier</label>
+                            <select id="payableSupplier" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" required>
+                                <option value="">Select Supplier</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Amount (&#8377;)</label>
+                            <input type="number" id="payableAmount" step="0.01" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" placeholder="Enter pending amount" required>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Reference/Invoice No.</label>
+                            <input type="text" id="payableReference" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" placeholder="Old invoice or reference">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Description</label>
+                            <textarea id="payableDescription" rows="2" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" placeholder="Notes about this old balance"></textarea>
+                        </div>
+
+                        <button type="submit" class="w-full bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 transition-colors font-medium shadow-md">
+                            Add Payable Entry
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Opening Balance History -->
+            <div class="mt-12 bg-white rounded-xl shadow-soft overflow-hidden">
+                <div class="bg-gradient-to-r from-primary to-secondary p-6">
+                    <h3 class="text-2xl font-bold text-white">Opening Balance History</h3>
+                    <p class="text-blue-100 text-sm mt-1">All opening balance entries added to the system</p>
+                </div>
                 
-                // Update last sale date if this sale is more recent
-                if (new Date(sale.date) > new Date(customerBalances[sale.customerId].lastSaleDate)) {
-                    customerBalances[sale.customerId].lastSaleDate = sale.date;
-                }
-            });
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">Date</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">Type</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">Entity</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">Amount</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">Reference</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">Description</th>
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-slate-700">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="openingBalanceHistory" class="divide-y divide-gray-200">
+                            <!-- Will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="openingBalancePagination" class="pagination-container" style="padding: 16px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 11: Reports -->
+    <div id="reports" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-2">
+            <div class="mb-4 border-l-4 border-blue-600 pl-3"><h2 class="text-xl font-bold text-slate-900">Reports</h2></div>
             
-            // Subtract deductions from customer balances
-            appData.deductions.forEach(deduction => {
-                if (customerBalances[deduction.customerId]) {
-                    customerBalances[deduction.customerId].balance -= deduction.amount;
-                }
-            });
-            
-            // Find customers with balance > 1 lakh and no payments for over a week
-            const reminders = [];
-            Object.keys(customerBalances).forEach(customerId => {
-                const customer = customerBalances[customerId];
-                const lastSaleDate = new Date(customer.lastSaleDate);
+            <!-- Business Metrics Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="group bg-white rounded-lg shadow-medium hover:shadow-strong transition-all duration-300 p-6 border border-slate-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Net Payables</p>
+                            <p class="text-3xl font-bold text-red-600 mt-2" id="netPayables">&#8377;0</p>
+                            <div class="flex items-center mt-3">
+                                <span class="text-xs font-medium text-red-600 bg-red-50 px-3 py-1 rounded-full border border-red-200">To Pay</span>
+                            </div>
+                        </div>
+                        <div class="w-14 h-14 bg-gradient-to-br from-red-500 to-red-600 rounded-lg flex items-center justify-center shadow-md">
+                            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
                 
-                if (customer.balance > 100000 && lastSaleDate < oneWeekAgo) {
-                    const daysSinceLastSale = Math.floor((new Date() - lastSaleDate) / (1000 * 60 * 60 * 24));
-                    reminders.push({
-                        customerName: customer.customerName,
-                        balance: customer.balance,
-                        daysSince: daysSinceLastSale
-                    });
-                }
-            });
-            
-            if (reminders.length === 0) {
-                reminderContainer.innerHTML = `
+                <div class="group bg-white rounded-lg shadow-medium hover:shadow-strong transition-all duration-300 p-6 border border-slate-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Net Receivables</p>
+                            <p class="text-3xl font-bold text-blue-600 mt-2" id="netReceivables">&#8377;0</p>
+                            <div class="flex items-center mt-3">
+                                <span class="text-xs font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">To Receive</span>
+                            </div>
+                        </div>
+                        <div class="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-md">
+                            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="group bg-white rounded-lg shadow-medium hover:shadow-strong transition-all duration-300 p-6 border border-slate-200">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Stock Value</p>
+                            <p class="text-3xl font-bold text-amber-600 mt-2" id="stockValue">&#8377;0</p>
+                        </div>
+                        <div class="w-14 h-14 bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg flex items-center justify-center shadow-md">
+                            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div id="stockDetails" class="mt-3 space-y-2 max-h-24 overflow-y-auto border-t border-slate-100 pt-3">
+                        <div class="text-xs text-slate-500">Loading...</div>
+                    </div>
+                </div>
+
+                <div class="group bg-white rounded-lg shadow-medium hover:shadow-strong transition-all duration-300 p-6 border border-slate-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Payment Alerts</p>
+                            <p class="text-3xl font-bold text-orange-600 mt-2" id="paymentAlertsCount">0</p>
+                            <div class="flex items-center mt-3">
+                                <span class="text-xs font-medium text-orange-600 bg-orange-50 px-3 py-1 rounded-full border border-orange-200">Pending</span>
+                            </div>
+                        </div>
+                        <div class="w-14 h-14 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center shadow-md">
+                            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Reminders Section -->
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6 mb-8">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h3 class="text-2xl font-bold text-danger">Payment Reminders</h3>
+                        <p class="text-slate-500 text-sm mt-1">Customers with outstanding balances requiring attention</p>
+                    </div>
+                    <div class="w-12 h-12 bg-gradient-to-br from-danger/20 to-danger/10 rounded-xl flex items-center justify-center">
+                        <svg class="w-6 h-6 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="space-y-3" id="paymentReminders">
                     <div class="flex justify-between items-center p-4 bg-gray-50/50 rounded-xl border border-gray-100">
                         <span class="text-slate-600 font-medium">No payment reminders</span>
                     </div>
-                `;
-            } else {
-                reminders.forEach(reminder => {
-                    const div = document.createElement('div');
-                    div.className = 'flex justify-between items-center p-4 bg-gradient-to-r from-danger/5 to-danger/10 border border-danger/20 rounded-xl hover:shadow-soft transition-all duration-200';
-                    div.innerHTML = `
-                        <div class="flex-1">
-                            <div class="flex items-center space-x-3">
-                                <div class="w-10 h-10 bg-danger/20 rounded-full flex items-center justify-center">
-                                    <svg class="w-5 h-5 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <span class="font-semibold text-danger text-lg">${reminder.customerName}</span>
-                                    <p class="text-sm text-danger/80 font-medium">Outstanding: ${RU}${reminder.balance.toLocaleString()}</p>
-                                    <p class="text-xs text-danger/60">${reminder.daysSince} days since last transaction</p>
-                                </div>
-                            </div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow" onclick="showReport('purchases')">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                         </div>
-                        <div class="flex items-center space-x-2">
-                            <span class="text-xs bg-red-600 text-white px-3 py-1 rounded-full font-medium">URGENT</span>
-                        </div>
-                    `;
-                    reminderContainer.appendChild(div);
-                });
-            }
-        }
-
-        // P&L functions
-       function generatePnL() {
-  const filterType = document.getElementById('pnlFilterType').value;
-
-  let filteredPurchases = appData.purchases;
-  let filteredSales = appData.sales;
-  let filteredBrokerage = appData.brokerage;
-  let filteredDeductions = appData.deductions;
-
-  const today = new Date();
-  let startDate = null;
-  let endDate = today;
-
-  // Decide startDate based on selected filter
-  if (filterType === 'thismonth') {
-    startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-  } else if (filterType === 'last30days') {
-    startDate = new Date(today);
-    startDate.setDate(today.getDate() - 30);
-  } else if (filterType === 'last3months') {
-    startDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
-  } else if (filterType === 'last6months') {
-    startDate = new Date(today.getFullYear(), today.getMonth() - 6, 1);
-  } else if (filterType === 'custom') {
-    const startInput = document.getElementById('pnlStartDate')?.value;
-    const endInput = document.getElementById('pnlEndDate')?.value;
-    if (startInput && endInput) {
-      startDate = new Date(startInput);
-      endDate = new Date(endInput);
-      endDate.setHours(23, 59, 59, 999); // include full last day
-    } else {
-      console.warn("Custom date range not fully selected");
-      startDate = null; // skip filtering until user picks both dates
-    }
-  } else if (filterType === 'all' || !filterType) {
-    startDate = null; // no filtering - show all transactions
-  }
-
-  // Apply date filters if we have a startDate
-  if (startDate) {
-    const inRange = (entryDateStr) => {
-      if (!entryDateStr) return false;
-      const d = new Date(entryDateStr);
-      return d >= startDate && d <= endDate;
-    };
-
-    filteredPurchases = filteredPurchases.filter(p => inRange(p.date));
-    filteredSales = filteredSales.filter(s => inRange(s.date));
-    filteredBrokerage = filteredBrokerage.filter(b => inRange(b.date));
-    filteredDeductions = filteredDeductions.filter(d => inRange(d.date));
-  }
-
-  console.log('P&L Filter Debug:', {
-    filterType,
-    startDate,
-    endDate,
-    totalPurchases: appData.purchases.length,
-    totalSales: appData.sales.length,
-    filteredPurchases: filteredPurchases.length,
-    filteredSales: filteredSales.length,
-    samplePurchaseDate: appData.purchases[0]?.date,
-    sampleSaleDate: appData.sales[0]?.date
-  });
-        
-            // Calculate totals - EXCLUDE truck advance from revenue for profit calculation
-            const totalRevenue = filteredSales.reduce((sum, sale) => {
-                const saleTotal = (sale.grandTotal || sale.total || 0);
-                const truckAdvance = sale.truckAdvance || 0;
-                return sum + saleTotal - truckAdvance; // Subtract truck advance as it's not profit
-            }, 0);
-            const totalCosts = filteredPurchases.reduce((sum, purchase) => sum + (purchase.grandTotal || purchase.total || 0), 0);
-            const totalBrokerage = filteredBrokerage.reduce((sum, entry) => sum + (entry.amount || 0), 0);
-            const totalDeductionsAmount = filteredDeductions.reduce((sum, d) => {
-                var amt = parseFloat(d.amount) || 0;
-                var loss = (d.lossAmount !== undefined && d.lossAmount !== null && d.lossAmount !== '') ? parseFloat(d.lossAmount) : amt;
-                return sum + loss;
-            }, 0);
-            const netProfit = totalRevenue - totalCosts - totalBrokerage - totalDeductionsAmount;
-            
-            // Update summary
-            document.getElementById('totalRevenue').textContent = `${RU}${totalRevenue.toFixed(2)}`;
-            document.getElementById('totalCosts').textContent = `${RU}${(totalCosts + totalBrokerage).toFixed(2)}`;
-            document.getElementById('netProfit').textContent = `${RU}${netProfit.toFixed(2)}`;
-            
-            // Helper: deduction totals for a sale (by linkedSale.saleId or invoice match). Uses lossAmount for P&L so adjustment (supplier/broker share) is respected.
-            function getDeductionsForSale(sale) {
-                if (!sale || !appData.deductions || !appData.deductions.length) return { netLoss: 0, adjustmentTotal: 0 };
-                var deductionsForSale = appData.deductions.filter(function(d) {
-                    if (d.linkedSale && d.linkedSale.saleId === sale.id) return true;
-                    if (d.invoice && sale.invoice && String(d.invoice).trim() === String(sale.invoice).trim()) return true;
-                    return false;
-                });
-                var netLoss = 0;
-                var adjustmentTotal = 0;
-                deductionsForSale.forEach(function(d) {
-                    var amt = parseFloat(d.amount) || 0;
-                    var loss = (d.lossAmount !== undefined && d.lossAmount !== null && d.lossAmount !== '') ? parseFloat(d.lossAmount) : amt;
-                    var adj = parseFloat(d.adjustmentAmount) || 0;
-                    netLoss += loss;
-                    adjustmentTotal += adj;
-                });
-                return { netLoss: netLoss, adjustmentTotal: adjustmentTotal };
-            }
-            
-            // Create P&L rows based on linked purchases
-            const pnlRows = [];
-            
-            // Process sales with linked purchases
-            filteredSales.forEach(sale => {
-                const saleTotal = sale.grandTotal || sale.total || 0;
-                const saleTruckAdvance = sale.truckAdvance || 0;
-                const saleNetAmount = saleTotal - saleTruckAdvance;
-                var deductionTotals = getDeductionsForSale(sale);
-                var totalDeductionForSale = deductionTotals.netLoss;
-                var totalAdjustmentForSale = deductionTotals.adjustmentTotal || 0;
-                
-                if (sale.linkedPurchases && sale.linkedPurchases.length > 0) {
-                    const totalSaleQty = sale.items ? sale.items.reduce((sum, item) => sum + item.grossWeight, 0) : 1;
-                    // Sale has linked purchases - show each linked purchase
-                    sale.linkedPurchases.forEach(link => {
-                        const purchase = appData.purchases.find(p => p.id === link.purchaseId);
-                        if (purchase && filteredPurchases.some(fp => fp.id === purchase.id)) {
-                            // Calculate proportional amounts based on quantity used
-                            const totalPurchaseQty = purchase.items ? purchase.items.reduce((sum, item) => sum + item.grossWeight, 0) : 1;
-                            const purchaseTotal = purchase.grandTotal || purchase.total || 0;
-                            const proportionalPurchaseCost = totalPurchaseQty > 0 ? (purchaseTotal / totalPurchaseQty) * link.quantityUsed : 0;
-                            
-                            // Calculate proportional sale amount
-                            const proportionalSaleAmount = totalSaleQty > 0 ? (saleNetAmount / totalSaleQty) * link.quantityUsed : 0;
-                            var ratio = totalSaleQty > 0 ? (link.quantityUsed / totalSaleQty) : (1 / sale.linkedPurchases.length);
-                            var deductionAllocation = totalDeductionForSale * ratio;
-                            var adjustmentAllocation = totalAdjustmentForSale * ratio;
-                            const profitLoss = proportionalSaleAmount - proportionalPurchaseCost - deductionAllocation;
-                            
-                            pnlRows.push({
-                                purchaseDate: purchase.date,
-                                purchaseInvoice: purchase.invoice,
-                                purchaseSupplier: purchase.supplierName,
-                                purchaseTotal: proportionalPurchaseCost,
-                                saleDate: sale.date,
-                                saleInvoice: sale.invoice,
-                                saleCustomer: sale.customerName,
-                                saleTotal: proportionalSaleAmount,
-                                profitLoss: profitLoss,
-                                quantityUsed: link.quantityUsed,
-                                deductionsAmount: deductionAllocation,
-                                adjustmentAmount: adjustmentAllocation
-                            });
-                        }
-                    });
-                } else {
-                    // Sale without linked purchases - show as standalone
-                    pnlRows.push({
-                        purchaseDate: null,
-                        purchaseInvoice: null,
-                        purchaseSupplier: null,
-                        purchaseTotal: 0,
-                        saleDate: sale.date,
-                        saleInvoice: sale.invoice,
-                        saleCustomer: sale.customerName,
-                        saleTotal: saleNetAmount,
-                        profitLoss: saleNetAmount - totalDeductionForSale,
-                        quantityUsed: null,
-                        deductionsAmount: totalDeductionForSale,
-                        adjustmentAmount: totalAdjustmentForSale
-                    });
-                }
-            });
-            
-            // Add unlinked purchases (purchases not linked to any sale)
-            const linkedPurchaseIds = new Set();
-            filteredSales.forEach(sale => {
-                if (sale.linkedPurchases) {
-                    sale.linkedPurchases.forEach(link => {
-                        linkedPurchaseIds.add(link.purchaseId);
-                    });
-                }
-            });
-            
-            filteredPurchases.forEach(purchase => {
-                if (!linkedPurchaseIds.has(purchase.id)) {
-                    const purchaseTotal = purchase.grandTotal || purchase.total || 0;
-                    pnlRows.push({
-                        purchaseDate: purchase.date,
-                        purchaseInvoice: purchase.invoice,
-                        purchaseSupplier: purchase.supplierName,
-                        purchaseTotal: purchaseTotal,
-                        saleDate: null,
-                        saleInvoice: null,
-                        saleCustomer: null,
-                        saleTotal: 0,
-                        profitLoss: -purchaseTotal,
-                        quantityUsed: null,
-                        deductionsAmount: 0,
-                        adjustmentAmount: 0
-                    });
-                }
-            });
-            
-            // Sort by date (purchase date or sale date)
-            pnlRows.sort((a, b) => {
-                const dateA = a.purchaseDate || a.saleDate || '';
-                const dateB = b.purchaseDate || b.saleDate || '';
-                return dateA.localeCompare(dateB);
-            });
-            
-            // Store for pagination
-            currentPnLData = pnlRows;
-            paginationState.pnl.currentPage = 1; // Reset to first page
-            
-            // Render the table with pagination
-            renderPnLTable(pnlRows);
-            
-            // Show export button after generating report
-            document.getElementById('exportPnLBtn').style.display = 'block';
-        }
-        
-        function renderPnLTable(pnlRows) {
-            // Update P&L details table
-            const tbody = document.getElementById('pnlDetails');
-            tbody.innerHTML = '';
-            
-            if (pnlRows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No P&L data to display</td></tr>';
-                document.getElementById('pnlPagination').innerHTML = '';
-                return;
-            }
-            
-            // Get paginated data
-            const { currentPage, pageSize } = paginationState.pnl;
-            const paginatedRows = getPaginatedData(pnlRows, currentPage, pageSize);
-            
-            paginatedRows.forEach(row => {
-                const tr = document.createElement('tr');
-                tr.className = 'border-b border-slate-200 hover:bg-slate-50';
-                tr.innerHTML = `
-                    <td class="px-4 py-3 bg-blue-50/30">${row.purchaseDate || '-'}</td>
-                    <td class="px-4 py-3 bg-blue-50/30">${row.purchaseInvoice || '-'}</td>
-                    <td class="px-4 py-3 bg-blue-50/30">${row.purchaseSupplier || '-'}</td>
-                    <td class="px-4 py-3 bg-blue-50/30 border-r-2 border-r-slate-300">${row.purchaseTotal > 0 ? `${RU}${row.purchaseTotal.toFixed(2)}` : '-'}</td>
-                    <td class="px-4 py-3 bg-green-50/30">${row.saleDate || '-'}</td>
-                    <td class="px-4 py-3 bg-green-50/30">${row.saleInvoice || '-'}</td>
-                    <td class="px-4 py-3 bg-green-50/30">${row.saleCustomer || '-'}</td>
-                    <td class="px-4 py-3 bg-green-50/30 border-r-2 border-r-slate-300">${row.saleTotal > 0 ? `${RU}${row.saleTotal.toFixed(2)}` : '-'}</td>
-                    <td class="px-4 py-3 bg-amber-50/30 ${row.profitLoss >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}">
-                        ${row.profitLoss >= 0 ? '+' : ''}${RU}${row.profitLoss.toFixed(2)}
-                        ${row.quantityUsed ? `<br><small class="text-xs text-slate-500">(${row.quantityUsed} kg)</small>` : ''}
-                        ${(row.deductionsAmount || 0) > 0 ? `<br><small class="text-xs text-red-600">Ded: ${RU}${(row.deductionsAmount || 0).toFixed(2)}</small>` : ''}
-                        ${(row.adjustmentAmount || 0) > 0 ? `<br><small class="text-xs text-slate-600">Adj: ${RU}${(row.adjustmentAmount || 0).toFixed(2)}</small>` : ''}
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-            
-            // Calculate totals from all data (not just paginated) - net profit is sum of row profit (already includes deductions)
-            const totalCosts = pnlRows.reduce((sum, row) => sum + (row.purchaseTotal || 0), 0);
-            const totalRevenue = pnlRows.reduce((sum, row) => sum + (row.saleTotal || 0), 0);
-            const totalDeductionsInRows = pnlRows.reduce((sum, row) => sum + (row.deductionsAmount || 0), 0);
-            const netProfit = pnlRows.reduce((sum, row) => sum + (row.profitLoss || 0), 0);
-            
-            // Add grand total row only on last page
-            const totalPages = Math.ceil(pnlRows.length / pageSize);
-            if (currentPage === totalPages) {
-                const grandTotalRow = document.createElement('tr');
-                grandTotalRow.className = 'bg-slate-200 font-bold text-lg';
-                grandTotalRow.innerHTML = `
-                    <td colspan="3" class="px-4 py-4 text-right bg-blue-100">GRAND TOTAL:</td>
-                    <td class="px-4 py-4 bg-blue-100 border-r-2 border-r-slate-400">${RU}${totalCosts.toFixed(2)}</td>
-                    <td colspan="3" class="px-4 py-4 bg-green-100"></td>
-                    <td class="px-4 py-4 bg-green-100 border-r-2 border-r-slate-400">${RU}${totalRevenue.toFixed(2)}</td>
-                    <td class="px-4 py-4 bg-amber-100 ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}">
-                        ${netProfit >= 0 ? '+' : ''}${RU}${netProfit.toFixed(2)}
-                    </td>
-                `;
-                tbody.appendChild(grandTotalRow);
-            }
-            
-            // Render pagination
-            renderPagination(
-                'pnlPagination',
-                pnlRows.length,
-                currentPage,
-                pageSize,
-                'changePnlPage',
-                'changePnlPageSize'
-            );
-        }
-
-        function exportPnLReport() {
-            var filterTypeEl = document.getElementById('pnlFilterType');
-            var filterType = filterTypeEl ? filterTypeEl.value : '';
-            var filterValueEl = document.getElementById('pnlFilterValue');
-            var filterValue = filterValueEl ? filterValueEl.value : '';
-            
-            var filterName = 'All';
-            if (filterType && filterValue) {
-                if (filterType === 'last3months') {
-                    var date = new Date(filterValue + '-01');
-                    filterName = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
-                }
-            }
-            
-            var csv = '\uFEFF';
-            csv += 'P&L Statement Report\n';
-            csv += 'Generated on,' + new Date().toLocaleDateString() + '\n';
-            csv += 'Filter,' + (filterType ? filterType.charAt(0).toUpperCase() + filterType.slice(1).replace('last3months', 'Last 3 Months') : 'All Transactions') + '\n';
-            csv += 'Filter Value,' + filterName + '\n\n';
-            
-            var totalRevenueEl = document.getElementById('totalRevenue');
-            var totalCostsEl = document.getElementById('totalCosts');
-            var netProfitEl = document.getElementById('netProfit');
-            var totalRevenue = totalRevenueEl ? (totalRevenueEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
-            var totalCosts = totalCostsEl ? (totalCostsEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
-            var netProfit = netProfitEl ? (netProfitEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
-            csv += 'SUMMARY\n';
-            csv += 'Total Revenue,' + totalRevenue + '\n';
-            csv += 'Total Costs,' + totalCosts + '\n';
-            csv += 'Net Profit,' + netProfit + '\n\n';
-            
-            csv += 'DETAILED P&L STATEMENT\n';
-            csv += 'Purchase Date,Purchase Invoice,Supplier,Purchase Total,Sale Date,Sale Invoice,Customer,Sale Total,Profit/Loss,Deductions,Adjustment\n';
-            
-            var data = (typeof currentPnLData !== 'undefined' && currentPnLData) ? currentPnLData : [];
-            if (data.length === 0) {
-                alert('No P&L data to export. Please generate the P&L report first (select a filter and ensure data is loaded).');
-                return;
-            }
-            data.forEach(function(row) {
-                var purchaseTotal = (row.purchaseTotal != null && row.purchaseTotal > 0) ? row.purchaseTotal.toFixed(2) : '-';
-                var saleTotal = (row.saleTotal != null && row.saleTotal > 0) ? row.saleTotal.toFixed(2) : '-';
-                var profitLoss = (row.profitLoss != null) ? row.profitLoss.toFixed(2) : '-';
-                var ded = (row.deductionsAmount != null && row.deductionsAmount > 0) ? row.deductionsAmount.toFixed(2) : '';
-                var adj = (row.adjustmentAmount != null && row.adjustmentAmount > 0) ? row.adjustmentAmount.toFixed(2) : '';
-                csv += '"' + (row.purchaseDate || '-') + '","' + (row.purchaseInvoice || '-') + '","' + (row.purchaseSupplier || '-') + '",' + purchaseTotal + ',"' + (row.saleDate || '-') + '","' + (row.saleInvoice || '-') + '","' + (row.saleCustomer || '-') + '",' + saleTotal + ',' + profitLoss + ',' + ded + ',' + adj + '\n';
-            });
-            
-            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            var url = window.URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = 'PnL_Report_' + filterName.replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.csv';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-            alert('P&L Report exported successfully!');
-        }
-function onPnLFilterChange() {
-  const filterType = document.getElementById('pnlFilterType').value;
-  const customRangeDiv = document.getElementById('customDateRange');
-
-  // Show or hide the custom date range inputs
-  if (customRangeDiv) {
-    customRangeDiv.style.display = (filterType === 'custom') ? 'flex' : 'none';
-  }
-
-  // Automatically refresh report if not custom
-  if (filterType && filterType !== 'custom') {
-    generatePnL();
-  }
-}
-        // Ledger functions
-        function updateLedgerOptions() {
-            const type = document.getElementById('ledgerType').value;
-            const entitySelect = document.getElementById('ledgerEntity');
-            
-            entitySelect.innerHTML = '<option value="">Select Entity</option>';
-            
-            if (type === 'supplier') {
-                appData.suppliers.forEach(supplier => {
-                    entitySelect.innerHTML += `<option value="${supplier.id}">${supplier.name}</option>`;
-                });
-            } else if (type === 'customer') {
-                appData.customers.forEach(customer => {
-                    entitySelect.innerHTML += `<option value="${customer.id}">${customer.name}</option>`;
-                });
-            } else if (type === 'broker') {
-                appData.brokers.forEach(broker => {
-                    entitySelect.innerHTML += `<option value="${broker.id}">${broker.name}</option>`;
-                });
-            }
-        }
-
-        function generateLedger() {
-            const type = document.getElementById('ledgerType').value;
-            const entityId = document.getElementById('ledgerEntity').value;
-            
-            if (!type || !entityId) {
-                alert('Please select ledger type and entity');
-                return;
-            }
-            
-            const tbody = document.getElementById('ledgerEntries');
-            tbody.innerHTML = '';
-            
-            let entries = [];
-            let balance = 0;
-            let entityName = '';
-            
-            // Get entity name
-            if (type === 'supplier') {
-                const supplier = appData.suppliers.find(s => s.id == entityId);
-                entityName = supplier ? supplier.name : 'Unknown Supplier';
-            } else if (type === 'customer') {
-                const customer = appData.customers.find(c => c.id == entityId);
-                entityName = customer ? customer.name : 'Unknown Customer';
-            } else if (type === 'broker') {
-                const broker = appData.brokers.find(b => b.id == entityId);
-                entityName = broker ? broker.name : 'Unknown Broker';
-            }
-            
-            if (type === 'supplier') {
-                // Add opening balance entries first (if any)
-                if (appData.openingBalances) {
-                    appData.openingBalances
-                        .filter(ob => ob.entityType === 'supplier' && String(ob.entityId) === String(entityId))
-                        .forEach(opening => {
-                            entries.push({
-                                id: `opening_${opening.id}`,
-                                type: 'opening',
-                                sourceId: opening.id,
-                                date: opening.date,
-                                description: `Opening Balance - ${opening.description || 'Old Purchases Pending'}`,
-                                invoice: opening.reference || 'Opening',
-                                debit: opening.amount,
-                                credit: 0,
-                                balance: 0, // Will be calculated after sorting
-                                canDelete: false
-                            });
-                        });
-                }
-                
-                // Add purchase entries (debit to supplier)
-                appData.purchases
-                    .filter(p => p.supplierId == entityId)
-                    .forEach(purchase => {
-                        entries.push({
-                            id: `purchase_${purchase.id}`,
-                            type: 'purchase',
-                            sourceId: purchase.id,
-                            date: purchase.date,
-                            description: `Purchase - ${purchase.itemName || 'Multiple Items'}`,
-                            invoice: purchase.invoice,
-                            debit: purchase.grandTotal || purchase.total,
-                            credit: 0,
-                            balance: 0, // Will be calculated after sorting
-                            canDelete: true
-                        });
-                    });
-                
-                // Add adjustment entries (credit to supplier - reduces balance)
-                if (appData.adjustments) {
-                    appData.adjustments
-                        .filter(adj => adj.type === 'supplier_adjustment' && adj.entityId == entityId)
-                        .forEach(adjustment => {
-                            entries.push({
-                                id: `adjustment_${adjustment.id}`,
-                                type: 'adjustment',
-                                sourceId: adjustment.id,
-                                date: adjustment.date,
-                                description: `Adjustment - ${adjustment.reference}`,
-                                invoice: '',
-                                debit: 0,
-                                credit: adjustment.amount,
-                                balance: 0, // Will be calculated after sorting
-                                canDelete: true
-                            });
-                        });
-                }
-                
-                // Add payment entries (credit to supplier - reduces balance)
-                appData.payments
-                    .filter(p => (p.type === 'purchase' && appData.purchases.find(pur => pur.id === p.invoiceId && pur.supplierId == entityId)) || 
-                                (p.type === 'ledger_payment' && p.entityType === 'supplier' && p.entityId == entityId))
-                    .forEach(payment => {
-                        entries.push({
-                            id: `payment_${payment.id}`,
-                            type: 'payment',
-                            sourceId: payment.id,
-                            date: payment.date,
-                            description: `Payment - ${payment.mode} ${payment.paidThrough ? 'via ' + payment.paidThrough : ''}`,
-                            invoice: payment.invoice,
-                            debit: 0,
-                            credit: payment.amount,
-                            balance: 0, // Will be calculated after sorting
-                            canDelete: true
-                        });
-                    });
-            } else if (type === 'customer') {
-                // Add opening balance entries first (if any)
-                if (appData.openingBalances) {
-                    appData.openingBalances
-                        .filter(ob => ob.entityType === 'customer' && String(ob.entityId) === String(entityId))
-                        .forEach(opening => {
-                            entries.push({
-                                id: `opening_${opening.id}`,
-                                type: 'opening',
-                                sourceId: opening.id,
-                                date: opening.date,
-                                description: `Opening Balance - ${opening.description || 'Old Sales Pending'}`,
-                                invoice: opening.reference || 'Opening',
-                                debit: opening.amount,
-                                credit: 0,
-                                balance: 0, // Will be calculated after sorting
-                                canDelete: false
-                            });
-                        });
-                }
-                
-                // Add sales entries (DEBIT to customer - they owe us)
-                appData.sales
-                    .filter(s => s.customerId == entityId)
-                    .forEach(sale => {
-                        entries.push({
-                            id: `sale_${sale.id}`,
-                            type: 'sale',
-                            sourceId: sale.id,
-                            date: sale.date,
-                            description: `Sale - ${sale.itemName || 'Multiple Items'}`,
-                            invoice: sale.invoice,
-                            debit: sale.grandTotal || sale.total,
-                            credit: 0,
-                            balance: 0, // Will be calculated after sorting
-                            canDelete: true
-                        });
-                    });
-                
-                // Add deduction entries (CREDIT to customer - reduces what they owe)
-                appData.deductions
-                    .filter(d => d.customerId == entityId)
-                    .forEach(deduction => {
-                        entries.push({
-                            id: `deduction_${deduction.id}`,
-                            type: 'deduction',
-                            sourceId: deduction.id,
-                            date: deduction.date,
-                            description: `Deduction - ${deduction.reason}`,
-                            invoice: deduction.invoice,
-                            debit: 0,
-                            credit: deduction.amount,
-                            balance: 0, // Will be calculated after sorting
-                            canDelete: true
-                        });
-                    });
-                
-                // Add payment entries (CREDIT to customer - they paid us)
-                appData.payments
-                    .filter(p => (p.type === 'sale' && appData.sales.find(sale => sale.id === p.invoiceId && sale.customerId == entityId)) || 
-                                (p.type === 'ledger_receipt' && p.entityType === 'customer' && p.entityId == entityId))
-                    .forEach(payment => {
-                        entries.push({
-                            id: `payment_${payment.id}`,
-                            type: 'payment',
-                            sourceId: payment.id,
-                            date: payment.date,
-                            description: `Receipt - ${payment.mode} ${payment.paidThrough ? 'via ' + payment.paidThrough : ''}`,
-                            invoice: payment.invoice,
-                            debit: 0,
-                            credit: payment.amount,
-                            balance: 0, // Will be calculated after sorting
-                            canDelete: true
-                        });
-                    });
-            } else if (type === 'broker') {
-                // Add brokerage entries
-                appData.brokerage
-                    .filter(b => b.brokerId == entityId)
-                    .forEach(entry => {
-                        balance += entry.amount;
-                        entries.push({
-                            id: `brokerage_${entry.id}`,
-                            type: 'brokerage',
-                            sourceId: entry.id,
-                            date: entry.date,
-                            description: `${entry.type} - ${entry.itemName}`,
-                            invoice: entry.reference,
-                            debit: entry.amount,
-                            credit: 0,
-                            balance: balance,
-                            canDelete: true
-                        });
-                    });
-                
-                // Add adjustment entries (credit to broker - reduces balance)
-                if (appData.adjustments) {
-                    appData.adjustments
-                        .filter(adj => adj.type === 'broker_adjustment' && adj.entityId == entityId)
-                        .forEach(adjustment => {
-                            balance -= adjustment.amount;
-                            entries.push({
-                                id: `adjustment_${adjustment.id}`,
-                                type: 'adjustment',
-                                sourceId: adjustment.id,
-                                date: adjustment.date,
-                                description: `Adjustment - ${adjustment.reference}`,
-                                invoice: '',
-                                debit: 0,
-                                credit: adjustment.amount,
-                                balance: balance,
-                                canDelete: true
-                            });
-                        });
-                }
-                
-                // Add payment entries (credit to broker - reduces balance)
-                appData.payments
-                    .filter(p => (p.type === 'brokerage' && appData.brokerage.find(br => br.id === p.invoiceId && br.brokerId == entityId)) || 
-                                (p.type === 'ledger_payment' && p.entityType === 'broker' && p.entityId == entityId))
-                    .forEach(payment => {
-                        balance -= payment.amount;
-                        entries.push({
-                            id: `payment_${payment.id}`,
-                            type: 'payment',
-                            sourceId: payment.id,
-                            date: payment.date,
-                            description: `Payment - ${payment.mode} ${payment.paidThrough ? 'via ' + payment.paidThrough : ''}`,
-                            invoice: payment.invoice,
-                            debit: 0,
-                            credit: payment.amount,
-                            balance: balance,
-                            canDelete: true
-                        });
-                    });
-            }
-            
-            // Sort entries by date
-            entries.sort((a, b) => new Date(a.date) - new Date(b.date));
-            
-            // Calculate running balance after sorting
-            balance = 0;
-            entries.forEach(entry => {
-                balance += entry.debit - entry.credit;
-                entry.balance = balance;
-            });
-            
-            // Update balance display
-            const balanceSection = document.getElementById('ledgerBalanceSection');
-            const entityNameElement = document.getElementById('ledgerEntityName');
-            const balanceElement = document.getElementById('ledgerBalance');
-            const balanceTypeElement = document.getElementById('ledgerBalanceType');
-            const payButton = document.getElementById('ledgerPayButton');
-            const receiveButton = document.getElementById('ledgerReceiveButton');
-            
-            balanceSection.style.display = 'block';
-            entityNameElement.textContent = entityName;
-            balanceElement.textContent = `${RU}${balance.toFixed(2)}`;
-            
-            // Show appropriate buttons based on ledger type and balance
-            payButton.style.display = 'none';
-            receiveButton.style.display = 'none';
-            
-            if (type === 'supplier' && balance > 0) {
-                balanceTypeElement.textContent = 'Amount Payable';
-                balanceElement.className = 'text-2xl font-bold text-red-600';
-                payButton.style.display = 'block';
-            } else if (type === 'customer' && balance > 0) {
-                balanceTypeElement.textContent = 'Amount Receivable';
-                balanceElement.className = 'text-2xl font-bold text-green-600';
-                receiveButton.style.display = 'block';
-            } else if (type === 'broker' && balance > 0) {
-                balanceTypeElement.textContent = 'Brokerage Payable';
-                balanceElement.className = 'text-2xl font-bold text-red-600';
-                payButton.style.display = 'block';
-            } else {
-                balanceTypeElement.textContent = 'Current Balance';
-                balanceElement.className = 'text-2xl font-bold text-blue-600';
-            }
-            
-            // Store current ledger data for payment functions
-            window.currentLedgerData = {
-                type: type,
-                entityId: entityId,
-                entityName: entityName,
-                balance: balance
-            };
-            
-            // Store entries for pagination
-            currentLedgerData = entries;
-            paginationState.ledger.currentPage = 1; // Reset to first page
-            
-            // Render the table with pagination
-            renderLedgerTable(entries);
-            
-            if (entries.length === 0) {
-                balanceSection.style.display = 'none';
-                document.getElementById('exportLedgerBtn').style.display = 'none';
-            } else {
-                document.getElementById('exportLedgerBtn').style.display = 'block';
-            }
-        }
-        
-        function renderLedgerTable(entries) {
-            const tbody = document.getElementById('ledgerEntries');
-            tbody.innerHTML = '';
-            
-            if (entries.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No entries found for selected entity</td></tr>';
-                document.getElementById('ledgerPagination').innerHTML = '';
-                return;
-            }
-            
-            // Get paginated data
-            const { currentPage, pageSize } = paginationState.ledger;
-            const paginatedEntries = getPaginatedData(entries, currentPage, pageSize);
-            
-            // Populate table
-            paginatedEntries.forEach(entry => {
-                const row = document.createElement('tr');
-                row.className = 'border-b border-slate-200';
-                row.innerHTML = `
-                    <td class="px-4 py-3">${entry.date}</td>
-                    <td class="px-4 py-3">${entry.description}</td>
-                    <td class="px-4 py-3">${entry.invoice}</td>
-                    <td class="px-4 py-3">${entry.debit ? RU + entry.debit.toFixed(2) : '-'}</td>
-                    <td class="px-4 py-3">${entry.credit ? RU + entry.credit.toFixed(2) : '-'}</td>
-                    <td class="px-4 py-3">${RU}${entry.balance.toFixed(2)}</td>
-                    <td class="px-4 py-3">
-                        ${entry.canDelete ? `<button onclick="deleteLedgerEntry('${entry.id}', '${entry.type}', ${entry.sourceId})" class="text-red-600 hover:text-red-800 text-sm font-medium">Delete</button>` : '-'}
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-            
-            // Render pagination
-            renderPagination(
-                'ledgerPagination',
-                entries.length,
-                currentPage,
-                pageSize,
-                'changeLedgerPage',
-                'changeLedgerPageSize'
-            );
-        }
-
-        // Reports functions
-        var currentReportType = '';
-        function getReportDateRange() {
-            var fromEl = document.getElementById('reportDateFrom');
-            var toEl = document.getElementById('reportDateTo');
-            return { from: fromEl ? fromEl.value : '', to: toEl ? toEl.value : '' };
-        }
-        function applyReportDateRange() {
-            var reportType = currentReportType || (document.getElementById('exportBtn') && document.getElementById('exportBtn').getAttribute('data-report-type'));
-            if (reportType) showReport(reportType);
-        }
-        function setDefaultReportDates() {
-            var d = new Date();
-            var fromEl = document.getElementById('reportDateFrom');
-            var toEl = document.getElementById('reportDateTo');
-            if (fromEl && !fromEl.value) {
-                fromEl.value = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-            }
-            if (toEl && !toEl.value) toEl.value = d.toISOString().slice(0, 10);
-        }
-        function applyReportDatePreset(value) {
-            var fromEl = document.getElementById('reportDateFrom');
-            var toEl = document.getElementById('reportDateTo');
-            var presetEl = document.getElementById('reportDatePreset');
-            if (!fromEl || !toEl || !value) return;
-            var d = new Date();
-            var from, to;
-            switch (value) {
-                case 'this_month':
-                    from = new Date(d.getFullYear(), d.getMonth(), 1);
-                    to = new Date();
-                    break;
-                case 'last_month':
-                    from = new Date(d.getFullYear(), d.getMonth() - 1, 1);
-                    to = new Date(d.getFullYear(), d.getMonth(), 0);
-                    break;
-                case 'last_3_months':
-                    to = new Date();
-                    from = new Date(to);
-                    from.setMonth(from.getMonth() - 3);
-                    break;
-                case 'this_fy':
-                    from = d.getMonth() >= 3 ? new Date(d.getFullYear(), 2, 1) : new Date(d.getFullYear() - 1, 2, 1);
-                    to = new Date();
-                    break;
-                default: return;
-            }
-            fromEl.value = from.toISOString().slice(0, 10);
-            toEl.value = to.toISOString().slice(0, 10);
-            if (presetEl) presetEl.value = value;
-            applyReportDateRange();
-        }
-        function showReport(reportType) {
-            currentReportType = reportType;
-            setDefaultReportDates();
-            var range = getReportDateRange();
-            var dateFilter = function(d) {
-                if (range.from && d < range.from) return false;
-                if (range.to && d > range.to) return false;
-                return true;
-            };
-            const reportTitle = document.getElementById('reportTitle');
-            const exportBtn = document.getElementById('exportBtn');
-            const exportPdfBtn = document.getElementById('exportPdfBtn');
-            const tableHead = document.getElementById('reportTableHead');
-            const tableBody = document.getElementById('reportTableBody');
-            
-            exportBtn.style.display = 'block';
-            exportBtn.setAttribute('data-report-type', reportType);
-            if (exportPdfBtn) { exportPdfBtn.style.display = 'block'; }
-            
-            switch (reportType) {
-                case 'purchases':
-                    reportTitle.textContent = 'Purchase Report';
-                    tableHead.innerHTML = `
-                        <tr class="bg-slate-50">
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Date</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Invoice</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Supplier</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Items</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Total Amount</th>
-                        </tr>
-                    `;
-                    
-                    tableBody.innerHTML = '';
-                    let purchaseTotal = 0;
-                    (appData.purchases || []).filter(function(p){ return dateFilter(p.date); }).forEach(purchase => {
-                        let itemsDisplay = '';
-                        if (purchase.items && purchase.items.length > 0) {
-                            itemsDisplay = purchase.items.map(item => 
-                                `${item.itemName} (${item.netWeight} kg @ ${RU}${item.rate})`
-                            ).join(', ');
-                        } else if (purchase.itemName) {
-                            itemsDisplay = `${purchase.itemName} (${purchase.quantity || 0} @ ${RU}${purchase.rate || 0})`;
-                        } else {
-                            itemsDisplay = 'No items';
-                        }
-                        
-                        const amount = purchase.grandTotal || purchase.total || 0;
-                        purchaseTotal += amount;
-                        
-                        const row = document.createElement('tr');
-                        row.className = 'border-b border-slate-200';
-                        row.innerHTML = `
-                            <td class="px-4 py-3">${purchase.date}</td>
-                            <td class="px-4 py-3">${purchase.invoice}</td>
-                            <td class="px-4 py-3">${purchase.supplierName}</td>
-                            <td class="px-4 py-3">${itemsDisplay}</td>
-                            <td class="px-4 py-3">${RU}${amount.toFixed(2)}</td>
-                        `;
-                        tableBody.appendChild(row);
-                    });
-                    
-                    // Add total row for purchases
-                    const purchaseTotalRow = document.createElement('tr');
-                    purchaseTotalRow.className = 'bg-slate-100 border-t-2 border-slate-400 font-bold';
-                    purchaseTotalRow.innerHTML = `
-                        <td class="px-4 py-4" colspan="4" style="text-align: right;">Total:</td>
-                        <td class="px-4 py-4">${RU}${purchaseTotal.toFixed(2)}</td>
-                    `;
-                    tableBody.appendChild(purchaseTotalRow);
-                    break;
-                    
-                case 'sales':
-                    reportTitle.textContent = 'Sales Report';
-                    tableHead.innerHTML = `
-                        <tr class="bg-slate-50">
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Date</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Invoice</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Customer</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Items</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Total Amount</th>
-                        </tr>
-                    `;
-                    
-                    tableBody.innerHTML = '';
-                    let salesTotal = 0;
-                    (appData.sales || []).filter(function(s){ return dateFilter(s.date); }).forEach(sale => {
-                        let itemsDisplay = '';
-                        if (sale.items && sale.items.length > 0) {
-                            itemsDisplay = sale.items.map(item => 
-                                `${item.itemName} (${item.netWeight} kg @ ${RU}${item.rate})`
-                            ).join(', ');
-                        } else if (sale.itemName) {
-                            itemsDisplay = `${sale.itemName} (${sale.quantity || 0} @ ${RU}${sale.rate || 0})`;
-                        } else {
-                            itemsDisplay = 'No items';
-                        }
-                        
-                        const amount = sale.grandTotal || sale.total || 0;
-                        salesTotal += amount;
-                        
-                        const row = document.createElement('tr');
-                        row.className = 'border-b border-slate-200';
-                        row.innerHTML = `
-                            <td class="px-4 py-3">${sale.date}</td>
-                            <td class="px-4 py-3">${sale.invoice}</td>
-                            <td class="px-4 py-3">${sale.customerName}</td>
-                            <td class="px-4 py-3">${itemsDisplay}</td>
-                            <td class="px-4 py-3">${RU}${amount.toFixed(2)}</td>
-                        `;
-                        tableBody.appendChild(row);
-                    });
-                    
-                    // Add total row for sales
-                    const salesTotalRow = document.createElement('tr');
-                    salesTotalRow.className = 'bg-slate-100 border-t-2 border-slate-400 font-bold';
-                    salesTotalRow.innerHTML = `
-                        <td class="px-4 py-4" colspan="4" style="text-align: right;">Total:</td>
-                        <td class="px-4 py-4">${RU}${salesTotal.toFixed(2)}</td>
-                    `;
-                    tableBody.appendChild(salesTotalRow);
-                    break;
-                    
-                case 'inventory':
-                    reportTitle.textContent = 'Inventory Report';
-                    tableHead.innerHTML = `
-                        <tr class="bg-slate-50">
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Item</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Category</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Current Stock</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Unit</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Total Value</th>
-                        </tr>
-                    `;
-                    
-                    tableBody.innerHTML = '';
-                    Object.keys(appData.inventory).forEach(itemId => {
-                        const item = appData.items.find(i => i.id == itemId);
-                        const stock = appData.inventory[itemId];
-                        
-                        if (item) {
-                            const row = document.createElement('tr');
-                            row.className = 'border-b border-slate-200';
-                            row.innerHTML = `
-                                <td class="px-4 py-3">${item.name}</td>
-                                <td class="px-4 py-3">${item.category}</td>
-                                <td class="px-4 py-3">${stock.quantity}</td>
-                                <td class="px-4 py-3">${item.unit}</td>
-                                <td class="px-4 py-3">${RU}${stock.totalCost.toFixed(2)}</td>
-                            `;
-                            tableBody.appendChild(row);
-                        }
-                    });
-                    break;
-                    
-                case 'brokerage':
-                    reportTitle.textContent = 'Brokerage Report';
-                    tableHead.innerHTML = `
-                        <tr class="bg-slate-50">
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Date</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Broker</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Item</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Type</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Amount</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Reference</th>
-                        </tr>
-                    `;
-                    
-                    tableBody.innerHTML = '';
-                    (appData.brokerage || []).filter(function(e){ return dateFilter(e.date); }).forEach(entry => {
-                        const row = document.createElement('tr');
-                        row.className = 'border-b border-slate-200';
-                        row.innerHTML = `
-                            <td class="px-4 py-3">${entry.date}</td>
-                            <td class="px-4 py-3">${entry.brokerName}</td>
-                            <td class="px-4 py-3">${entry.itemName}</td>
-                            <td class="px-4 py-3">${entry.type}</td>
-                            <td class="px-4 py-3">${RU}${entry.amount}</td>
-                            <td class="px-4 py-3">${entry.reference}</td>
-                        `;
-                        tableBody.appendChild(row);
-                    });
-                    break;
-                    
-                case 'deductions':
-                    reportTitle.textContent = 'Deductions Report';
-                    tableHead.innerHTML = `
-                        <tr class="bg-slate-50">
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Date</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Customer</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Invoice</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Amount</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Reason</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Adjustment</th>
-                        </tr>
-                    `;
-                    
-                    tableBody.innerHTML = '';
-                    (appData.deductions || []).filter(function(d){ return dateFilter(d.date); }).forEach(deduction => {
-                        const row = document.createElement('tr');
-                        row.className = 'border-b border-slate-200';
-                        row.innerHTML = `
-                            <td class="px-4 py-3">${deduction.date}</td>
-                            <td class="px-4 py-3">${deduction.customerName}</td>
-                            <td class="px-4 py-3">${deduction.invoice}</td>
-                            <td class="px-4 py-3">${RU}${deduction.amount}</td>
-                            <td class="px-4 py-3">${deduction.reason}</td>
-                            <td class="px-4 py-3">${deduction.adjustmentType}</td>
-                        `;
-                        tableBody.appendChild(row);
-                    });
-                    break;
-                    
-                case 'summary':
-                    reportTitle.textContent = 'Business Summary Report';
-                    tableHead.innerHTML = `
-                        <tr class="bg-slate-50">
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Metric</th>
-                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Value</th>
-                        </tr>
-                    `;
-                    
-                    const totalPurchaseValue = appData.purchases.reduce((sum, p) => sum + (p.grandTotal || p.total || 0), 0);
-                    const totalSalesValue = appData.sales.reduce((sum, s) => sum + (s.grandTotal || s.total || 0), 0);
-                    const totalBrokerageValue = appData.brokerage.reduce((sum, b) => sum + (b.amount || 0), 0);
-                    const totalDeductionsValue = appData.deductions.reduce((sum, d) => sum + (d.amount || 0), 0);
-                    const totalInventoryValue = Object.values(appData.inventory).reduce((sum, inv) => sum + (inv.totalCost || 0), 0);
-                    
-                    tableBody.innerHTML = `
-                        <tr class="border-b border-slate-200">
-                            <td class="px-4 py-3 font-medium">Total Purchases</td>
-                            <td class="px-4 py-3">${RU}${totalPurchaseValue.toFixed(2)}</td>
-                        </tr>
-                        <tr class="border-b border-slate-200">
-                            <td class="px-4 py-3 font-medium">Total Sales</td>
-                            <td class="px-4 py-3">${RU}${totalSalesValue.toFixed(2)}</td>
-                        </tr>
-                        <tr class="border-b border-slate-200">
-                            <td class="px-4 py-3 font-medium">Total Brokerage</td>
-                            <td class="px-4 py-3">${RU}${totalBrokerageValue.toFixed(2)}</td>
-                        </tr>
-                        <tr class="border-b border-slate-200">
-                            <td class="px-4 py-3 font-medium">Total Deductions</td>
-                            <td class="px-4 py-3">${RU}${totalDeductionsValue.toFixed(2)}</td>
-                        </tr>
-                        <tr class="border-b border-slate-200">
-                            <td class="px-4 py-3 font-medium">Current Inventory Value</td>
-                            <td class="px-4 py-3">${RU}${totalInventoryValue.toFixed(2)}</td>
-                        </tr>
-                        <tr class="border-b border-slate-200">
-                            <td class="px-4 py-3 font-medium">Net Profit/Loss</td>
-                            <td class="px-4 py-3 ${(totalSalesValue - totalPurchaseValue - totalBrokerageValue - totalDeductionsValue) >= 0 ? 'text-green-600' : 'text-red-600'}">${RU}${(totalSalesValue - totalPurchaseValue - totalBrokerageValue - totalDeductionsValue).toFixed(2)}</td>
-                        </tr>
-                    `;
-                    break;
-                    
-                case 'ageing':
-                    reportTitle.textContent = 'Ageing Report (Receivables & Payables)';
-                    tableHead.innerHTML = '<tr class="bg-slate-50"><th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Party</th><th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Type</th><th class="px-4 py-3 text-right text-sm font-medium text-slate-700">0-30 days</th><th class="px-4 py-3 text-right text-sm font-medium text-slate-700">31-60 days</th><th class="px-4 py-3 text-right text-sm font-medium text-slate-700">61-90 days</th><th class="px-4 py-3 text-right text-sm font-medium text-slate-700">90+ days</th><th class="px-4 py-3 text-right text-sm font-medium text-slate-700">Total</th></tr>';
-                    tableBody.innerHTML = '';
-                    var today = new Date();
-                    today.setHours(0,0,0,0);
-                    function daysDiff(d) { var t = new Date(d); t.setHours(0,0,0,0); return Math.floor((today - t) / (24*60*60*1000)); }
-                    function bucket(days) {
-                        if (days <= 30) return 'b0';
-                        if (days <= 60) return 'b1';
-                        if (days <= 90) return 'b2';
-                        return 'b3';
-                    }
-                    var payablesByParty = {};
-                    (appData.purchases || []).forEach(function(p) {
-                        var bal = (p.grandTotal || p.total || 0) - (p.paid || 0);
-                        if (bal <= 0) return;
-                        var name = p.supplierName || 'Unknown';
-                        if (!payablesByParty[name]) payablesByParty[name] = { b0:0, b1:0, b2:0, b3:0, total: 0 };
-                        var days = daysDiff(p.date);
-                        var b = bucket(days);
-                        payablesByParty[name][b] += bal;
-                        payablesByParty[name].total += bal;
-                    });
-                    var receivablesByParty = {};
-                    (appData.sales || []).forEach(function(s) {
-                        var bal = (s.grandTotal || s.total || 0) - (s.received || 0);
-                        if (bal <= 0) return;
-                        var name = s.customerName || 'Unknown';
-                        if (!receivablesByParty[name]) receivablesByParty[name] = { b0:0, b1:0, b2:0, b3:0, total: 0 };
-                        var days = daysDiff(s.date);
-                        var b = bucket(days);
-                        receivablesByParty[name][b] += bal;
-                        receivablesByParty[name].total += bal;
-                    });
-                    Object.keys(payablesByParty).forEach(function(name) {
-                        var o = payablesByParty[name];
-                        var tr = document.createElement('tr');
-                        tr.className = 'border-b border-slate-200';
-                        tr.innerHTML = '<td class="px-4 py-3 font-medium">' + name + '</td><td class="px-4 py-3 text-red-600">Payable</td><td class="px-4 py-3 text-right">' + RU + (o.b0||0).toFixed(2) + '</td><td class="px-4 py-3 text-right">' + RU + (o.b1||0).toFixed(2) + '</td><td class="px-4 py-3 text-right">' + RU + (o.b2||0).toFixed(2) + '</td><td class="px-4 py-3 text-right">' + RU + (o.b3||0).toFixed(2) + '</td><td class="px-4 py-3 text-right font-bold">' + RU + (o.total||0).toFixed(2) + '</td>';
-                        tableBody.appendChild(tr);
-                    });
-                    Object.keys(receivablesByParty).forEach(function(name) {
-                        var o = receivablesByParty[name];
-                        var tr = document.createElement('tr');
-                        tr.className = 'border-b border-slate-200';
-                        tr.innerHTML = '<td class="px-4 py-3 font-medium">' + name + '</td><td class="px-4 py-3 text-green-600">Receivable</td><td class="px-4 py-3 text-right">' + RU + (o.b0||0).toFixed(2) + '</td><td class="px-4 py-3 text-right">' + RU + (o.b1||0).toFixed(2) + '</td><td class="px-4 py-3 text-right">' + RU + (o.b2||0).toFixed(2) + '</td><td class="px-4 py-3 text-right">' + RU + (o.b3||0).toFixed(2) + '</td><td class="px-4 py-3 text-right font-bold">' + RU + (o.total||0).toFixed(2) + '</td>';
-                        tableBody.appendChild(tr);
-                    });
-                    break;
-            }
-            
-            if (tableBody.children.length === 0 && reportType !== 'summary' && reportType !== 'ageing') {
-                tableBody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No data available for this report</td></tr>';
-            }
-        }
-
-        function exportReportToPdf() {
-            var reportTitleEl = document.getElementById('reportTitle');
-            var table = document.getElementById('reportTable');
-            if (!table || !reportTitleEl) return;
-            var title = reportTitleEl.textContent || 'Report';
-            var win = window.open('', '_blank');
-            win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + escapeHtml(title) + '</title><style>body{font-family:Arial,sans-serif;margin:20px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #333;padding:8px;text-align:left;} th{background:#f0f0f0;}</style></head><body><h2>' + escapeHtml(title) + '</h2>' + table.outerHTML + '</body></html>');
-            win.document.close();
-            win.focus();
-            setTimeout(function() { win.print(); }, 250);
-        }
-        function exportReport() {
-            var exportBtn = document.getElementById('exportBtn');
-            var reportType = exportBtn ? exportBtn.getAttribute('data-report-type') : '';
-            var table = document.getElementById('reportTable');
-            if (!table) {
-                alert('No report data to export. Please select a report category first.');
-                return;
-            }
-            var rows = table.querySelectorAll('tr');
-            if (!rows.length) {
-                alert('No report data to export. Please select a report and apply date range.');
-                return;
-            }
-            var csv = '\uFEFF';
-            for (var i = 0; i < rows.length; i++) {
-                var cols = rows[i].querySelectorAll('th, td');
-                var rowData = Array.from(cols).map(function(col) { return (col.textContent || '').trim().replace(/\n/g, ' '); }).join(',');
-                csv += rowData + '\n';
-            }
-            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-            var url = window.URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = (reportType || 'report') + '_' + new Date().toISOString().slice(0, 10) + '.csv';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-        }
-
-        // Action functions for purchase and sales
-        // Number to words conversion function
-        function numberToWords(num) {
-            if (num === 0) return 'Zero';
-            
-            const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
-            const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-            const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-            
-            function convertLessThanThousand(n) {
-                if (n === 0) return '';
-                
-                if (n < 10) return ones[n];
-                if (n < 20) return teens[n - 10];
-                if (n < 100) {
-                    const ten = Math.floor(n / 10);
-                    const one = n % 10;
-                    return tens[ten] + (one > 0 ? ' ' + ones[one] : '');
-                }
-                
-                const hundred = Math.floor(n / 100);
-                const rest = n % 100;
-                return ones[hundred] + ' Hundred' + (rest > 0 ? ' and ' + convertLessThanThousand(rest) : '');
-            }
-            
-            // Handle decimal part (paise)
-            const parts = num.toFixed(2).split('.');
-            const rupees = parseInt(parts[0]);
-            const paise = parseInt(parts[1]);
-            
-            let result = '';
-            
-            if (rupees === 0) {
-                result = 'Zero Rupees';
-            } else {
-                const crore = Math.floor(rupees / 10000000);
-                const lakh = Math.floor((rupees % 10000000) / 100000);
-                const thousand = Math.floor((rupees % 100000) / 1000);
-                const remainder = rupees % 1000;
-                
-                if (crore > 0) result += convertLessThanThousand(crore) + ' Crore ';
-                if (lakh > 0) result += convertLessThanThousand(lakh) + ' Lakh ';
-                if (thousand > 0) result += convertLessThanThousand(thousand) + ' Thousand ';
-                if (remainder > 0) result += convertLessThanThousand(remainder);
-                
-                result = result.trim() + ' Rupees';
-            }
-            
-            if (paise > 0) {
-                result += ' and ' + convertLessThanThousand(paise) + ' Paise';
-            }
-            
-            return result + ' Only';
-        }
-
-        // Function to calculate ledger balance for supplier
-        function getSupplierLedgerBalance(supplierId) {
-            let balance = 0;
-            
-            // Ensure openingBalances array exists
-            if (!appData.openingBalances) {
-                appData.openingBalances = [];
-            }
-            
-            // Add opening balances first
-            appData.openingBalances
-                .filter(ob => ob.entityType === 'supplier' && String(ob.entityId) === String(supplierId))
-                .forEach(opening => {
-                    balance += opening.amount;
-                });
-            
-            // Add all purchases (debit to supplier)
-            appData.purchases
-                .filter(p => String(p.supplierId) === String(supplierId))
-                .forEach(purchase => {
-                    balance += purchase.grandTotal || purchase.total || 0;
-                });
-            
-            // Subtract all payments (credit to supplier)
-            appData.payments
-                .filter(p => (p.type === 'purchase' && appData.purchases.find(pur => pur.id === p.invoiceId && String(pur.supplierId) === String(supplierId))) || 
-                            (p.type === 'ledger_payment' && p.entityType === 'supplier' && String(p.entityId) === String(supplierId)))
-                .forEach(payment => {
-                    balance -= payment.amount;
-                });
-            
-            // Subtract adjustments (credit to supplier)
-            if (appData.adjustments) {
-                appData.adjustments
-                    .filter(adj => adj.type === 'supplier_adjustment' && String(adj.entityId) === String(supplierId))
-                    .forEach(adjustment => {
-                        balance -= adjustment.amount;
-                    });
-            }
-            
-            return balance;
-        }
-
-        // Function to calculate ledger balance for customer
-        function getCustomerLedgerBalance(customerId) {
-            let balance = 0;
-            
-            // Ensure openingBalances array exists
-            if (!appData.openingBalances) {
-                appData.openingBalances = [];
-            }
-            
-            // Add opening balances first
-            appData.openingBalances
-                .filter(ob => ob.entityType === 'customer' && String(ob.entityId) === String(customerId))
-                .forEach(opening => {
-                    balance += opening.amount;
-                });
-            
-            // Add all sales (debit to customer)
-            appData.sales
-                .filter(s => String(s.customerId) === String(customerId))
-                .forEach(sale => {
-                    balance += sale.grandTotal || sale.total || 0;
-                });
-            
-            // Subtract all receipts (credit from customer)
-            appData.payments
-                .filter(p => (p.type === 'sale' && appData.sales.find(s => s.id === p.invoiceId && String(s.customerId) === String(customerId))) || 
-                            (p.type === 'ledger_payment' && p.entityType === 'customer' && String(p.entityId) === String(customerId)))
-                .forEach(payment => {
-                    // For customer payments, positive amount means they paid us (reduces their balance)
-                    balance -= Math.abs(payment.amount);
-                });
-            
-            // Subtract deductions (reduces what customer owes us)
-            appData.deductions
-                .filter(d => String(d.customerId) === String(customerId))
-                .forEach(deduction => {
-                    balance -= deduction.amount;
-                });
-            
-            // Subtract adjustments
-            if (appData.adjustments) {
-                appData.adjustments
-                    .filter(adj => adj.type === 'customer_adjustment' && String(adj.entityId) === String(customerId))
-                    .forEach(adjustment => {
-                        balance -= adjustment.amount;
-                    });
-            }
-            
-            return balance;
-        }
-
-        function printPurchaseInvoice(purchaseId) {
-            const purchase = appData.purchases.find(p => p.id === purchaseId);
-            if (!purchase) return;
-            
-            const printWindow = window.open('', '_blank');
-            const company = appData.company;
-            
-            let itemsHtml = '';
-            if (purchase.items) {
-                purchase.items.forEach((item) => {
-                    const bagsDisplay = item.isCoconut ? (item.discountQty || 0) : (item.bags ?? '');
-                    const discountDisplay = (item.grossWeight != null && item.netWeight != null && !isNaN(item.grossWeight) && !isNaN(item.netWeight)) ? (item.grossWeight - item.netWeight) : '';
-                    itemsHtml += `
-                        <tr>
-                            <td class="inv-td">${item.itemName}</td>
-                            <td class="inv-td text-center">${item.grossWeight}</td>
-                            <td class="inv-td text-center">${bagsDisplay}</td>
-                            <td class="inv-td text-center">${discountDisplay}</td>
-                            <td class="inv-td text-center">${item.netWeight}</td>
-                            <td class="inv-td text-right">${RU}${item.rate}</td>
-                            <td class="inv-td text-right">${RU}${item.total.toFixed(2)}</td>
-                        </tr>
-                    `;
-                });
-            }
-            
-            const supplier = appData.suppliers.find(s => s.id == purchase.supplierId);
-            
-            // Calculate ledger balance with detailed breakdown
-            let ledgerBalance = 0;
-            let openingTotal = 0;
-            let purchasesTotal = 0;
-            let paymentsTotal = 0;
-            
-            // Count opening balances - ensure array exists and is not null
-            if (appData.openingBalances && Array.isArray(appData.openingBalances) && appData.openingBalances.length > 0) {
-                appData.openingBalances
-                    .filter(ob => ob.entityType === 'supplier' && String(ob.entityId) === String(purchase.supplierId))
-                    .forEach(opening => {
-                        openingTotal += opening.amount || 0;
-                    });
-            }
-            
-            // Count purchases
-            if (appData.purchases && Array.isArray(appData.purchases)) {
-                appData.purchases
-                    .filter(p => String(p.supplierId) === String(purchase.supplierId))
-                    .forEach(p => {
-                        purchasesTotal += p.grandTotal || p.total || 0;
-                    });
-            }
-            
-            // Count payments
-            if (appData.payments && Array.isArray(appData.payments)) {
-                appData.payments
-                    .filter(p => (p.type === 'purchase' && appData.purchases.find(pur => pur.id === p.invoiceId && String(pur.supplierId) === String(purchase.supplierId))) || 
-                                (p.type === 'ledger_payment' && p.entityType === 'supplier' && String(p.entityId) === String(purchase.supplierId)))
-                    .forEach(payment => {
-                        paymentsTotal += payment.amount || 0;
-                    });
-            }
-            
-            ledgerBalance = openingTotal + purchasesTotal - paymentsTotal;
-            
-            const amountInWords = numberToWords(purchase.grandTotal || purchase.total || 0);
-            
-            printWindow.document.write(`
-                <html>
-                <head>
-                    <title>Purchase Invoice - ${purchase.invoice}</title>
-                    <style>
-                        * { box-sizing: border-box; }
-                        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
-                        .inv-header {
-                            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #5b21b6 100%);
-                            color: #fff; text-align: center; padding: 24px 20px; margin: -24px -24px 24px -24px; border-radius: 0 0 12px 12px;
-                        }
-                        .inv-header h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: 0.02em; }
-                        .inv-header .tagline { margin: 6px 0 0; font-size: 13px; opacity: 0.95; font-style: italic; }
-                        .inv-header .company-meta { margin-top: 12px; font-size: 12px; opacity: 0.9; }
-                        .inv-title { text-align: center; font-size: 22px; font-weight: 700; margin-bottom: 20px; color: #1e293b; }
-                        .inv-details-wrap { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 20px; flex-wrap: wrap; }
-                        .inv-billto { font-size: 14px; }
-                        .inv-billto .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 4px; }
-                        .inv-billto .name { font-size: 16px; font-weight: 700; color: #1e293b; }
-                        .inv-meta-box {
-                            background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; font-size: 13px; min-width: 220px;
-                        }
-                        .inv-meta-box div { margin-bottom: 4px; }
-                        .inv-meta-box div:last-child { margin-bottom: 0; }
-                        .inv-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-                        .inv-table thead tr { background: linear-gradient(135deg, #4f46e5 0%, #5b21b6 100%); color: #fff; }
-                        .inv-table th { padding: 12px 10px; text-align: left; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
-                        .inv-table th.text-center, .inv-table td.text-center { text-align: center; }
-                        .inv-table th.text-right, .inv-table td.text-right { text-align: right; }
-                        .inv-td { border: 1px solid #e2e8f0; padding: 10px; font-size: 13px; }
-                        .inv-table tbody tr:nth-child(even) { background: #f8fafc; }
-                        .totals { margin-top: 20px; text-align: right; font-size: 14px; }
-                        .totals .grand { font-size: 18px; font-weight: 700; margin-top: 8px; }
-                        .words-box { margin-top: 20px; padding: 12px 14px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; }
-                        .ledger-box { margin-top: 16px; padding: 12px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 15px; }
-                        .ledger-box.to-pay { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; }
-                        .ledger-box.settled { background: #d1fae5; border: 1px solid #10b981; color: #065f46; }
-                        .signature-section { margin-top: 36px; display: flex; justify-content: space-between; gap: 24px; }
-                        .signature-box { border: 1px solid #cbd5e1; padding: 16px; text-align: center; border-radius: 8px; min-height: 80px; }
-                        .signature-box .label { font-weight: 700; font-size: 12px; color: #475569; }
-                    </style>
-                </head>
-                <body>
-                    <div class="inv-header">
-                        <h1>${company.name || 'Ishwar Trading Company'}</h1>
-                        <p class="tagline">Purchase Invoice</p>
-                        ${company.gstin ? `<div class="company-meta">GST No: ${company.gstin}</div>` : ''}
-                    </div>
-                    <div class="inv-title">PURCHASE INVOICE</div>
-                    <div class="inv-details-wrap">
-                        <div class="inv-billto">
-                            <div class="label">Supplier</div>
-                            <div class="name">${purchase.supplierName || '—'}</div>
-                            ${supplier && supplier.mobile ? `<div style="margin-top:6px;font-size:13px;">Mobile: ${supplier.mobile}</div>` : ''}
-                            ${supplier && supplier.account ? `<div style="font-size:12px;">Account: ${supplier.account}${supplier.ifsc ? ' | IFSC: ' + supplier.ifsc : ''}</div>` : ''}
-                        </div>
-                        <div class="inv-meta-box">
-                            <div><strong>Invoice No:</strong> ${purchase.invoice}</div>
-                            <div><strong>Date:</strong> ${purchase.date}</div>
-                            <div><strong>Truck No:</strong> ${purchase.truck || '—'}</div>
-                            <div><strong>LR Number:</strong> ${purchase.lrNumber || '—'}</div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">Purchase Report</h3>
+                            <p class="text-slate-600 text-sm">View all purchase transactions</p>
                         </div>
                     </div>
-                    <table class="inv-table">
-                        <thead>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow" onclick="showReport('sales')">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">Sales Report</h3>
+                            <p class="text-slate-600 text-sm">View all sales transactions</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow" onclick="showReport('inventory')">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8 4-8-4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">Inventory Report</h3>
+                            <p class="text-slate-600 text-sm">Current stock status</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow" onclick="showReport('brokerage')">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">Brokerage Report</h3>
+                            <p class="text-slate-600 text-sm">Broker commissions and fees</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow" onclick="showReport('deductions')">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">Deductions Report</h3>
+                            <p class="text-slate-600 text-sm">Customer deductions and adjustments</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow" onclick="showReport('summary')">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">Summary Report</h3>
+                            <p class="text-slate-600 text-sm">Overall business summary</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow" onclick="showReport('ageing')">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">Ageing Report</h3>
+                            <p class="text-slate-600 text-sm">Receivables &amp; payables by age (0-30, 31-60, 61-90, 90+ days)</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+                <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
+                    <h3 class="text-xl font-semibold text-primary" id="reportTitle">Select a Report Category</h3>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <select id="reportDatePreset" onchange="applyReportDatePreset(this.value)" class="p-2 border border-slate-300 rounded-lg text-sm bg-white">
+                            <option value="">Date range</option>
+                            <option value="this_month">This Month</option>
+                            <option value="last_month">Last Month</option>
+                            <option value="last_3_months">Last 3 Months</option>
+                            <option value="this_fy">This Financial Year</option>
+                        </select>
+                        <label class="text-sm text-slate-600">From</label>
+                        <input type="date" id="reportDateFrom" class="p-2 border border-slate-300 rounded-lg text-sm">
+                        <label class="text-sm text-slate-600">To</label>
+                        <input type="date" id="reportDateTo" class="p-2 border border-slate-300 rounded-lg text-sm">
+                        <button type="button" onclick="applyReportDateRange()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-sm font-medium">Apply</button>
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="exportReportToPdf()" class="px-3 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 text-sm font-medium" id="exportPdfBtn" style="display: none;">Download PDF</button>
+                        <button onclick="exportReport()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportBtn" style="display: none;">Export to CSV</button>
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto" id="reportTable">
+                        <thead id="reportTableHead">
+                        </thead>
+                        <tbody id="reportTableBody">
                             <tr>
-                                <th>Item</th>
-                                <th class="text-center">Gross Wt</th>
-                                <th class="text-center">Bag/Quantity</th>
-                                <th class="text-center">Discount</th>
-                                <th class="text-center">Net Wt</th>
-                                <th class="text-right">Rate</th>
-                                <th class="text-right">Amount</th>
+                                <td class="px-4 py-8 text-center text-slate-500">Select a report category to view data</td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            ${itemsHtml}
                         </tbody>
                     </table>
-                    <div class="totals">
-                        <div><strong>Items Total: ${RU}${(purchase.itemsTotal || purchase.total || 0).toFixed(2)}</strong></div>
-                        <div>Hammali: ${RU}${(purchase.hammali || 0).toFixed(2)}</div>
-                        <div>Advance: ${RU}${(purchase.advance || 0).toFixed(2)}</div>
-                        ${purchase.othersEntries && purchase.othersEntries.length > 0 ? purchase.othersEntries.map(entry => 
-                            `<div>${entry.operation === 'add' ? '+' : '-'} ${entry.reason}: ${RU}${entry.amount.toFixed(2)}</div>`
-                        ).join('') : ''}
-                        <div class="grand">Grand Total: ${RU}${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</div>
-                    </div>
-                    <div class="words-box">
-                        <strong>Amount in Words:</strong> ${amountInWords}
-                    </div>
-                    <div class="ledger-box ${ledgerBalance > 0 ? 'to-pay' : 'settled'}">
-                        <span>Ledger Balance (${supplier ? supplier.name : 'Supplier'}):</span>
-                        <span>${RU}${ledgerBalance.toFixed(2)} ${ledgerBalance > 0 ? '(To Pay)' : ledgerBalance < 0 ? '(To Receive)' : '(Settled)'}</span>
-                    </div>
-                    <div class="signature-section">
-                        <div class="signature-box" style="width:200px;"><div style="height:50px;"></div><div class="label">Supplier Signature</div></div>
-                        <div class="signature-box" style="width:260px;"><div style="height:50px;"></div><div class="label">Company Seal & Signature</div></div>
-                    </div>
-                </body>
-                </html>
-            `);
-            
-            printWindow.document.close();
-            printWindow.print();
-        }
-
-        function printSaleInvoice(saleId) {
-            const sale = appData.sales.find(s => s.id === saleId);
-            if (!sale) return;
-            
-            const printWindow = window.open('', '_blank');
-            const company = appData.company;
-            
-            let itemsHtml = '';
-            if (sale.items) {
-                sale.items.forEach(item => {
-                    // For coconut, show discount quantity instead of bags
-                    const middleColumn = item.isCoconut 
-                        ? `<td class="border px-2 py-1 text-center">${item.discountQty || 0}</td>` 
-                        : `<td class="border px-2 py-1 text-center">${item.bags}</td>`;
-                    
-                    itemsHtml += `
-                        <tr>
-                            <td class="border px-2 py-1">${item.itemName}</td>
-                            <td class="border px-2 py-1 text-center">${item.grossWeight}</td>
-                            ${middleColumn}
-                            <td class="border px-2 py-1 text-center">${item.netWeight}</td>
-                            <td class="border px-2 py-1 text-right">${RU}${item.rate}</td>
-                            <td class="border px-2 py-1 text-right">${RU}${item.total.toFixed(2)}</td>
-                        </tr>
-                    `;
-                });
-            }
-            
-            const customer = appData.customers.find(c => c.id == sale.customerId);
-            
-            // DEBUG: Log opening balances data
-            console.log('=== INVOICE PRINT DEBUG ===');
-            console.log('Customer ID:', sale.customerId);
-            console.log('appData.openingBalances:', appData.openingBalances);
-            console.log('Is Array?:', Array.isArray(appData.openingBalances));
-            console.log('Length:', appData.openingBalances ? appData.openingBalances.length : 'undefined');
-            
-            // Calculate ledger balance with detailed breakdown
-            let ledgerBalance = 0;
-            let openingTotal = 0;
-            let salesTotal = 0;
-            let paymentsTotal = 0;
-            let deductionsTotal = 0;
-            
-            // Count opening balances - ensure array exists and is not null
-            if (appData.openingBalances && Array.isArray(appData.openingBalances) && appData.openingBalances.length > 0) {
-                const filteredOpenings = appData.openingBalances.filter(ob => ob.entityType === 'customer' && String(ob.entityId) === String(sale.customerId));
-                console.log('Filtered openings for this customer:', filteredOpenings);
-                
-                filteredOpenings.forEach(opening => {
-                    openingTotal += opening.amount || 0;
-                    console.log('Adding opening balance:', opening.amount, 'Total now:', openingTotal);
-                });
-            } else {
-                console.log('No opening balances found or array is empty');
-            }
-            
-            console.log('Final openingTotal:', openingTotal);
-            console.log('===========================');
-            
-            // Count sales
-            if (appData.sales && Array.isArray(appData.sales)) {
-                appData.sales
-                    .filter(s => String(s.customerId) === String(sale.customerId))
-                    .forEach(s => {
-                        salesTotal += s.grandTotal || s.total || 0;
-                    });
-            }
-            
-            // Count payments
-            if (appData.payments && Array.isArray(appData.payments)) {
-                appData.payments
-                    .filter(p => (p.type === 'sale' && appData.sales.find(s => s.id === p.invoiceId && String(s.customerId) === String(sale.customerId))) || 
-                                (p.type === 'ledger_payment' && p.entityType === 'customer' && String(p.entityId) === String(sale.customerId)))
-                    .forEach(payment => {
-                        paymentsTotal += Math.abs(payment.amount) || 0;
-                    });
-            }
-            
-            // Count deductions
-            if (appData.deductions && Array.isArray(appData.deductions)) {
-                appData.deductions
-                    .filter(d => String(d.customerId) === String(sale.customerId))
-                    .forEach(deduction => {
-                        deductionsTotal += deduction.amount || 0;
-                    });
-            }
-            
-            ledgerBalance = openingTotal + salesTotal - paymentsTotal - deductionsTotal;
-            
-            const amountInWords = numberToWords(sale.grandTotal || sale.total || 0);
-            
-            printWindow.document.write(`
-                <html>
-                <head>
-                    <title>Sale Invoice - ${sale.invoice}</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; }
-                        .header { text-align: center; margin-bottom: 20px; }
-                        .invoice-details { margin-bottom: 20px; }
-                        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                        .border { border: 1px solid #000; }
-                        .text-center { text-align: center; }
-                        .text-right { text-align: right; }
-                        .font-bold { font-weight: bold; }
-                        .totals { margin-top: 20px; }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h1>${company.name || 'ITCO Trade Management'}</h1>
-                        <h2>SALE INVOICE</h2></div>
-                    </div>
-                    
-                    <div class="invoice-details">
-                        <div style="display: flex; justify-content: space-between;">
-                            <div>
-                                <strong>Invoice No:</strong> ${sale.invoice}<br>
-                                <strong>Date:</strong> ${sale.date}<br>
-                                <strong>Truck No:</strong> ${sale.truck || 'N/A'}<br>
-                                <strong>LR Number:</strong> ${sale.lrNumber || 'N/A'}
-                            </div>
-                            <div>
-                                <strong>Customer:</strong> ${sale.customerName}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-bottom: 20px; border: 1px solid #000; padding: 10px;">
-                        <h3 style="margin: 0 0 10px 0; text-align: center;">BANK DETAILS</h3>
-                        <div style="display: flex; justify-content: space-between;">
-                            <div>
-                                <strong>Bank 1:</strong> ${company.bank1?.name || 'N/A'}<br>
-                                <strong>Account:</strong> ${company.bank1?.account || 'N/A'}<br>
-                                <strong>IFSC:</strong> ${company.bank1?.ifsc || 'N/A'}
-                            </div>
-                            <div>
-                                <strong>Bank 2:</strong> ${company.bank2?.name || 'N/A'}<br>
-                                <strong>Account:</strong> ${company.bank2?.account || 'N/A'}<br>
-                                <strong>IFSC:</strong> ${company.bank2?.ifsc || 'N/A'}
-                            </div>
-                            <div>
-                                <strong>UPI:</strong> ${company.upi || 'N/A'}
-                            </div>
-                        </div>
-                    </div>
-                        </div>
-                    </div>
-                    
-                    <table class="border">
-                        <thead>
-                            <tr class="border">
-                                <th class="border px-2 py-1">Item</th>
-                                <th class="border px-2 py-1">Gross Weight</th>
-                                <th class="border px-2 py-1">Bags/Discount</th>
-                                <th class="border px-2 py-1">Net Weight</th>
-                                <th class="border px-2 py-1">Rate</th>
-                                <th class="border px-2 py-1">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${itemsHtml}
-                        </tbody>
-                    </table>
-                    
-                    <div class="totals">
-                        <div style="text-align: right;">
-                            <div><strong>Items Total: ${RU}${(sale.itemsTotal || sale.total || 0).toFixed(2)}</strong></div>
-                            <div>Hammali: ${RU}${(sale.hammali || 0).toFixed(2)}</div>
-                            <div>Advance: ${RU}${(sale.advance || 0).toFixed(2)}</div>
-                            <div style="color: #d97706;"><strong>Truck Advance: ${RU}${(sale.truckAdvance || 0).toFixed(2)}</strong></div>
-                            ${sale.othersEntries && sale.othersEntries.length > 0 ? sale.othersEntries.map(entry => 
-                                `<div>${entry.operation === 'add' ? '+' : '-'} ${entry.reason}: ${RU}${entry.amount.toFixed(2)}</div>`
-                            ).join('') : ''}
-                            <div class="font-bold" style="font-size: 18px; margin-top: 10px;">
-                                Grand Total: ${RU}${(sale.grandTotal || sale.total || 0).toFixed(2)}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-top: 20px; padding: 10px; background-color: #f0f0f0; border: 1px solid #ccc;">
-                        <div class="font-bold">Amount in Words:</div>
-                        <div style="font-size: 14px; margin-top: 5px;">${amountInWords}</div>
-                    </div>
-                    
-                    <div style="margin-top: 15px; padding: 10px; background-color: ${ledgerBalance > 0 ? '#fff3cd' : '#d4edda'}; border: 1px solid ${ledgerBalance > 0 ? '#ffc107' : '#28a745'};">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div class="font-bold">Ledger Balance (${customer ? customer.name : 'Customer'}):</div>
-                            <div class="font-bold" style="font-size: 16px; color: ${ledgerBalance > 0 ? '#856404' : '#155724'};">
-                                ${RU}${ledgerBalance.toFixed(2)} ${ledgerBalance > 0 ? '(To Receive)' : ledgerBalance < 0 ? '(To Pay)' : '(Settled)'}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-top: 40px; display: flex; justify-content: flex-end;">
-                        <div style="border: 1px solid #000; padding: 30px; text-center; width: 300px; height: 120px;">
-                            <div style="margin-bottom: 70px;"></div>
-                            <div class="font-bold">Company Seal & Signature</div>
-                        </div>
-                    </div>
-                </body>
-                </html>
-            `);
-            
-            printWindow.document.close();
-            printWindow.print();
-        }
-
-        function printDeliveryChallan(saleId) {
-            var sale = appData.sales.find(function(s) { return s.id === saleId; });
-            if (!sale) return;
-            var company = appData.company || {};
-            var customer = appData.customers.find(function(c) { return c.id == sale.customerId; });
-            var custName = (customer && customer.name) ? customer.name : (sale.customerName || 'Customer');
-            var challanNo = 'DC-' + (sale.date || '').replace(/-/g, '') + '-' + (sale.invoice || sale.id || '');
-            var itemsRows = '';
-            if (sale.items && sale.items.length) {
-                sale.items.forEach(function(item) {
-                    itemsRows += '<tr><td style="border:1px solid #000;padding:6px;">' + escapeHtml(item.itemName) + '</td><td style="border:1px solid #000;padding:6px;text-align:right;">' + (item.netWeight || item.grossWeight || '-') + '</td><td style="border:1px solid #000;padding:6px;">kg</td></tr>';
-                });
-            } else {
-                itemsRows = '<tr><td colspan="3" style="border:1px solid #000;padding:8px;text-align:center;">No items</td></tr>';
-            }
-            var win = window.open('', '_blank');
-            win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Delivery Challan - ' + escapeHtml(challanNo) + '</title><style>body{font-family:Arial,sans-serif;margin:20px;} .header{text-align:center;margin-bottom:20px;} table{width:100%;border-collapse:collapse;} .sig{ margin-top:40px; border:1px solid #000; padding:30px; width:220px; text-align:center;}</style></head><body>' +
-                '<div class="header"><h1>' + escapeHtml(company.name || 'ITCO') + '</h1><h2>DELIVERY CHALLAN</h2></div>' +
-                '<p><strong>Challan No:</strong> ' + escapeHtml(challanNo) + ' &nbsp; <strong>Date:</strong> ' + escapeHtml(sale.date || '') + ' &nbsp; <strong>Invoice Ref:</strong> ' + escapeHtml(sale.invoice || '') + '</p>' +
-                '<p><strong>Customer:</strong> ' + escapeHtml(custName) + '</p>' +
-                '<p><strong>Vehicle / Truck:</strong> ' + escapeHtml(sale.truck || '') + '</p>' +
-                '<table><thead><tr style="background:#f0f0f0;"><th style="border:1px solid #000;padding:8px;">Item</th><th style="border:1px solid #000;padding:8px;">Quantity</th><th style="border:1px solid #000;padding:8px;">Unit</th></tr></thead><tbody>' + itemsRows + '</tbody></table>' +
-                '<p style="margin-top:16px;"><strong>Remarks:</strong> _________________________________________</p>' +
-                '<div style="margin-top:40px;display:flex;justify-content:space-between;">' +
-                '<div class="sig">Receiver Signature<br/><br/><br/></div>' +
-                '<div class="sig">Authorised Signature</div>' +
-                '</div></body></html>');
-            win.document.close();
-            win.focus();
-            setTimeout(function() { win.print(); }, 250);
-        }
-
-        let editingPurchaseId = null;
-        let editingSaleId = null;
-
-        function viewPurchase(purchaseId) {
-            const purchase = appData.purchases.find(p => p.id === purchaseId);
-            if (!purchase) {
-                alert('Purchase not found');
-                return;
-            }
-            
-            // Build items table
-            let itemsTable = '';
-            if (purchase.items && purchase.items.length > 0) {
-                itemsTable = `
-                    <table class="w-full border border-slate-300 mt-4">
-                        <thead>
-                            <tr class="bg-slate-100">
-                                <th class="border border-slate-300 px-3 py-2 text-left text-sm">Item</th>
-                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Gross Wt</th>
-                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Bag/Quantity</th>
-                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Discount</th>
-                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Net Wt</th>
-                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Rate</th>
-                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${purchase.items.map((item) => {
-                                const bagsDisplay = item.isCoconut ? (item.discountQty || 0) : (item.bags ?? '');
-                                const discountDisplay = (item.grossWeight != null && item.netWeight != null && !isNaN(item.grossWeight) && !isNaN(item.netWeight)) ? (item.grossWeight - item.netWeight) : '';
-                                const unit = item.unit || '';
-                                return `
-                                <tr>
-                                    <td class="border border-slate-300 px-3 py-2 text-sm">${item.itemName}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.grossWeight} ${unit}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${bagsDisplay}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${discountDisplay}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.netWeight} ${unit}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${item.rate.toFixed(2)}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm font-semibold">${RU}${item.total.toFixed(2)}</td>
-                                </tr>
-                            `; }).join('')}
-                        </tbody>
-                    </table>
-                `;
-            }
-            
-            // Build others entries table
-            let othersTable = '';
-            if (purchase.othersEntries && purchase.othersEntries.length > 0) {
-                othersTable = `
-                    <div class="mt-4">
-                        <h4 class="font-semibold text-sm mb-2">Other Charges:</h4>
-                        <table class="w-full border border-slate-300">
-                            <thead>
-                                <tr class="bg-slate-100">
-                                    <th class="border border-slate-300 px-3 py-2 text-left text-sm">Description</th>
-                                    <th class="border border-slate-300 px-3 py-2 text-center text-sm">Operation</th>
-                                    <th class="border border-slate-300 px-3 py-2 text-right text-sm">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${purchase.othersEntries.map(entry => `
-                                    <tr>
-                                        <td class="border border-slate-300 px-3 py-2 text-sm">${entry.description}</td>
-                                        <td class="border border-slate-300 px-3 py-2 text-center text-sm">${entry.operation}</td>
-                                        <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${entry.amount.toFixed(2)}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            }
-            
-            const content = `
-                <div class="text-left">
-                    <div class="bg-blue-50 border-l-4 border-blue-600 p-4 mb-4 rounded">
-                        <h3 class="text-xl font-bold text-slate-900 mb-1">Purchase Invoice</h3>
-                        <p class="text-sm text-slate-600">Invoice No: ${purchase.invoice}</p>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-4 mb-4 bg-slate-50 p-4 rounded">
-                        <div>
-                            <p class="text-xs text-slate-500 uppercase tracking-wide">Date</p>
-                            <p class="font-semibold text-slate-900">${purchase.date}</p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-slate-500 uppercase tracking-wide">Supplier</p>
-                            <p class="font-semibold text-slate-900">${purchase.supplierName}</p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-slate-500 uppercase tracking-wide">Truck No</p>
-                            <p class="font-semibold text-slate-900">${purchase.truck || 'N/A'}</p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-slate-500 uppercase tracking-wide">LR Number</p>
-                            <p class="font-semibold text-slate-900">${purchase.lrNumber || 'N/A'}</p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-slate-500 uppercase tracking-wide">Invoice No</p>
-                            <p class="font-semibold text-slate-900">${purchase.invoice}</p>
-                        </div>
-                    </div>
-                    
-                    ${itemsTable}
-                    
-                    <div class="mt-4 bg-slate-50 p-4 rounded border-2 border-slate-200">
-                        <div class="grid grid-cols-2 gap-3 text-sm">
-                            <div class="flex justify-between">
-                                <span class="text-slate-600">Items Total:</span>
-                                <span class="font-semibold">${RU}${(purchase.itemsTotal || 0).toFixed(2)}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-slate-600">Hammali:</span>
-                                <span class="font-semibold">${RU}${(purchase.hammali || 0).toFixed(2)}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-slate-600">Advance:</span>
-                                <span class="font-semibold">${RU}${(purchase.advance || 0).toFixed(2)}</span>
-                            </div>
-                            <div></div>
-                            <div class="flex justify-between pt-3 border-t-2 border-slate-300 col-span-2">
-                                <span class="text-slate-700 font-bold text-base">Grand Total:</span>
-                                <span class="font-bold text-xl text-blue-600">${RU}${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</span>
-                            </div>
-                            <div class="flex justify-between pt-2 border-t border-slate-200">
-                                <span class="text-slate-600">Paid:</span>
-                                <span class="font-semibold text-green-600">${RU}${(purchase.paid || 0).toFixed(2)}</span>
-                            </div>
-                            <div class="flex justify-between pt-2 border-t border-slate-200">
-                                <span class="text-slate-600">Balance:</span>
-                                <span class="font-semibold text-red-600">${RU}${(purchase.balance || purchase.grandTotal || purchase.total || 0).toFixed(2)}</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    ${othersTable}
                 </div>
-            `;
-            
-            document.getElementById('modalTitle').textContent = 'Purchase Details';
-            document.getElementById('modalContent').innerHTML = content;
-            document.getElementById('viewModal').classList.remove('hidden');
-        }
+            </div>
+        </div>
+    </div>
 
-        function editPurchase(purchaseId) {
-            const purchase = appData.purchases.find(p => p.id === purchaseId);
-            if (!purchase) return;
+    <!-- Payment Modal -->
+    <div id="paymentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-semibold text-gray-800" id="paymentModalTitle">Record Payment</h3>
+                <button onclick="closePaymentModal()" class="text-gray-400 hover:text-slate-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
             
-            editingPurchaseId = purchaseId;
-            
-            // Fill the form with existing data
-            document.getElementById('purchaseDate').value = purchase.date;
-            document.getElementById('purchaseInvoice').value = purchase.invoice;
-            document.getElementById('purchaseSupplier').value = purchase.supplierId;
-            syncPurchaseSupplierDisplay();
-            document.getElementById('purchaseTruck').value = purchase.truck || '';
-            var plrEl = document.getElementById('purchaseLRNumber');
-            if (plrEl) plrEl.value = purchase.lrNumber || '';
-            document.getElementById('purchaseHammali').value = purchase.hammali || 0;
-            document.getElementById('purchaseAdvance').value = purchase.advance || 0;
-            
-            // Load items into current items array
-            currentPurchaseItems = purchase.items ? [...purchase.items] : [];
-            updateCurrentPurchaseItemsDisplay();
-            calculatePurchaseTotals();
-            
-            // Show the purchase form
-            showPurchaseForm();
-            
-            // Scroll to form
-            document.querySelector('#purchaseEntryView').scrollIntoView({ behavior: 'smooth' });
-            
-            alert('Purchase loaded for editing. Make changes and save to update, or click Cancel to abort.');
-        }
-        
-        function cancelPurchaseEdit() {
-            if (confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
-                editingPurchaseId = null;
-                currentPurchaseItems = [];
-                clearPurchaseForm();
-                
-                // Return to history view
-                hidePurchaseForm();
-            }
-        }
-
-        function clearPurchaseForm() {
-            document.getElementById('purchaseDate').value = '';
-            document.getElementById('purchaseInvoice').value = '';
-            document.getElementById('purchaseSupplier').value = '';
-            var psi = document.getElementById('purchaseSupplierInput');
-            if (psi) psi.value = '';
-            var psd = document.getElementById('purchaseSupplierDropdown');
-            if (psd) psd.classList.add('hidden');
-            document.getElementById('purchaseTruck').value = '';
-            var plr = document.getElementById('purchaseLRNumber');
-            if (plr) plr.value = '';
-            document.getElementById('purchaseHammali').value = '';
-            document.getElementById('purchaseAdvance').value = '';
-            var pdEl = document.getElementById('purchaseDiscount');
-            if (pdEl) pdEl.value = '0';
-            
-            // Clear Others fields
-            const othersContainer = document.getElementById('purchaseOthersContainer');
-            if (othersContainer) {
-                othersContainer.innerHTML = `
-                    <div class="purchase-others-row grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Reason</label>
-                            <input type="text" class="purchase-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason (e.g., Transport, Commission)">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
-                            <input type="number" class="purchase-others-amount w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter amount">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Operation</label>
-                            <select class="purchase-others-operation w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                                <option value="add">Add (+)</option>
-                                <option value="reduce">Reduce (-)</option>
-                            </select>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            // Clear current items
-            currentPurchaseItems = [];
-            updateCurrentPurchaseItemsDisplay();
-            calculatePurchaseTotals();
-            editingPurchaseId = null;
-        }
-
-        function viewSale(saleId) {
-            const sale = appData.sales.find(s => s.id === saleId);
-            if (!sale) {
-                alert('Sale not found');
-                return;
-            }
-            
-            // Build items table
-            let itemsTable = '';
-            if (sale.items && sale.items.length > 0) {
-                itemsTable = `
-                    <table class="w-full border border-slate-300 mt-4">
-                        <thead>
-                            <tr class="bg-slate-100">
-                                <th class="border border-slate-300 px-3 py-2 text-left text-sm">Item</th>
-                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Gross Wt</th>
-                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Bags/Disc</th>
-                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Net Wt</th>
-                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Rate</th>
-                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${sale.items.map(item => `
-                                <tr>
-                                    <td class="border border-slate-300 px-3 py-2 text-sm">${item.itemName}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.grossWeight} ${item.unit}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.bags || item.discountQty || 0}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.netWeight} ${item.unit}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${item.rate.toFixed(2)}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm font-semibold">${RU}${item.total.toFixed(2)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            }
-            
-            // Build others entries table
-            let othersTable = '';
-            if (sale.othersEntries && sale.othersEntries.length > 0) {
-                othersTable = `
-                    <div class="mt-4">
-                        <h4 class="font-semibold text-sm mb-2">Other Charges:</h4>
-                        <table class="w-full border border-slate-300">
-                            <thead>
-                                <tr class="bg-slate-100">
-                                    <th class="border border-slate-300 px-3 py-2 text-left text-sm">Description</th>
-                                    <th class="border border-slate-300 px-3 py-2 text-center text-sm">Operation</th>
-                                    <th class="border border-slate-300 px-3 py-2 text-right text-sm">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${sale.othersEntries.map(entry => `
-                                    <tr>
-                                        <td class="border border-slate-300 px-3 py-2 text-sm">${entry.description}</td>
-                                        <td class="border border-slate-300 px-3 py-2 text-center text-sm">${entry.operation}</td>
-                                        <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${entry.amount.toFixed(2)}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            }
-            
-            const content = `
-                <div class="text-left">
-                    <div class="bg-blue-50 border-l-4 border-blue-600 p-4 mb-4 rounded">
-                        <h3 class="text-xl font-bold text-slate-900 mb-1">Sale Invoice</h3>
-                        <p class="text-sm text-slate-600">Invoice No: ${sale.invoice}</p>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-4 mb-4 bg-slate-50 p-4 rounded">
-                        <div>
-                            <p class="text-xs text-slate-500 uppercase tracking-wide">Date</p>
-                            <p class="font-semibold text-slate-900">${sale.date}</p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-slate-500 uppercase tracking-wide">Customer</p>
-                            <p class="font-semibold text-slate-900">${sale.customerName}</p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-slate-500 uppercase tracking-wide">Truck No</p>
-                            <p class="font-semibold text-slate-900">${sale.truck || 'N/A'}</p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-slate-500 uppercase tracking-wide">Invoice No</p>
-                            <p class="font-semibold text-slate-900">${sale.invoice}</p>
-                        </div>
-                    </div>
-                    
-                    ${itemsTable}
-                    
-                    <div class="mt-4 bg-slate-50 p-4 rounded border-2 border-slate-200">
-                        <div class="grid grid-cols-2 gap-3 text-sm">
-                            <div class="flex justify-between">
-                                <span class="text-slate-600">Items Total:</span>
-                                <span class="font-semibold">${RU}${(sale.itemsTotal || 0).toFixed(2)}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-slate-600">Hammali:</span>
-                                <span class="font-semibold">${RU}${(sale.hammali || 0).toFixed(2)}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-slate-600">Advance:</span>
-                                <span class="font-semibold">${RU}${(sale.advance || 0).toFixed(2)}</span>
-                            </div>
-                            <div></div>
-                            <div class="flex justify-between pt-3 border-t-2 border-slate-300 col-span-2">
-                                <span class="text-slate-700 font-bold text-base">Grand Total:</span>
-                                <span class="font-bold text-xl text-blue-600">${RU}${(sale.grandTotal || sale.total || 0).toFixed(2)}</span>
-                            </div>
-                            <div class="flex justify-between pt-2 border-t border-slate-200">
-                                <span class="text-slate-600">Received:</span>
-                                <span class="font-semibold text-green-600">${RU}${(sale.received || 0).toFixed(2)}</span>
-                            </div>
-                            <div class="flex justify-between pt-2 border-t border-slate-200">
-                                <span class="text-slate-600">Balance:</span>
-                                <span class="font-semibold text-red-600">${RU}${(sale.balance || sale.grandTotal || sale.total || 0).toFixed(2)}</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    ${othersTable}
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
+                    <input type="number" id="paymentAmount" placeholder="Enter amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    <small class="text-slate-500" id="balanceDisplay">Balance: &#8377;0</small>
                 </div>
-            `;
-            
-            document.getElementById('modalTitle').textContent = 'Sale Details';
-            document.getElementById('modalContent').innerHTML = content;
-            document.getElementById('viewModal').classList.remove('hidden');
-        }
-
-        function editSale(saleId) {
-            const sale = appData.sales.find(s => s.id === saleId);
-            if (!sale) return;
-            
-            editingSaleId = saleId;
-            
-            // Fill the form with existing data
-            document.getElementById('saleDate').value = sale.date;
-            document.getElementById('saleInvoice').value = sale.invoice;
-            document.getElementById('saleCustomer').value = sale.customerId;
-            syncSaleCustomerDisplay();
-            document.getElementById('saleTruck').value = sale.truck || '';
-            document.getElementById('saleHammali').value = sale.hammali || 0;
-            document.getElementById('saleAdvance').value = sale.advance || 0;
-            
-            // Load items into current items array
-            currentSaleItems = sale.items ? [...sale.items] : [];
-            updateCurrentSaleItemsDisplay();
-            calculateSaleTotals();
-            
-            // Load linked purchases
-            linkedPurchases = sale.linkedPurchases ? [...sale.linkedPurchases] : [];
-            updateLinkedPurchasesDisplay();
-            
-            // Show the sales form
-            showSalesForm();
-            
-            // Scroll to form
-            document.querySelector('#salesEntryView').scrollIntoView({ behavior: 'smooth' });
-            
-            alert('Sale loaded for editing. Make changes and save to update, or click Cancel to abort.');
-        }
-        
-        function cancelSaleEdit() {
-            if (confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
-                editingSaleId = null;
-                currentSaleItems = [];
-                clearSaleForm();
                 
-                // Return to history view
-                hideSalesForm();
-            }
-        }
-
-        function clearSaleForm() {
-            document.getElementById('saleDate').value = '';
-            document.getElementById('saleInvoice').value = '';
-            document.getElementById('saleCustomer').value = '';
-            var sci = document.getElementById('saleCustomerInput');
-            if (sci) sci.value = '';
-            var scd = document.getElementById('saleCustomerDropdown');
-            if (scd) scd.classList.add('hidden');
-            document.getElementById('saleTruck').value = '';
-            document.getElementById('saleLRNumber').value = '';
-            document.getElementById('saleHammali').value = '';
-            document.getElementById('saleAdvance').value = '';
-            document.getElementById('saleTruckAdvance').value = '';
-            var sdEl = document.getElementById('saleDiscount');
-            if (sdEl) sdEl.value = '0';
-            
-            // Clear Others fields
-            const othersContainer = document.getElementById('saleOthersContainer');
-            if (othersContainer) {
-                othersContainer.innerHTML = `
-                    <div class="sale-others-row grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Reason</label>
-                            <input type="text" class="sale-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason (e.g., Transport, Commission)">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
-                            <input type="number" class="sale-others-amount w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter amount">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Operation</label>
-                            <select class="sale-others-operation w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                                <option value="add">Add (+)</option>
-                                <option value="reduce">Reduce (-)</option>
-                            </select>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            // Clear current items
-            currentSaleItems = [];
-            updateCurrentSaleItemsDisplay();
-            calculateSaleTotals();
-            editingSaleId = null;
-        }
-
-        let currentPaymentData = null;
-
-        function payPurchase(purchaseId) {
-            const purchase = appData.purchases.find(p => p.id === purchaseId);
-            if (!purchase) return;
-            
-            currentPaymentData = {
-                type: 'purchase',
-                id: purchaseId,
-                invoice: purchase.invoice,
-                party: purchase.supplierName,
-                balance: purchase.balance
-            };
-            
-            document.getElementById('paymentModalTitle').textContent = 'Record Payment to Supplier';
-            document.getElementById('balanceDisplay').textContent = `Balance: ${RU}${purchase.balance.toFixed(2)}`;
-            document.getElementById('paymentAmount').value = '';
-            document.getElementById('paymentMode').value = '';
-            document.getElementById('paidThrough').value = '';
-            document.getElementById('paymentRemarks').value = '';
-            
-            document.getElementById('paymentModal').classList.remove('hidden');
-        }
-
-        function receiveSale(saleId) {
-            const sale = appData.sales.find(s => s.id === saleId);
-            if (!sale) return;
-            
-            currentPaymentData = {
-                type: 'sale',
-                id: saleId,
-                invoice: sale.invoice,
-                party: sale.customerName,
-                balance: sale.balance
-            };
-            
-            document.getElementById('paymentModalTitle').textContent = 'Record Payment from Customer';
-            document.getElementById('balanceDisplay').textContent = `Balance: ${RU}${sale.balance.toFixed(2)}`;
-            document.getElementById('paymentAmount').value = '';
-            document.getElementById('paymentMode').value = '';
-            document.getElementById('paidThrough').value = '';
-            document.getElementById('paymentRemarks').value = '';
-            
-            document.getElementById('paymentModal').classList.remove('hidden');
-        }
-
-        function closePaymentModal() {
-            document.getElementById('paymentModal').classList.add('hidden');
-            currentPaymentData = null;
-        }
-        function printPaymentVoucherFromModal() {
-            var titleEl = document.getElementById('paymentModalTitle');
-            var amountEl = document.getElementById('paymentAmount');
-            var modeEl = document.getElementById('paymentMode');
-            var throughEl = document.getElementById('paidThrough');
-            var remarksEl = document.getElementById('paymentRemarks');
-            var party = currentPaymentData ? currentPaymentData.party : '';
-            var invoice = currentPaymentData ? currentPaymentData.invoice : '';
-            var amount = amountEl ? parseFloat(amountEl.value) || 0 : 0;
-            var mode = modeEl ? (modeEl.options[modeEl.selectedIndex] && modeEl.options[modeEl.selectedIndex].text) || modeEl.value : '';
-            var paidThrough = throughEl ? throughEl.value : '';
-            var remarks = remarksEl ? remarksEl.value : '';
-            var companyName = (appData.company && appData.company.name) ? appData.company.name : 'ITCO';
-            var d = new Date();
-            var dateStr = d.toLocaleDateString('en-IN');
-            var timeStr = d.toLocaleTimeString('en-IN', { hour12: true });
-            var win = window.open('', '_blank');
-            win.document.write('<!DOCTYPE html><html><head><title>Payment Voucher</title></head><body style="font-family: Arial, sans-serif; padding: 24px; max-width: 400px;">' +
-                '<div style="border: 2px solid #333; padding: 20px;">' +
-                '<h2 style="margin: 0 0 16px 0; text-align: center;">PAYMENT VOUCHER</h2>' +
-                '<p style="margin: 4px 0;"><strong>Date:</strong> ' + dateStr + ' &nbsp; <strong>Time:</strong> ' + timeStr + '</p>' +
-                '<p style="margin: 4px 0;"><strong>Party:</strong> ' + (party || '-') + '</p>' +
-                '<p style="margin: 4px 0;"><strong>Invoice/Ref:</strong> ' + (invoice || '-') + '</p>' +
-                '<p style="margin: 4px 0;"><strong>Amount:</strong> ' + RU + ' ' + amount.toFixed(2) + '</p>' +
-                '<p style="margin: 4px 0;"><strong>Amount in Words:</strong> ' + (typeof numberToWords === "function" ? numberToWords(amount) : amount.toFixed(2)) + '</p>' +
-                '<p style="margin: 4px 0;"><strong>Mode:</strong> ' + (mode || '-') + '</p>' +
-                (paidThrough ? '<p style="margin: 4px 0;"><strong>Paid Through:</strong> ' + paidThrough + '</p>' : '') +
-                (remarks ? '<p style="margin: 4px 0;"><strong>Remarks:</strong> ' + remarks + '</p>' : '') +
-                '<hr style="margin: 16px 0;">' +
-                '<p style="font-size: 12px; color: #666; text-align: center;">' + companyName + '</p>' +
-                '</div></body></html>');
-            win.document.close();
-            win.print();
-        }
-
-        function savePayment() {
-            if (!currentPaymentData) return;
-            
-            const amount = parseFloat(document.getElementById('paymentAmount').value);
-            const mode = document.getElementById('paymentMode').value;
-            const paidThrough = document.getElementById('paidThrough').value;
-            const remarks = document.getElementById('paymentRemarks').value;
-            
-            if (!amount || amount <= 0) {
-                alert('Please enter a valid amount');
-                return;
-            }
-            
-            if (!mode) {
-                alert('Please select payment mode');
-                return;
-            }
-            
-            if (amount > currentPaymentData.balance) {
-                alert('Payment amount cannot exceed balance');
-                return;
-            }
-            
-            // Update the transaction
-            if (currentPaymentData.type === 'purchase') {
-                const purchase = appData.purchases.find(p => p.id === currentPaymentData.id);
-                if (purchase) {
-                    purchase.paid += amount;
-                    purchase.balance -= amount;
-                }
-            } else if (currentPaymentData.type === 'sale') {
-                const sale = appData.sales.find(s => s.id === currentPaymentData.id);
-                if (sale) {
-                    sale.received += amount;
-                    sale.balance -= amount;
-                }
-            } else if (currentPaymentData.type === 'brokerage') {
-                // For brokerage, we just record the payment
-                // The brokerage entry itself doesn't have a balance field
-            } else if (currentPaymentData.type === 'ledger_payment' || currentPaymentData.type === 'ledger_receipt') {
-                // For ledger payments, we create a direct payment entry
-                // This will be reflected in the ledger when regenerated
-            }
-            
-            // Record payment
-            const paymentRecord = {
-                id: Date.now(),
-                type: currentPaymentData.type,
-                invoiceId: currentPaymentData.id || null,
-                invoice: currentPaymentData.invoice || 'Direct Payment',
-                party: currentPaymentData.party,
-                amount: amount,
-                mode: mode,
-                paidThrough: paidThrough,
-                remarks: remarks,
-                date: new Date().toISOString().split('T')[0]
-            };
-            
-            // Add entity information for ledger payments
-            if (currentPaymentData.type === 'ledger_payment' || currentPaymentData.type === 'ledger_receipt') {
-                paymentRecord.entityType = currentPaymentData.entityType;
-                paymentRecord.entityId = currentPaymentData.entityId;
-            }
-            
-            appData.payments.push(paymentRecord);
-            
-            saveData();
-            
-            // Update UI immediately before closing modal
-            updatePurchaseHistory();
-            updateSalesHistory();
-            updateDashboard();
-            
-            // If we're on the ledger page, regenerate it to show the new entry immediately
-            if (typeof generateLedger === 'function') {
-                generateLedger();
-            }
-            
-            // Close modal and show alert after UI updates
-            setTimeout(() => {
-                closePaymentModal();
-                alert('Payment recorded successfully!');
-            }, 50);
-        }
-
-        function deletePurchase(purchaseId) {
-            const purchase = appData.purchases.find(p => p.id === purchaseId);
-            if (!purchase) return;
-            
-            // Step 1: Block if any sale is explicitly linked to this purchase (process: Purchase first -> Sale of that purchase)
-            const salesLinkedToThisPurchase = (appData.sales || []).filter(function(sale) {
-                return sale.linkedPurchases && sale.linkedPurchases.some(function(lp) { return lp.purchaseId === purchaseId; });
-            });
-            if (salesLinkedToThisPurchase.length > 0) {
-                var invoiceList = salesLinkedToThisPurchase.map(function(s) { return s.invoice || ('Sale #' + s.id); }).join(', ');
-                alert('Cannot delete this purchase because it is linked to the following sale(s):\n\n' + invoiceList + '\n\nProcess: Purchase is first, then sale of that purchase. Remove this purchase from the linked list in those sales (Edit sale → Link to Purchase), or delete those sales first, then delete this purchase.');
-                return;
-            }
-            
-            // Check if any items from this purchase have been sold (extra safety for any sale using same items)
-            let soldItems = [];
-            if (purchase.items) {
-                purchase.items.forEach(purchaseItem => {
-                    // Check if this item has been sold
-                    const salesWithThisItem = appData.sales.filter(sale => {
-                        if (sale.items) {
-                            return sale.items.some(saleItem => saleItem.itemId == purchaseItem.itemId);
-                        }
-                        return sale.itemId == purchaseItem.itemId;
-                    });
-                    
-                    if (salesWithThisItem.length > 0) {
-                        soldItems.push({
-                            itemName: purchaseItem.itemName,
-                            sales: salesWithThisItem.map(s => s.invoice).join(', ')
-                        });
-                    }
-                });
-            }
-            
-            if (soldItems.length > 0) {
-                let message = 'Cannot delete this purchase because the following items have been sold:\n\n';
-                soldItems.forEach(item => {
-                    message += `${BULLET} ${item.itemName} (sold in: ${item.sales})\n`;
-                });
-                message += '\nPlease delete the related sales entries first, then try deleting this purchase.';
-                alert(message);
-                return;
-            }
-            
-            if (confirm('Are you sure you want to delete this purchase? This will also update inventory and remove all related transactions.')) {
-                // Reverse inventory changes (using gross weight)
-                if (purchase.items) {
-                    purchase.items.forEach(item => {
-                        if (appData.inventory[item.itemId]) {
-                            appData.inventory[item.itemId].quantity -= item.grossWeight;
-                            appData.inventory[item.itemId].totalCost -= item.total;
-                            
-                            // Remove inventory entry if quantity becomes 0 or negative
-                            if (appData.inventory[item.itemId].quantity <= 0) {
-                                delete appData.inventory[item.itemId];
-                            }
-                        }
-                    });
-                }
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Payment Mode</label>
+                    <select id="paymentMode" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="">Select Payment Mode</option>
+                        <option value="cash">Cash</option>
+                        <option value="upi">UPI</option>
+                        <option value="bank">Bank Transfer</option>
+                        <option value="cheque">Cheque</option>
+                    </select>
+                </div>
                 
-                // Remove related payments
-                appData.payments = appData.payments.filter(payment => 
-                    !(payment.type === 'purchase' && payment.invoiceId === purchaseId)
-                );
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Paid Through</label>
+                    <input type="text" id="paidThrough" placeholder="Person name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
                 
-                // Remove related brokerage entries
-                appData.brokerage = appData.brokerage.filter(entry => 
-                    entry.reference !== purchase.invoice
-                );
-                
-                // Remove the purchase
-                appData.purchases = appData.purchases.filter(p => p.id !== purchaseId);
-                
-                saveData();
-                updatePurchaseHistory();
-                updateBrokerageHistory();
-                updateDashboard();
-                refreshInventory();
-                alert('Purchase and all related transactions deleted successfully!');
-            }
-        }
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Remarks</label>
+                    <textarea id="paymentRemarks" placeholder="Add remarks (optional)" rows="3" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"></textarea>
+                </div>
+            </div>
+            
+            <div class="flex justify-end space-x-3 mt-6">
+                <button onclick="closePaymentModal()" class="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                <button onclick="savePayment()" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-green-700">Save Payment</button>
+                <button type="button" onclick="printPaymentVoucherFromModal()" class="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700">Print Voucher</button>
+            </div>
+        </div>
+    </div>
 
-        function deleteSale(saleId) {
-            if (confirm('Are you sure you want to delete this sale? This will also update inventory and remove all related transactions.')) {
-                const sale = appData.sales.find(s => s.id === saleId);
-                if (sale) {
-                    // Reverse inventory changes (using gross weight)
-                    if (sale.items) {
-                        sale.items.forEach(item => {
-                            if (!appData.inventory[item.itemId]) {
-                                appData.inventory[item.itemId] = { quantity: 0, totalCost: 0 };
-                            }
-                            appData.inventory[item.itemId].quantity += item.grossWeight;
-                            const prevQty = appData.inventory[item.itemId].quantity - item.grossWeight;
-                            const avgCost = prevQty > 0 ? appData.inventory[item.itemId].totalCost / prevQty : 0;
-                            appData.inventory[item.itemId].totalCost += (avgCost * item.grossWeight);
-                        });
-                    }
-                    
-                    // Remove related payments
-                    appData.payments = appData.payments.filter(payment => 
-                        !(payment.type === 'sale' && payment.invoiceId === saleId)
-                    );
-                    
-                    // Remove related deductions
-                    appData.deductions = appData.deductions.filter(deduction => 
-                        deduction.invoice !== sale.invoice
-                    );
-                    
-                    // Remove related brokerage entries
-                    appData.brokerage = appData.brokerage.filter(entry => 
-                        entry.reference !== sale.invoice
-                    );
-                }
-                
-                // Remove the sale
-                appData.sales = appData.sales.filter(s => s.id !== saleId);
-                
-                saveData();
-                updateSalesHistory();
-                updateDeductionsHistory();
-                updateBrokerageHistory();
-                updateDashboard();
-                populateDropdowns();
-                alert('Sale and all related transactions deleted successfully!');
-            }
-        }
+    <!-- Delete All (password protected) Modal -->
+    <div id="deleteAllModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 class="text-xl font-bold text-slate-800 mb-2" id="deleteAllModalTitle">Delete All</h3>
+            <p class="text-slate-600 text-sm mb-4" id="deleteAllModalMessage">This action cannot be undone. Enter password to confirm.</p>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                <input type="password" id="deleteAllPassword" placeholder="Enter password" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" onkeydown="if(event.key==='Enter') confirmDeleteAll()">
+                <p class="text-xs text-slate-500 mt-1">Default password: admin</p>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button type="button" onclick="closeDeleteAllModal()" class="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+                <button type="button" onclick="confirmDeleteAll()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Confirm Delete</button>
+            </div>
+        </div>
+    </div>
 
-        // Ledger payment functions
-        function payFromLedger() {
-            if (!window.currentLedgerData) return;
-            
-            const ledgerData = window.currentLedgerData;
-            currentPaymentData = {
-                type: 'ledger_payment',
-                entityType: ledgerData.type,
-                entityId: ledgerData.entityId,
-                party: ledgerData.entityName,
-                balance: ledgerData.balance
-            };
-            
-            document.getElementById('paymentModalTitle').textContent = `Pay ${ledgerData.entityName}`;
-            document.getElementById('balanceDisplay').textContent = `Balance: ${RU}${ledgerData.balance.toFixed(2)}`;
-            document.getElementById('paymentAmount').value = ledgerData.balance;
-            document.getElementById('paymentMode').value = '';
-            document.getElementById('paidThrough').value = '';
-            document.getElementById('paymentRemarks').value = '';
-            
-            document.getElementById('paymentModal').classList.remove('hidden');
-        }
+    <!-- Quick Add Supplier (from Purchase) Modal -->
+    <div id="quickAddSupplierModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold text-slate-800 mb-4">Add New Supplier</h3>
+            <div class="space-y-3">
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Name *</label><input type="text" id="quickSupplierName" placeholder="Supplier Name" class="w-full p-3 border border-slate-300 rounded-lg"></div>
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Mobile</label><input type="tel" id="quickSupplierMobile" placeholder="Mobile" class="w-full p-3 border border-slate-300 rounded-lg"></div>
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Address *</label><textarea id="quickSupplierAddress" placeholder="Address" rows="2" class="w-full p-3 border border-slate-300 rounded-lg"></textarea></div>
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Account / IFSC / GSTIN</label><input type="text" id="quickSupplierAccount" placeholder="Account" class="w-full p-3 border border-slate-300 rounded-lg"><input type="text" id="quickSupplierIFSC" placeholder="IFSC" class="w-full p-3 border border-slate-300 rounded-lg mt-1"><input type="text" id="quickSupplierGSTIN" placeholder="GSTIN (optional)" class="w-full p-3 border border-slate-300 rounded-lg mt-1"></div>
+            </div>
+            <div class="flex justify-end gap-3 mt-4">
+                <button type="button" onclick="closeQuickAddSupplierModal()" class="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+                <button type="button" onclick="saveQuickAddSupplier()" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-green-700">Save to Masters</button>
+            </div>
+        </div>
+    </div>
 
-        function receiveFromLedger() {
-            if (!window.currentLedgerData) return;
-            
-            const ledgerData = window.currentLedgerData;
-            currentPaymentData = {
-                type: 'ledger_receipt',
-                entityType: ledgerData.type,
-                entityId: ledgerData.entityId,
-                party: ledgerData.entityName,
-                balance: ledgerData.balance
-            };
-            
-            document.getElementById('paymentModalTitle').textContent = `Receive from ${ledgerData.entityName}`;
-            document.getElementById('balanceDisplay').textContent = `Balance: ${RU}${ledgerData.balance.toFixed(2)}`;
-            document.getElementById('paymentAmount').value = ledgerData.balance;
-            document.getElementById('paymentMode').value = '';
-            document.getElementById('paidThrough').value = '';
-            document.getElementById('paymentRemarks').value = '';
-            
-            document.getElementById('paymentModal').classList.remove('hidden');
-        }
+    <!-- Quick Add Customer (from Sale) Modal -->
+    <div id="quickAddCustomerModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold text-slate-800 mb-4">Add New Customer</h3>
+            <div class="space-y-3">
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Name *</label><input type="text" id="quickCustomerName" placeholder="Customer Name" class="w-full p-3 border border-slate-300 rounded-lg"></div>
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Mobile</label><input type="tel" id="quickCustomerMobile" placeholder="Mobile" class="w-full p-3 border border-slate-300 rounded-lg"></div>
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Address *</label><textarea id="quickCustomerAddress" placeholder="Address" rows="2" class="w-full p-3 border border-slate-300 rounded-lg"></textarea></div>
+                <div><label class="block text-sm font-medium text-slate-700 mb-1">Account / GSTIN</label><input type="text" id="quickCustomerAccount" placeholder="Account" class="w-full p-3 border border-slate-300 rounded-lg"><input type="text" id="quickCustomerGSTIN" placeholder="GSTIN (optional)" class="w-full p-3 border border-slate-300 rounded-lg mt-1"></div>
+            </div>
+            <div class="flex justify-end gap-3 mt-4">
+                <button type="button" onclick="closeQuickAddCustomerModal()" class="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Cancel</button>
+                <button type="button" onclick="saveQuickAddCustomer()" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-green-700">Save to Masters</button>
+            </div>
+        </div>
+    </div>
 
-function exportLedgerStatement() {
-            if (!window.currentLedgerData) {
-                alert('Please generate a ledger first.');
-                return;
-            }
-            var ledgerData = window.currentLedgerData;
-            var tbody = document.getElementById('ledgerEntries');
-            if (!tbody) {
-                alert('Ledger table not found. Please generate the ledger again.');
-                return;
-            }
-            var rows = tbody.querySelectorAll('tr');
-            
-            var csv = '\uFEFFLedger Statement\n';
-            csv += 'Generated on,' + new Date().toLocaleDateString() + '\n';
-            csv += 'Entity Type,' + (ledgerData.type ? ledgerData.type.charAt(0).toUpperCase() + ledgerData.type.slice(1) : '') + '\n';
-            csv += 'Entity Name,' + (ledgerData.entityName || '') + '\n';
-            csv += 'Current Balance,' + (ledgerData.balance != null ? ledgerData.balance.toFixed(2) : '0') + '\n\n';
-            csv += 'Date,Description,Invoice,Debit,Credit,Balance\n';
-            for (var r = 0; r < rows.length; r++) {
-                var cols = rows[r].querySelectorAll('td');
-                if (cols.length >= 6) {
-                    var rowData = [
-                        (cols[0].textContent || '').trim(),
-                        (cols[1].textContent || '').trim(),
-                        (cols[2].textContent || '').trim(),
-                        (cols[3].textContent || '').trim().replace(RU, '').replace(/,/g, ''),
-                        (cols[4].textContent || '').trim().replace(RU, '').replace(/,/g, ''),
-                        (cols[5].textContent || '').trim().replace(RU, '').replace(/,/g, '')
-                    ].join(',');
-                    csv += rowData + '\n';
-                }
-            }
-            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-            var url = window.URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = 'Ledger_' + (ledgerData.entityName || 'export').replace(/[^a-zA-Z0-9]/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.csv';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-        }
+    </div>
+    <!-- End of main-content-area -->
+</div>
+<!-- End of main-wrapper -->
+</div>
+<!-- End of mainAppContent -->
 
-        // Payment Tracking page: get all payment rows (from appData.payments or derived from purchases/sales)
-        function getPaymentsListForTracking() {
-            var payments = appData.payments || [];
-            if (payments.length > 0) return payments.slice();
-            // Fallback: derive from purchase paid amounts and sale received amounts (for older data or when no central payments)
-            var derived = [];
-            (appData.purchases || []).forEach(function(p) {
-                var paid = parseFloat(p.paid) || 0;
-                if (paid > 0) {
-                    derived.push({
-                        type: 'purchase',
-                        date: p.date || '',
-                        party: p.supplierName || '-',
-                        invoice: p.invoice || '-',
-                        amount: paid,
-                        mode: '-',
-                        remarks: 'From purchase record'
-                    });
-                }
-            });
-            (appData.sales || []).forEach(function(s) {
-                var received = parseFloat(s.received) || 0;
-                if (received > 0) {
-                    derived.push({
-                        type: 'sale',
-                        date: s.date || '',
-                        party: s.customerName || '-',
-                        invoice: s.invoice || '-',
-                        amount: received,
-                        mode: '-',
-                        remarks: 'From sale record'
-                    });
-                }
-            });
-            return derived;
-        }
-        function loadPaymentsTracking() {
-            var typeEl = document.getElementById('paymentsFilterType');
-            var fromEl = document.getElementById('paymentsDateFrom');
-            var toEl = document.getElementById('paymentsDateTo');
-            var tbody = document.getElementById('paymentsTableBody');
-            var summaryEl = document.getElementById('paymentsSummary');
-            if (!tbody) return;
-            // Outstanding payables & receivables (same logic as dashboard)
-            var totalPurchases = (appData.purchases || []).reduce(function(s, p) { return s + (p.grandTotal || p.total || 0); }, 0);
-            var openingPayables = (appData.openingBalances || []).filter(function(ob) { return ob.type === 'payable'; }).reduce(function(s, ob) { return s + (ob.amount || 0); }, 0);
-            var supplierPayments = (appData.payments || []).filter(function(pm) { return pm.type === 'purchase' || (pm.type === 'ledger_payment' && pm.entityType === 'supplier'); }).reduce(function(s, pm) { return s + (pm.amount || 0); }, 0);
-            var netPayables = Math.max(0, totalPurchases + openingPayables - supplierPayments);
-            var totalSales = (appData.sales || []).reduce(function(s, sale) { return s + (sale.grandTotal || sale.total || 0); }, 0);
-            var openingReceivables = (appData.openingBalances || []).filter(function(ob) { return ob.type === 'receivable'; }).reduce(function(s, ob) { return s + (ob.amount || 0); }, 0);
-            var totalDeductions = (appData.deductions || []).reduce(function(s, d) { return s + (d.amount || 0); }, 0);
-            var customerPayments = (appData.payments || []).filter(function(pm) { return pm.type === 'sale' || (pm.type === 'ledger_receipt' && pm.entityType === 'customer'); }).reduce(function(s, pm) { return s + (pm.amount || 0); }, 0);
-            var netReceivables = Math.max(0, totalSales + openingReceivables - totalDeductions - customerPayments);
-            var payablesEl = document.getElementById('paymentsOutstandingPayables');
-            var receivablesEl = document.getElementById('paymentsOutstandingReceivables');
-            if (payablesEl) payablesEl.textContent = RU + (netPayables || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
-            if (receivablesEl) receivablesEl.textContent = RU + (netReceivables || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
-            var typeFilter = typeEl ? typeEl.value : '';
-            var fromVal = fromEl ? fromEl.value : '';
-            var toVal = toEl ? toEl.value : '';
-            var searchEl = document.getElementById('paymentsSearch');
-            var searchTerm = (searchEl && searchEl.value) ? String(searchEl.value).trim().toLowerCase() : '';
-            var list = getPaymentsListForTracking().sort(function(a, b) {
-                var dA = (a.date || '').replace(/-/g, '');
-                var dB = (b.date || '').replace(/-/g, '');
-                return dB.localeCompare(dA);
-            });
-            if (typeFilter === 'purchase_payments') list = list.filter(function(p) { return p.type === 'purchase' || (p.type === 'ledger_payment' && p.entityType === 'supplier'); });
-            if (typeFilter === 'sales_payments') list = list.filter(function(p) { return p.type === 'sale' || (p.type === 'ledger_receipt' && p.entityType === 'customer'); });
-            if (fromVal) list = list.filter(function(p) { return (p.date || '') >= fromVal; });
-            if (toVal) list = list.filter(function(p) { return (p.date || '') <= toVal; });
-            if (searchTerm) {
-                list = list.filter(function(p) {
-                    var party = (p.party || '').toLowerCase();
-                    var invoice = (p.invoice || '').toLowerCase();
-                    var mode = (p.mode || '').toLowerCase();
-                    var remarks = (p.remarks != null ? String(p.remarks) : '').toLowerCase();
-                    var amountStr = (p.amount != null ? String(p.amount) : '');
-                    return party.indexOf(searchTerm) >= 0 || invoice.indexOf(searchTerm) >= 0 || mode.indexOf(searchTerm) >= 0 || remarks.indexOf(searchTerm) >= 0 || amountStr.indexOf(searchTerm) >= 0;
-                });
-            }
-            var totalAmount = list.reduce(function(s, p) { return s + (parseFloat(p.amount) || 0); }, 0);
-            var pageSize = paginationState.payments.pageSize;
-            var totalPages = Math.max(1, Math.ceil(list.length / pageSize));
-            if (paginationState.payments.currentPage > totalPages) {
-                paginationState.payments.currentPage = 1;
-            }
-            var currentPage = paginationState.payments.currentPage;
-            var pageList = getPaginatedData(list, currentPage, pageSize);
-            function getPaymentDisplayType(p) {
-                if (p.type === 'purchase' || (p.type === 'ledger_payment' && p.entityType === 'supplier')) return 'Purchase payment';
-                if (p.type === 'sale' || (p.type === 'ledger_receipt' && p.entityType === 'customer')) return 'Sales payment';
-                return p.type || 'Other';
-            }
-            if (list.length === 0) {
-                var msg = searchTerm ? 'No payments match your search. Try clearing the search or changing filters.' : 'No payments found. Try <strong>Type: All</strong> or leave date range empty to see all payments.';
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">' + msg + '</td></tr>';
-            } else {
-                tbody.innerHTML = pageList.map(function(p) {
-                    var amt = parseFloat(p.amount) || 0;
-                    var typeLabel = getPaymentDisplayType(p);
-                    return '<tr class="border-b border-slate-200 hover:bg-slate-50">' +
-                        '<td class="px-4 py-3">' + escapeHtml(p.date || '-') + '</td>' +
-                        '<td class="px-4 py-3">' + escapeHtml(typeLabel) + '</td>' +
-                        '<td class="px-4 py-3">' + escapeHtml(p.party || '-') + '</td>' +
-                        '<td class="px-4 py-3">' + escapeHtml(p.invoice || '-') + '</td>' +
-                        '<td class="px-4 py-3 text-right font-semibold">' + RU + (amt.toFixed(2)) + '</td>' +
-                        '<td class="px-4 py-3">' + escapeHtml(p.mode || '-') + '</td>' +
-                        '<td class="px-4 py-3 text-slate-600">' + escapeHtml((p.remarks || '-').toString().slice(0, 50)) + '</td>' +
-                        '</tr>';
-                }).join('');
-            }
-            if (summaryEl) summaryEl.textContent = 'Total: ' + list.length + ' payment(s) | Amount: ' + RU + totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 });
-            renderPagination('paymentsPagination', list.length, currentPage, pageSize, 'changePaymentsPage', 'changePaymentsPageSize');
-        }
-        function exportPaymentsToCsv() {
-            var typeEl = document.getElementById('paymentsFilterType');
-            var fromEl = document.getElementById('paymentsDateFrom');
-            var toEl = document.getElementById('paymentsDateTo');
-            var searchEl = document.getElementById('paymentsSearch');
-            var typeFilter = typeEl ? typeEl.value : '';
-            var fromVal = fromEl ? fromEl.value : '';
-            var toVal = toEl ? toEl.value : '';
-            var searchTerm = (searchEl && searchEl.value) ? String(searchEl.value).trim().toLowerCase() : '';
-            var list = getPaymentsListForTracking().sort(function(a, b) {
-                var dA = (a.date || '').replace(/-/g, '');
-                var dB = (b.date || '').replace(/-/g, '');
-                return dB.localeCompare(dA);
-            });
-            if (typeFilter === 'purchase_payments') list = list.filter(function(p) { return p.type === 'purchase' || (p.type === 'ledger_payment' && p.entityType === 'supplier'); });
-            if (typeFilter === 'sales_payments') list = list.filter(function(p) { return p.type === 'sale' || (p.type === 'ledger_receipt' && p.entityType === 'customer'); });
-            if (fromVal) list = list.filter(function(p) { return (p.date || '') >= fromVal; });
-            if (toVal) list = list.filter(function(p) { return (p.date || '') <= toVal; });
-            if (searchTerm) {
-                list = list.filter(function(p) {
-                    var party = (p.party || '').toLowerCase();
-                    var invoice = (p.invoice || '').toLowerCase();
-                    var mode = (p.mode || '').toLowerCase();
-                    var remarks = (p.remarks != null ? String(p.remarks) : '').toLowerCase();
-                    var amountStr = (p.amount != null ? String(p.amount) : '');
-                    return party.indexOf(searchTerm) >= 0 || invoice.indexOf(searchTerm) >= 0 || mode.indexOf(searchTerm) >= 0 || remarks.indexOf(searchTerm) >= 0 || amountStr.indexOf(searchTerm) >= 0;
-                });
-            }
-            function getPaymentDisplayTypeExport(p) {
-                if (p.type === 'purchase' || (p.type === 'ledger_payment' && p.entityType === 'supplier')) return 'Purchase payment';
-                if (p.type === 'sale' || (p.type === 'ledger_receipt' && p.entityType === 'customer')) return 'Sales payment';
-                return p.type || 'Other';
-            }
-            var csv = '\uFEFFDate,Type,Party,Invoice/Ref,Amount,Mode,Remarks\n';
-            list.forEach(function(p) {
-                var amt = (parseFloat(p.amount) || 0).toFixed(2);
-                var typeLabel = getPaymentDisplayTypeExport(p);
-                csv += '"' + (p.date || '') + '","' + typeLabel + '","' + (p.party || '').replace(/"/g, '""') + '","' + (p.invoice || '').replace(/"/g, '""') + '",' + amt + ',"' + (p.mode || '').replace(/"/g, '""') + '","' + (p.remarks || '').toString().replace(/"/g, '""').slice(0, 100) + '"\n';
-            });
-            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-            var url = window.URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = 'Payment_Tracking_' + new Date().toISOString().slice(0, 10) + '.csv';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-        }
+    <script src="js/ui.js" charset="UTF-8"></script>
+    <script src="js/app.js" charset="UTF-8"></script>
+    <script src="js/auth.js" charset="UTF-8"></script>
 
-        // Delete ledger entry function
-   function deleteLedgerEntry(entryId, entryType, sourceId) {
-            if (!confirm('Are you sure you want to delete this ledger entry? This will also delete the original transaction and all related data.')) {
-                return;
-            }
-            
-            try {
-                console.log('Deleting entry:', { entryId, entryType, sourceId });
-                
-                let deleted = false;
-                
-                if (entryType === 'purchase') {
-                    // Use the comprehensive delete function
-                    const purchase = appData.purchases.find(p => p.id === sourceId);
-                    if (purchase) {
-                        deletePurchase(sourceId);
-                        deleted = true;
-                        // Don't call saveData here - deletePurchase already does it
-                        return; // Exit early since deletePurchase handles everything
-                    }
-                } else if (entryType === 'sale') {
-                    // Use the comprehensive delete function
-                    const sale = appData.sales.find(s => s.id === sourceId);
-                    if (sale) {
-                        deleteSale(sourceId);
-                        deleted = true;
-                        // Don't call saveData here - deleteSale already does it
-                        return; // Exit early since deleteSale handles everything
-                    }
-                } else if (entryType === 'brokerage') {
-                    // Delete from brokerage array
-                    const originalLength = appData.brokerage.length;
-                    appData.brokerage = appData.brokerage.filter(b => b.id !== sourceId);
-                    deleted = appData.brokerage.length !== originalLength;
-                } else if (entryType === 'deduction') {
-                    // Use the comprehensive delete function
-                    deleteDeduction(sourceId);
-                    deleted = true;
-                    // Don't call saveData here - deleteDeduction already does it
-                    return; // Exit early since deleteDeduction handles everything
-                } else if (entryType === 'adjustment') {
-                    // Delete adjustment entry
-                    if (appData.adjustments) {
-                        const originalLength = appData.adjustments.length;
-                        appData.adjustments = appData.adjustments.filter(adj => adj.id !== sourceId);
-                        deleted = appData.adjustments.length !== originalLength;
-                    }
-                } else if (entryType === 'payment') {
-                    // Handle direct ledger payments/receipts
-                    // First, find the payment and reverse it from purchase/sale if applicable
-                    const payment = appData.payments.find(p => p.id === sourceId);
-                    if (payment) {
-                        // If this payment was linked to a purchase or sale, reverse it
-                        if (payment.type === 'purchase' && payment.invoiceId) {
-                            const purchase = appData.purchases.find(p => p.id === payment.invoiceId);
-                            if (purchase) {
-                                purchase.paid = (purchase.paid || 0) - payment.amount;
-                                purchase.balance = (purchase.balance || 0) + payment.amount;
-                            }
-                        } else if (payment.type === 'sale' && payment.invoiceId) {
-                            const sale = appData.sales.find(s => s.id === payment.invoiceId);
-                            if (sale) {
-                                sale.received = (sale.received || 0) - payment.amount;
-                                sale.balance = (sale.balance || 0) + payment.amount;
-                            }
-                        }
-                    }
-                    
-                    const originalLength = appData.payments.length;
-                    appData.payments = appData.payments.filter(p => p.id !== sourceId);
-                    deleted = appData.payments.length !== originalLength;
-                } else if (entryType === 'opening') {
-                    // Handle opening balance deletions
-                    deleteOpeningBalance(sourceId);
-                    deleted = true;
-                    // Don't call saveData here - deleteOpeningBalance already does it
-                    return; // Exit early since deleteOpeningBalance handles everything
-                }
-                
-                if (deleted) {
-                    saveData();
-                    generateLedger(); // Refresh the ledger display
-                    updatePurchaseHistory(); // Update purchase history to reflect balance changes
-                    updateSalesHistory(); // Update sales history to reflect balance changes
-                    updateDashboard();
-                    alert('Entry deleted successfully!');
-                } else {
-                    alert('Entry not found or could not be deleted.');
-                }
-            } catch (error) {
-                alert('Error deleting entry. Please try again.');
-                console.error('Delete error:', error);
-            }
-        }
-      
-        // Edit deduction function
-        function editDeduction(deductionId) {
-            const deduction = appData.deductions.find(d => d.id === deductionId);
-            if (!deduction) return;
-            
-            // Fill the form with existing data
-            document.getElementById('deductionDate').value = deduction.date;
-            document.getElementById('deductionCustomer').value = deduction.customerId;
-            document.getElementById('deductionInvoice').value = deduction.invoice;
-            document.getElementById('deductionAmount').value = deduction.amount;
-            document.getElementById('deductionReason').value = deduction.reason;
-            document.getElementById('adjustmentType').value = deduction.adjustmentType || '';
-            
-            // Show adjustment fields if needed
-            if (deduction.adjustmentType === 'Supplier' || deduction.adjustmentType === 'Broker') {
-                showAdjustmentFields();
-                setTimeout(() => {
-                    document.getElementById('adjustmentEntity').value = deduction.adjustmentEntityId || '';
-                    document.getElementById('adjustmentAmount').value = deduction.adjustmentAmount || '';
-                }, 100);
-            } else if (deduction.adjustmentType === 'Split' && deduction.splitAdjustments) {
-                showAdjustmentFields();
-                setTimeout(() => {
-                    document.getElementById('splitBroker').value = deduction.splitAdjustments.broker.id || '';
-                    document.getElementById('splitBrokerAmount').value = deduction.splitAdjustments.broker.amount || '';
-                    document.getElementById('splitSupplier').value = deduction.splitAdjustments.supplier.id || '';
-                    document.getElementById('splitSupplierAmount').value = deduction.splitAdjustments.supplier.amount || '';
-                }, 100);
-            }
-            
-            // Remove the old deduction and related adjustments
-            appData.deductions = appData.deductions.filter(d => d.id !== deductionId);
-            if (appData.adjustments) {
-                appData.adjustments = appData.adjustments.filter(adj => adj.deductionId !== deductionId);
-            }
-            
-            updateDeductionsHistory();
-            showPage('deductions');
-            
-            alert('Deduction loaded for editing. Make changes and save to update.');
-        }
 
-        // Delete deduction function
-        function deleteDeduction(deductionId) {
-            if (confirm('Are you sure you want to delete this deduction entry?')) {
-                // Remove related adjustments first
-                if (appData.adjustments) {
-                    appData.adjustments = appData.adjustments.filter(adj => adj.deductionId !== deductionId);
-                }
-                
-                // Remove the deduction
-                appData.deductions = appData.deductions.filter(d => d.id !== deductionId);
-                
-                saveData();
-                updateDeductionsHistory();
-                updateDashboard();
-                alert('Deduction deleted successfully!');
-            }
-        }
-
-        // Opening Balance Functions
-        function populateOpeningBalanceDropdowns() {
-            const receivableCustomer = document.getElementById('receivableCustomer');
-            const payableSupplier = document.getElementById('payableSupplier');
-            
-            if (receivableCustomer) {
-                receivableCustomer.innerHTML = '<option value="">Select Customer</option>';
-                (appData.customers || []).filter(function(c){ return c.active !== false; }).forEach(customer => {
-                    receivableCustomer.innerHTML += `<option value="${customer.id}">${customer.name}</option>`;
-                });
-            }
-            
-            if (payableSupplier) {
-                payableSupplier.innerHTML = '<option value="">Select Supplier</option>';
-                (appData.suppliers || []).filter(function(s){ return s.active !== false; }).forEach(supplier => {
-                    payableSupplier.innerHTML += `<option value="${supplier.id}">${supplier.name}</option>`;
-                });
-            }
-        }
-
-        function updateOpeningBalanceHistory() {
-            const tbody = document.getElementById('openingBalanceHistory');
-            if (!tbody) return;
-            
-            tbody.innerHTML = '';
-            
-            // Ensure openingBalances array exists
-            if (!appData.openingBalances) {
-                appData.openingBalances = [];
-            }
-            
-            if (!Array.isArray(appData.openingBalances) || appData.openingBalances.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="7" class="px-6 py-8 text-center text-slate-500">
-                            No opening balance entries yet. Add your first entry above.
-                        </td>
-                    </tr>
-                `;
-                const paginationContainer = document.getElementById('openingBalancePagination');
-                if (paginationContainer) paginationContainer.innerHTML = '';
-                return;
-            }
-            
-            // Sort by date (newest first)
-            const sortedBalances = [...appData.openingBalances].sort((a, b) => new Date(b.date) - new Date(a.date));
-            
-            // Get paginated data
-            const { currentPage, pageSize } = paginationState.openingBalance;
-            const paginatedBalances = getPaginatedData(sortedBalances, currentPage, pageSize);
-            
-            paginatedBalances.forEach(entry => {
-                const row = document.createElement('tr');
-                row.className = 'hover:bg-gray-50';
-                
-                const typeClass = entry.type === 'receivable' ? 'text-green-600 bg-green-100' : 'text-red-600 bg-red-100';
-                const typeText = entry.type === 'receivable' ? 'Receivable' : 'Payable';
-                
-                row.innerHTML = `
-                    <td class="px-6 py-4 text-sm text-slate-700">${entry.date}</td>
-                    <td class="px-6 py-4">
-                        <span class="px-3 py-1 rounded-full text-xs font-medium ${typeClass}">${typeText}</span>
-                    </td>
-                    <td class="px-6 py-4 text-sm text-slate-700">${entry.entityName}</td>
-                    <td class="px-6 py-4 text-sm font-semibold text-gray-900">${RU}${entry.amount.toFixed(2)}</td>
-                    <td class="px-6 py-4 text-sm text-slate-600">${entry.reference || '-'}</td>
-                    <td class="px-6 py-4 text-sm text-slate-600">${entry.description || '-'}</td>
-                    <td class="px-6 py-4">
-                        <button onclick="deleteOpeningBalance('${entry.id}')" class="action-btn action-delete" title="Delete">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd"/></svg>
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-            
-            // Render pagination
-            renderPagination(
-                'openingBalancePagination',
-                appData.openingBalances.length,
-                currentPage,
-                pageSize,
-                'changeOpeningBalancePage',
-                'changeOpeningBalancePageSize'
-            );
-        }
-
-        // Handle receivable form submission
-        document.addEventListener('DOMContentLoaded', function() {
-            const receivableForm = document.getElementById('receivableForm');
-            if (receivableForm) {
-                receivableForm.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    
-                    const date = document.getElementById('receivableDate').value;
-                    const customerId = document.getElementById('receivableCustomer').value;
-                    const amount = parseFloat(document.getElementById('receivableAmount').value);
-                    const reference = document.getElementById('receivableReference').value;
-                    const description = document.getElementById('receivableDescription').value;
-                    
-                    if (!date || !customerId || !amount || amount <= 0) {
-                        alert('Please fill all required fields with valid values');
-                        return;
-                    }
-                    
-                    const customer = appData.customers.find(c => c.id == customerId);
-                    if (!customer) {
-                        alert('Customer not found');
-                        return;
-                    }
-                    
-                    // Create opening balance entry
-                    const openingBalance = {
-                        id: 'OB_' + Date.now(),
-                        type: 'receivable',
-                        date: date,
-                        entityType: 'customer',
-                        entityId: customerId,
-                        entityName: customer.name,
-                        amount: amount,
-                        reference: reference,
-                        description: description,
-                        createdAt: new Date().toISOString()
-                    };
-                    
-                    // Initialize array if it doesn't exist
-                    if (!appData.openingBalances) {
-                        appData.openingBalances = [];
-                    }
-                    
-                    appData.openingBalances.push(openingBalance);
-                    
-                    // Opening balance is now tracked in openingBalances array
-                    // It will appear in ledger via the generateLedger function
-                    // No need to add to payments array
-                    
-                    saveData();
-                    updateOpeningBalanceHistory();
-                    updateDashboard();
-                    
-                    // Regenerate ledger if on ledger page to show new entry immediately
-                    if (typeof generateLedger === 'function') {
-                        generateLedger();
-                    }
-                    
-                    // Clear form
-                    receivableForm.reset();
-                    document.getElementById('receivableDate').value = new Date().toISOString().split('T')[0];
-                    
-                    alert('Opening receivable balance added successfully!');
-                });
-            }
-            
-            // Handle payable form submission
-            const payableForm = document.getElementById('payableForm');
-            if (payableForm) {
-                payableForm.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    
-                    const date = document.getElementById('payableDate').value;
-                    const supplierId = document.getElementById('payableSupplier').value;
-                    const amount = parseFloat(document.getElementById('payableAmount').value);
-                    const reference = document.getElementById('payableReference').value;
-                    const description = document.getElementById('payableDescription').value;
-                    
-                    if (!date || !supplierId || !amount || amount <= 0) {
-                        alert('Please fill all required fields with valid values');
-                        return;
-                    }
-                    
-                    const supplier = appData.suppliers.find(s => s.id == supplierId);
-                    if (!supplier) {
-                        alert('Supplier not found');
-                        return;
-                    }
-                    
-                    // Create opening balance entry
-                    const openingBalance = {
-                        id: 'OB_' + Date.now(),
-                        type: 'payable',
-                        date: date,
-                        entityType: 'supplier',
-                        entityId: supplierId,
-                        entityName: supplier.name,
-                        amount: amount,
-                        reference: reference,
-                        description: description,
-                        createdAt: new Date().toISOString()
-                    };
-                    
-                    // Initialize array if it doesn't exist
-                    if (!appData.openingBalances) {
-                        appData.openingBalances = [];
-                    }
-                    
-                    appData.openingBalances.push(openingBalance);
-                    
-                    // Opening balance is now tracked in openingBalances array
-                    // It will appear in ledger via the generateLedger function
-                    // No need to add to payments array
-                    
-                    saveData();
-                    updateOpeningBalanceHistory();
-                    updateDashboard();
-                    
-                    // Regenerate ledger if on ledger page to show new entry immediately
-                    if (typeof generateLedger === 'function') {
-                        generateLedger();
-                    }
-                    
-                    // Clear form
-                    payableForm.reset();
-                    document.getElementById('payableDate').value = new Date().toISOString().split('T')[0];
-                    
-                    alert('Opening payable balance added successfully!');
-                });
-            }
-        });
-
-        function deleteOpeningBalance(id) {
-            if (!confirm('Are you sure you want to delete this opening balance entry?')) {
-                return;
-            }
-            
-            // Ensure openingBalances array exists
-            if (!appData.openingBalances) {
-                appData.openingBalances = [];
-                alert('No opening balances to delete');
-                return;
-            }
-            
-            const entry = appData.openingBalances.find(ob => ob.id === id);
-            if (!entry) {
-                alert('Entry not found');
-                return;
-            }
-            
-            console.log('Deleting opening balance:', entry);
-            console.log('Before delete - count:', appData.openingBalances.length);
-            
-            // Remove from openingBalances
-            appData.openingBalances = appData.openingBalances.filter(ob => ob.id !== id);
-            
-            console.log('After delete - count:', appData.openingBalances.length);
-            
-            // Force save to Firebase immediately
-            SHARED_DOC_REF.set({
-                data: appData,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }).then(() => {
-                console.log('âœ… Opening balance deleted and saved to Firebase');
-                updateOpeningBalanceHistory();
-                updateDashboard();
-                alert('Opening balance entry deleted successfully!');
-            }).catch((error) => {
-                console.error('âŒ Error saving after delete:', error);
-                alert('Deleted from screen but there was an error saving. Please click Save button.');
-                updateOpeningBalanceHistory();
-                updateDashboard();
-            });
-        }
-
-        // Initialize app
-        document.addEventListener('DOMContentLoaded', function() {
-            loadData();
-            showPage('home');
-            updateItemsList();
-            updateSuppliersList();
-            updateCustomersList();
-            updateBrokersList();
-            updatePurchaseHistory();
-            updateSalesHistory();
-            updateBrokerageHistory();
-            updateDeductionsHistory();
-            populateOpeningBalanceDropdowns();
-            updateOpeningBalanceHistory();
-            
-            // Set default dates to today
-            const today = new Date().toISOString().split('T')[0];
-            const dateInputs = ['purchaseDate', 'saleDate', 'brokerageDate', 'deductionDate', 'receivableDate', 'payableDate'];
-            dateInputs.forEach(id => {
-                const element = document.getElementById(id);
-                if (element) element.value = today;
-            });
-
-            // Add event listeners for real-time calculations
-            const purchaseInputs = ['purchaseQuantity', 'purchaseBags', 'purchaseDiscountQty', 'purchaseRate', 'purchaseAmount', 'purchaseHammali', 'purchaseAdvance', 'purchaseOthersAmount'];
-            purchaseInputs.forEach(id => {
-                const element = document.getElementById(id);
-                if (element) {
-                    element.addEventListener('input', function() {
-                        if (id === 'purchaseHammali' || id === 'purchaseAdvance' || id === 'purchaseOthersAmount') {
-                            calculatePurchaseTotals();
-                        } else {
-                            calculatePurchaseItemTotal();
-                        }
-                    });
-                }
-            });
-            
-            // Add event listener for Others operation change
-            const purchaseOthersOperation = document.getElementById('purchaseOthersOperation');
-            if (purchaseOthersOperation) {
-                purchaseOthersOperation.addEventListener('change', calculatePurchaseTotals);
-            }
-
-            const saleInputs = ['saleQuantity', 'saleBags', 'saleDiscountQty', 'saleRate', 'saleHammali', 'saleAdvance', 'saleOthersAmount'];
-            saleInputs.forEach(id => {
-                const element = document.getElementById(id);
-                if (element) {
-                    element.addEventListener('input', function() {
-                        if (id === 'saleHammali' || id === 'saleAdvance' || id === 'saleOthersAmount') {
-                            calculateSaleTotals();
-                        } else {
-                            calculateSaleItemTotal();
-                        }
-                    });
-                }
-            });
-            
-            // Add event listener for Others operation change
-            const saleOthersOperation = document.getElementById('saleOthersOperation');
-            if (saleOthersOperation) {
-                saleOthersOperation.addEventListener('change', calculateSaleTotals);
-            }
-        });
+</body>
+</html>
