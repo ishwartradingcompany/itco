@@ -1649,26 +1649,31 @@ function deleteAllMasters() {
             tbody.innerHTML = '';
             
             if (currentPurchaseItems.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
                 return;
             }
+            
+            const truckNo = (document.getElementById('purchaseTruck') && document.getElementById('purchaseTruck').value) ? document.getElementById('purchaseTruck').value.trim() : '';
+            const lrNo = (document.getElementById('purchaseLRNumber') && document.getElementById('purchaseLRNumber').value) ? document.getElementById('purchaseLRNumber').value.trim() : '';
+            const discountVal = (gross, net) => (gross != null && net != null && !isNaN(gross) && !isNaN(net)) ? (gross - net) : '';
             
             currentPurchaseItems.forEach((item, index) => {
                 const row = document.createElement('tr');
                 row.className = 'border-b border-slate-200';
-                
-                // For coconut, show discount quantity instead of bags
-                const middleColumn = item.isCoconut 
-                    ? `<td class="px-4 py-3">${item.discountQty || 0}</td>` 
-                    : `<td class="px-4 py-3">${item.bags}</td>`;
+                const bagsDisplay = item.isCoconut ? (item.discountQty || 0) : (item.bags ?? '');
+                const discountDisplay = discountVal(item.grossWeight, item.netWeight);
                 
                 row.innerHTML = `
                     <td class="px-4 py-3">${item.itemName}</td>
+                    <td class="px-4 py-3">${index + 1}</td>
                     <td class="px-4 py-3">${item.grossWeight}</td>
-                    ${middleColumn}
+                    <td class="px-4 py-3">${bagsDisplay}</td>
+                    <td class="px-4 py-3">${discountDisplay}</td>
                     <td class="px-4 py-3">${item.netWeight}</td>
                     <td class="px-4 py-3">${RU}${item.rate}</td>
                     <td class="px-4 py-3">${RU}${item.total.toFixed(2)}</td>
+                    <td class="px-4 py-3">${truckNo || '—'}</td>
+                    <td class="px-4 py-3">${lrNo || '—'}</td>
                     <td class="px-4 py-3">
                         <button onclick="removeItemFromPurchase(${index})" class="text-red-500 hover:text-red-700 font-medium">Remove</button>
                     </td>
@@ -5939,20 +5944,23 @@ function onPnLFilterChange() {
             
             let itemsHtml = '';
             if (purchase.items) {
-                purchase.items.forEach(item => {
-                    // For coconut, show discount quantity instead of bags
-                    const middleColumn = item.isCoconut 
-                        ? `<td class="border px-2 py-1 text-center">${item.discountQty || 0}</td>` 
-                        : `<td class="border px-2 py-1 text-center">${item.bags}</td>`;
-                    
+                const truckNo = purchase.truck || '';
+                const lrNo = purchase.lrNumber || '';
+                purchase.items.forEach((item, index) => {
+                    const bagsDisplay = item.isCoconut ? (item.discountQty || 0) : (item.bags ?? '');
+                    const discountDisplay = (item.grossWeight != null && item.netWeight != null && !isNaN(item.grossWeight) && !isNaN(item.netWeight)) ? (item.grossWeight - item.netWeight) : '';
                     itemsHtml += `
                         <tr>
                             <td class="border px-2 py-1">${item.itemName}</td>
+                            <td class="border px-2 py-1 text-center">${index + 1}</td>
                             <td class="border px-2 py-1 text-center">${item.grossWeight}</td>
-                            ${middleColumn}
+                            <td class="border px-2 py-1 text-center">${bagsDisplay}</td>
+                            <td class="border px-2 py-1 text-center">${discountDisplay}</td>
                             <td class="border px-2 py-1 text-center">${item.netWeight}</td>
                             <td class="border px-2 py-1 text-right">${RU}${item.rate}</td>
                             <td class="border px-2 py-1 text-right">${RU}${item.total.toFixed(2)}</td>
+                            <td class="border px-2 py-1 text-center">${truckNo || '—'}</td>
+                            <td class="border px-2 py-1 text-center">${lrNo || '—'}</td>
                         </tr>
                     `;
                 });
@@ -6045,11 +6053,15 @@ function onPnLFilterChange() {
                         <thead>
                             <tr class="border">
                                 <th class="border px-2 py-1">Item</th>
+                                <th class="border px-2 py-1">Quantity</th>
                                 <th class="border px-2 py-1">Gross Weight</th>
-                                <th class="border px-2 py-1">Bags/Discount</th>
+                                <th class="border px-2 py-1">Bags</th>
+                                <th class="border px-2 py-1">Discount</th>
                                 <th class="border px-2 py-1">Net Weight</th>
                                 <th class="border px-2 py-1">Rate</th>
                                 <th class="border px-2 py-1">Amount</th>
+                                <th class="border px-2 py-1">Truck No</th>
+                                <th class="border px-2 py-1">LR No</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -6356,29 +6368,43 @@ function onPnLFilterChange() {
             // Build items table
             let itemsTable = '';
             if (purchase.items && purchase.items.length > 0) {
+                const truckNo = purchase.truck || '—';
+                const lrNo = purchase.lrNumber || '—';
                 itemsTable = `
                     <table class="w-full border border-slate-300 mt-4">
                         <thead>
                             <tr class="bg-slate-100">
                                 <th class="border border-slate-300 px-3 py-2 text-left text-sm">Item</th>
+                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Qty</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Gross Wt</th>
-                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Bags/Disc</th>
+                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Bags</th>
+                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Discount</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Net Wt</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Rate</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Amount</th>
+                                <th class="border border-slate-300 px-3 py-2 text-center text-sm">Truck No</th>
+                                <th class="border border-slate-300 px-3 py-2 text-center text-sm">LR No</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${purchase.items.map(item => `
+                            ${purchase.items.map((item, index) => {
+                                const bagsDisplay = item.isCoconut ? (item.discountQty || 0) : (item.bags ?? '');
+                                const discountDisplay = (item.grossWeight != null && item.netWeight != null && !isNaN(item.grossWeight) && !isNaN(item.netWeight)) ? (item.grossWeight - item.netWeight) : '';
+                                const unit = item.unit || '';
+                                return `
                                 <tr>
                                     <td class="border border-slate-300 px-3 py-2 text-sm">${item.itemName}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.grossWeight} ${item.unit}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.bags || item.discountQty || 0}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.netWeight} ${item.unit}</td>
+                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${index + 1}</td>
+                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.grossWeight} ${unit}</td>
+                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${bagsDisplay}</td>
+                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${discountDisplay}</td>
+                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.netWeight} ${unit}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${item.rate.toFixed(2)}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm font-semibold">${RU}${item.total.toFixed(2)}</td>
+                                    <td class="border border-slate-300 px-3 py-2 text-center text-sm">${truckNo}</td>
+                                    <td class="border border-slate-300 px-3 py-2 text-center text-sm">${lrNo}</td>
                                 </tr>
-                            `).join('')}
+                            `; }).join('')}
                         </tbody>
                     </table>
                 `;
