@@ -815,13 +815,18 @@
                         </div>
                         <div id="purchaseBagsContainer">
                             <label class="block text-sm font-medium text-slate-700 mb-2">Number of Bags</label>
-                            <input type="number" id="purchaseBags" placeholder="Number of Bags" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <input type="number" id="purchaseBags" placeholder="Number of Bags" oninput="document.getElementById('purchaseDiscount').value=this.value; calculatePurchaseItemTotal();" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                             <small class="text-slate-500">Bags weight will be deducted</small>
+                        </div>
+                        <div id="purchaseDiscountContainer">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Discount</label>
+                            <input type="number" id="purchaseDiscount" placeholder="Discount" value="0" step="any" oninput="calculatePurchaseItemTotal()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Deducted from gross to get net weight (flows from Bags; editable)</small>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-2">Net Weight</label>
-                            <input type="number" id="purchaseNetWeight" placeholder="Net Weight" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-gray-100">
-                            <small class="text-slate-500">Auto-calculated (Gross - Bags)</small>
+                            <input type="number" id="purchaseNetWeight" placeholder="Net Weight" step="any" oninput="recalcPurchaseItemTotalFromNetWeight()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Auto-calculated (Gross - Discount); you can edit</small>
                         </div>
                         <div id="purchaseDiscountQtyContainer" style="display: none;">
                             <label class="block text-sm font-medium text-slate-700 mb-2">Discount Quantity (For Invoice Only)</label>
@@ -1283,13 +1288,18 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-2">Number of Bags</label>
-                            <input type="number" id="saleBags" placeholder="Number of Bags" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <input type="number" id="saleBags" placeholder="Number of Bags" oninput="document.getElementById('saleDiscount').value=this.value; calculateSaleItemTotal();" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                             <small class="text-slate-500">Bags weight will be deducted</small>
                         </div>
                         <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Discount</label>
+                            <input type="number" id="saleDiscount" placeholder="Discount" value="0" step="any" oninput="calculateSaleItemTotal()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Deducted from gross to get net weight (flows from Bags; editable)</small>
+                        </div>
+                        <div>
                             <label class="block text-sm font-medium text-slate-700 mb-2">Net Weight</label>
-                            <input type="number" id="saleNetWeight" placeholder="Net Weight" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-gray-100">
-                            <small class="text-slate-500">Auto-calculated (Gross - Bags)</small>
+                            <input type="number" id="saleNetWeight" placeholder="Net Weight" step="any" oninput="recalcSaleItemTotalFromNetWeight()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Auto-calculated (Gross - Discount); you can edit</small>
                         </div>
                         <div id="saleDiscountQtyContainer" style="display: none;">
                             <label class="block text-sm font-medium text-slate-700 mb-2">Discount Quantity (For Invoice Only)</label>
