@@ -1785,6 +1785,7 @@ function deleteAllMasters() {
             const invoice = document.getElementById('purchaseInvoice').value;
             const supplierId = document.getElementById('purchaseSupplier').value;
             const truck = document.getElementById('purchaseTruck').value;
+            const lrNumber = (document.getElementById('purchaseLRNumber') && document.getElementById('purchaseLRNumber').value) ? document.getElementById('purchaseLRNumber').value.trim() : '';
             const hammali = parseFloat(document.getElementById('purchaseHammali').value) || 0;
             const advance = parseFloat(document.getElementById('purchaseAdvance').value) || 0;
             const othersEntries = getPurchaseOthersEntries();
@@ -1841,6 +1842,7 @@ function deleteAllMasters() {
                     existingPurchase.supplierId = supplierId;
                     existingPurchase.supplierName = supplier.name;
                     existingPurchase.truck = truck;
+                    existingPurchase.lrNumber = lrNumber;
                     existingPurchase.items = [...currentPurchaseItems];
                     existingPurchase.itemsTotal = itemsTotal;
                     existingPurchase.hammali = hammali;
@@ -1869,6 +1871,7 @@ function deleteAllMasters() {
                     supplierId: supplierId,
                     supplierName: supplier.name,
                     truck: truck,
+                    lrNumber: lrNumber,
                     items: [...currentPurchaseItems],
                     itemsTotal: itemsTotal,
                     hammali: hammali,
@@ -1922,6 +1925,8 @@ function deleteAllMasters() {
             var psd = document.getElementById('purchaseSupplierDropdown');
             if (psd) psd.classList.add('hidden');
             document.getElementById('purchaseTruck').value = '';
+            var plr = document.getElementById('purchaseLRNumber');
+            if (plr) plr.value = '';
             document.getElementById('purchaseHammali').value = '';
             document.getElementById('purchaseAdvance').value = '';
             var pdEl = document.getElementById('purchaseDiscount');
@@ -6024,7 +6029,8 @@ function onPnLFilterChange() {
                             <div>
                                 <strong>Invoice No:</strong> ${purchase.invoice}<br>
                                 <strong>Date:</strong> ${purchase.date}<br>
-                                <strong>Truck No:</strong> ${purchase.truck || 'N/A'}
+                                <strong>Truck No:</strong> ${purchase.truck || 'N/A'}<br>
+                                <strong>LR Number:</strong> ${purchase.lrNumber || 'N/A'}
                             </div>
                             <div>
                                 <strong>Supplier:</strong> ${purchase.supplierName}<br>
@@ -6427,6 +6433,10 @@ function onPnLFilterChange() {
                             <p class="font-semibold text-slate-900">${purchase.truck || 'N/A'}</p>
                         </div>
                         <div>
+                            <p class="text-xs text-slate-500 uppercase tracking-wide">LR Number</p>
+                            <p class="font-semibold text-slate-900">${purchase.lrNumber || 'N/A'}</p>
+                        </div>
+                        <div>
                             <p class="text-xs text-slate-500 uppercase tracking-wide">Invoice No</p>
                             <p class="font-semibold text-slate-900">${purchase.invoice}</p>
                         </div>
@@ -6485,6 +6495,8 @@ function onPnLFilterChange() {
             document.getElementById('purchaseSupplier').value = purchase.supplierId;
             syncPurchaseSupplierDisplay();
             document.getElementById('purchaseTruck').value = purchase.truck || '';
+            var plrEl = document.getElementById('purchaseLRNumber');
+            if (plrEl) plrEl.value = purchase.lrNumber || '';
             document.getElementById('purchaseHammali').value = purchase.hammali || 0;
             document.getElementById('purchaseAdvance').value = purchase.advance || 0;
             
@@ -6522,6 +6534,8 @@ function onPnLFilterChange() {
             var psd = document.getElementById('purchaseSupplierDropdown');
             if (psd) psd.classList.add('hidden');
             document.getElementById('purchaseTruck').value = '';
+            var plr = document.getElementById('purchaseLRNumber');
+            if (plr) plr.value = '';
             document.getElementById('purchaseHammali').value = '';
             document.getElementById('purchaseAdvance').value = '';
             var pdEl = document.getElementById('purchaseDiscount');
