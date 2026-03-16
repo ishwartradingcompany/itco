@@ -658,24 +658,26 @@ function deleteAllMasters() {
         function generatePurchaseInvoiceNumber() {
             const fy = getFinancialYear();
             const prefix = `PUR-${fy}-`;
-            const existingNumbers = appData.purchases
+            const existingNumbers = new Set(appData.purchases
                 .map(p => p.invoice)
                 .filter(inv => inv && inv.startsWith(prefix))
-                .map(inv => parseInt(inv.replace(prefix, '')) || 0);
-            const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
-            const nextNumber = maxNumber + 1;
+                .map(inv => parseInt(inv.replace(prefix, ''), 10) || 0)
+                .filter(n => n >= 1));
+            let nextNumber = 1;
+            while (existingNumbers.has(nextNumber)) nextNumber++;
             return prefix + String(nextNumber).padStart(3, '0');
         }
         
         function generateSaleInvoiceNumber() {
             const fy = getFinancialYear();
             const prefix = `SALE-${fy}-`;
-            const existingNumbers = appData.sales
+            const existingNumbers = new Set(appData.sales
                 .map(s => s.invoice)
                 .filter(inv => inv && inv.startsWith(prefix))
-                .map(inv => parseInt(inv.replace(prefix, '')) || 0);
-            const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
-            const nextNumber = maxNumber + 1;
+                .map(inv => parseInt(inv.replace(prefix, ''), 10) || 0)
+                .filter(n => n >= 1));
+            let nextNumber = 1;
+            while (existingNumbers.has(nextNumber)) nextNumber++;
             return prefix + String(nextNumber).padStart(3, '0');
         }
         
@@ -1649,7 +1651,7 @@ function deleteAllMasters() {
             tbody.innerHTML = '';
             
             if (currentPurchaseItems.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
                 return;
             }
             
@@ -1665,7 +1667,6 @@ function deleteAllMasters() {
                 
                 row.innerHTML = `
                     <td class="px-4 py-3">${item.itemName}</td>
-                    <td class="px-4 py-3">${index + 1}</td>
                     <td class="px-4 py-3">${item.grossWeight}</td>
                     <td class="px-4 py-3">${bagsDisplay}</td>
                     <td class="px-4 py-3">${discountDisplay}</td>
@@ -5946,21 +5947,20 @@ function onPnLFilterChange() {
             if (purchase.items) {
                 const truckNo = purchase.truck || '';
                 const lrNo = purchase.lrNumber || '';
-                purchase.items.forEach((item, index) => {
+                purchase.items.forEach((item) => {
                     const bagsDisplay = item.isCoconut ? (item.discountQty || 0) : (item.bags ?? '');
                     const discountDisplay = (item.grossWeight != null && item.netWeight != null && !isNaN(item.grossWeight) && !isNaN(item.netWeight)) ? (item.grossWeight - item.netWeight) : '';
                     itemsHtml += `
                         <tr>
-                            <td class="border px-2 py-1">${item.itemName}</td>
-                            <td class="border px-2 py-1 text-center">${index + 1}</td>
-                            <td class="border px-2 py-1 text-center">${item.grossWeight}</td>
-                            <td class="border px-2 py-1 text-center">${bagsDisplay}</td>
-                            <td class="border px-2 py-1 text-center">${discountDisplay}</td>
-                            <td class="border px-2 py-1 text-center">${item.netWeight}</td>
-                            <td class="border px-2 py-1 text-right">${RU}${item.rate}</td>
-                            <td class="border px-2 py-1 text-right">${RU}${item.total.toFixed(2)}</td>
-                            <td class="border px-2 py-1 text-center">${truckNo || '—'}</td>
-                            <td class="border px-2 py-1 text-center">${lrNo || '—'}</td>
+                            <td class="inv-td">${item.itemName}</td>
+                            <td class="inv-td text-center">${item.grossWeight}</td>
+                            <td class="inv-td text-center">${bagsDisplay}</td>
+                            <td class="inv-td text-center">${discountDisplay}</td>
+                            <td class="inv-td text-center">${item.netWeight}</td>
+                            <td class="inv-td text-right">${RU}${item.rate}</td>
+                            <td class="inv-td text-right">${RU}${item.total.toFixed(2)}</td>
+                            <td class="inv-td text-center">${truckNo || '—'}</td>
+                            <td class="inv-td text-center">${lrNo || '—'}</td>
                         </tr>
                     `;
                 });
@@ -6011,101 +6011,101 @@ function onPnLFilterChange() {
                 <head>
                     <title>Purchase Invoice - ${purchase.invoice}</title>
                     <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; }
-                        .header { text-align: center; margin-bottom: 20px; }
-                        .invoice-details { margin-bottom: 20px; }
-                        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                        .border { border: 1px solid #000; }
-                        .text-center { text-align: center; }
-                        .text-right { text-align: right; }
-                        .font-bold { font-weight: bold; }
-                        .totals { margin-top: 20px; }
-                        .signature-section { margin-top: 40px; display: flex; justify-content: space-between; }
-                        .signature-box { border: 1px solid #000; padding: 20px; text-align: center; }
-                        .supplier-sign { width: 200px; height: 80px; }
-                        .company-sign { width: 250px; height: 100px; }
+                        * { box-sizing: border-box; }
+                        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
+                        .inv-header {
+                            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #5b21b6 100%);
+                            color: #fff; text-align: center; padding: 24px 20px; margin: -24px -24px 24px -24px; border-radius: 0 0 12px 12px;
+                        }
+                        .inv-header h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: 0.02em; }
+                        .inv-header .tagline { margin: 6px 0 0; font-size: 13px; opacity: 0.95; font-style: italic; }
+                        .inv-header .company-meta { margin-top: 12px; font-size: 12px; opacity: 0.9; }
+                        .inv-title { text-align: center; font-size: 22px; font-weight: 700; margin-bottom: 20px; color: #1e293b; }
+                        .inv-details-wrap { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 20px; flex-wrap: wrap; }
+                        .inv-billto { font-size: 14px; }
+                        .inv-billto .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 4px; }
+                        .inv-billto .name { font-size: 16px; font-weight: 700; color: #1e293b; }
+                        .inv-meta-box {
+                            background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; font-size: 13px; min-width: 220px;
+                        }
+                        .inv-meta-box div { margin-bottom: 4px; }
+                        .inv-meta-box div:last-child { margin-bottom: 0; }
+                        .inv-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+                        .inv-table thead tr { background: linear-gradient(135deg, #4f46e5 0%, #5b21b6 100%); color: #fff; }
+                        .inv-table th { padding: 12px 10px; text-align: left; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+                        .inv-table th.text-center, .inv-table td.text-center { text-align: center; }
+                        .inv-table th.text-right, .inv-table td.text-right { text-align: right; }
+                        .inv-td { border: 1px solid #e2e8f0; padding: 10px; font-size: 13px; }
+                        .inv-table tbody tr:nth-child(even) { background: #f8fafc; }
+                        .totals { margin-top: 20px; text-align: right; font-size: 14px; }
+                        .totals .grand { font-size: 18px; font-weight: 700; margin-top: 8px; }
+                        .words-box { margin-top: 20px; padding: 12px 14px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; }
+                        .ledger-box { margin-top: 16px; padding: 12px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 15px; }
+                        .ledger-box.to-pay { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; }
+                        .ledger-box.settled { background: #d1fae5; border: 1px solid #10b981; color: #065f46; }
+                        .signature-section { margin-top: 36px; display: flex; justify-content: space-between; gap: 24px; }
+                        .signature-box { border: 1px solid #cbd5e1; padding: 16px; text-align: center; border-radius: 8px; min-height: 80px; }
+                        .signature-box .label { font-weight: 700; font-size: 12px; color: #475569; }
                     </style>
                 </head>
                 <body>
-                    <div class="header">
-                        <h1>${company.name || 'ITCO Trade Management'}</h1>
-                        <h2>PURCHASE INVOICE</h2></div>
+                    <div class="inv-header">
+                        <h1>${company.name || 'Ishwar Trading Company'}</h1>
+                        <p class="tagline">Purchase Invoice</p>
+                        ${company.gstin ? `<div class="company-meta">GST No: ${company.gstin}</div>` : ''}
                     </div>
-                    
-                    <div class="invoice-details">
-                        <div style="display: flex; justify-content: space-between;">
-                            <div>
-                                <strong>Invoice No:</strong> ${purchase.invoice}<br>
-                                <strong>Date:</strong> ${purchase.date}<br>
-                                <strong>Truck No:</strong> ${purchase.truck || 'N/A'}<br>
-                                <strong>LR Number:</strong> ${purchase.lrNumber || 'N/A'}
-                            </div>
-                            <div>
-                                <strong>Supplier:</strong> ${purchase.supplierName}<br>
-                                <strong>Mobile:</strong> ${supplier ? supplier.mobile : 'N/A'}<br>
-                                ${supplier && supplier.account ? `<strong>Account:</strong> ${supplier.account}<br>` : ''}
-                                ${supplier && supplier.ifsc ? `<strong>IFSC:</strong> ${supplier.ifsc}` : ''}
-                            </div>
+                    <div class="inv-title">PURCHASE INVOICE</div>
+                    <div class="inv-details-wrap">
+                        <div class="inv-billto">
+                            <div class="label">Bill From (Supplier)</div>
+                            <div class="name">${purchase.supplierName || '—'}</div>
+                            ${supplier && supplier.mobile ? `<div style="margin-top:6px;font-size:13px;">Mobile: ${supplier.mobile}</div>` : ''}
+                            ${supplier && supplier.account ? `<div style="font-size:12px;">Account: ${supplier.account}${supplier.ifsc ? ' | IFSC: ' + supplier.ifsc : ''}</div>` : ''}
+                        </div>
+                        <div class="inv-meta-box">
+                            <div><strong>Invoice No:</strong> ${purchase.invoice}</div>
+                            <div><strong>Date:</strong> ${purchase.date}</div>
+                            <div><strong>Truck No:</strong> ${purchase.truck || '—'}</div>
+                            <div><strong>LR Number:</strong> ${purchase.lrNumber || '—'}</div>
                         </div>
                     </div>
-                    
-                    <table class="border">
+                    <table class="inv-table">
                         <thead>
-                            <tr class="border">
-                                <th class="border px-2 py-1">Item</th>
-                                <th class="border px-2 py-1">Quantity</th>
-                                <th class="border px-2 py-1">Gross Weight</th>
-                                <th class="border px-2 py-1">Bags</th>
-                                <th class="border px-2 py-1">Discount</th>
-                                <th class="border px-2 py-1">Net Weight</th>
-                                <th class="border px-2 py-1">Rate</th>
-                                <th class="border px-2 py-1">Amount</th>
-                                <th class="border px-2 py-1">Truck No</th>
-                                <th class="border px-2 py-1">LR No</th>
+                            <tr>
+                                <th>Item</th>
+                                <th class="text-center">Gross Wt</th>
+                                <th class="text-center">Bags</th>
+                                <th class="text-center">Discount</th>
+                                <th class="text-center">Net Wt</th>
+                                <th class="text-right">Rate</th>
+                                <th class="text-right">Amount</th>
+                                <th class="text-center">Truck No</th>
+                                <th class="text-center">LR No</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${itemsHtml}
                         </tbody>
                     </table>
-                    
                     <div class="totals">
-                        <div style="text-align: right;">
-                            <div><strong>Items Total: ${RU}${(purchase.itemsTotal || purchase.total || 0).toFixed(2)}</strong></div>
-                            <div>Hammali: ${RU}${(purchase.hammali || 0).toFixed(2)}</div>
-                            <div>Advance: ${RU}${(purchase.advance || 0).toFixed(2)}</div>
-                            ${purchase.othersEntries && purchase.othersEntries.length > 0 ? purchase.othersEntries.map(entry => 
-                                `<div>${entry.operation === 'add' ? '+' : '-'} ${entry.reason}: ${RU}${entry.amount.toFixed(2)}</div>`
-                            ).join('') : ''}
-                            <div class="font-bold" style="font-size: 18px; margin-top: 10px;">
-                                Grand Total: ${RU}${(purchase.grandTotal || purchase.total || 0).toFixed(2)}
-                            </div>
-                        </div>
+                        <div><strong>Items Total: ${RU}${(purchase.itemsTotal || purchase.total || 0).toFixed(2)}</strong></div>
+                        <div>Hammali: ${RU}${(purchase.hammali || 0).toFixed(2)}</div>
+                        <div>Advance: ${RU}${(purchase.advance || 0).toFixed(2)}</div>
+                        ${purchase.othersEntries && purchase.othersEntries.length > 0 ? purchase.othersEntries.map(entry => 
+                            `<div>${entry.operation === 'add' ? '+' : '-'} ${entry.reason}: ${RU}${entry.amount.toFixed(2)}</div>`
+                        ).join('') : ''}
+                        <div class="grand">Grand Total: ${RU}${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</div>
                     </div>
-                    
-                    <div style="margin-top: 20px; padding: 10px; background-color: #f0f0f0; border: 1px solid #ccc;">
-                        <div class="font-bold">Amount in Words:</div>
-                        <div style="font-size: 14px; margin-top: 5px;">${amountInWords}</div>
+                    <div class="words-box">
+                        <strong>Amount in Words:</strong> ${amountInWords}
                     </div>
-                    
-                    <div style="margin-top: 15px; padding: 10px; background-color: ${ledgerBalance > 0 ? '#fff3cd' : '#d4edda'}; border: 1px solid ${ledgerBalance > 0 ? '#ffc107' : '#28a745'};">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div class="font-bold">Ledger Balance (${supplier ? supplier.name : 'Supplier'}):</div>
-                            <div class="font-bold" style="font-size: 16px; color: ${ledgerBalance > 0 ? '#856404' : '#155724'};">
-                                ${RU}${ledgerBalance.toFixed(2)} ${ledgerBalance > 0 ? '(To Pay)' : ledgerBalance < 0 ? '(To Receive)' : '(Settled)'}
-                            </div>
-                        </div>
+                    <div class="ledger-box ${ledgerBalance > 0 ? 'to-pay' : 'settled'}">
+                        <span>Ledger Balance (${supplier ? supplier.name : 'Supplier'}):</span>
+                        <span>${RU}${ledgerBalance.toFixed(2)} ${ledgerBalance > 0 ? '(To Pay)' : ledgerBalance < 0 ? '(To Receive)' : '(Settled)'}</span>
                     </div>
-                    
                     <div class="signature-section">
-                        <div class="signature-box supplier-sign">
-                            <div style="margin-bottom: 50px;"></div>
-                            <div class="font-bold">Supplier Signature</div>
-                        </div>
-                        <div class="signature-box company-sign">
-                            <div style="margin-bottom: 60px;"></div>
-                            <div class="font-bold">Company Seal & Signature</div>
-                        </div>
+                        <div class="signature-box" style="width:200px;"><div style="height:50px;"></div><div class="label">Supplier Signature</div></div>
+                        <div class="signature-box" style="width:260px;"><div style="height:50px;"></div><div class="label">Company Seal & Signature</div></div>
                     </div>
                 </body>
                 </html>
@@ -6375,7 +6375,6 @@ function onPnLFilterChange() {
                         <thead>
                             <tr class="bg-slate-100">
                                 <th class="border border-slate-300 px-3 py-2 text-left text-sm">Item</th>
-                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Qty</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Gross Wt</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Bags</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Discount</th>
@@ -6387,14 +6386,13 @@ function onPnLFilterChange() {
                             </tr>
                         </thead>
                         <tbody>
-                            ${purchase.items.map((item, index) => {
+                            ${purchase.items.map((item) => {
                                 const bagsDisplay = item.isCoconut ? (item.discountQty || 0) : (item.bags ?? '');
                                 const discountDisplay = (item.grossWeight != null && item.netWeight != null && !isNaN(item.grossWeight) && !isNaN(item.netWeight)) ? (item.grossWeight - item.netWeight) : '';
                                 const unit = item.unit || '';
                                 return `
                                 <tr>
                                     <td class="border border-slate-300 px-3 py-2 text-sm">${item.itemName}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-right text-sm">${index + 1}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.grossWeight} ${unit}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${bagsDisplay}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${discountDisplay}</td>
