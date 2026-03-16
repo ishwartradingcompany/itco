@@ -1651,11 +1651,10 @@ function deleteAllMasters() {
             tbody.innerHTML = '';
             
             if (currentPurchaseItems.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
                 return;
             }
             
-            const truckNo = (document.getElementById('purchaseTruck') && document.getElementById('purchaseTruck').value) ? document.getElementById('purchaseTruck').value.trim() : '';
             const lrNo = (document.getElementById('purchaseLRNumber') && document.getElementById('purchaseLRNumber').value) ? document.getElementById('purchaseLRNumber').value.trim() : '';
             const discountVal = (gross, net) => (gross != null && net != null && !isNaN(gross) && !isNaN(net)) ? (gross - net) : '';
             
@@ -1673,7 +1672,6 @@ function deleteAllMasters() {
                     <td class="px-4 py-3">${item.netWeight}</td>
                     <td class="px-4 py-3">${RU}${item.rate}</td>
                     <td class="px-4 py-3">${RU}${item.total.toFixed(2)}</td>
-                    <td class="px-4 py-3">${truckNo || '—'}</td>
                     <td class="px-4 py-3">${lrNo || '—'}</td>
                     <td class="px-4 py-3">
                         <button onclick="removeItemFromPurchase(${index})" class="text-red-500 hover:text-red-700 font-medium">Remove</button>
@@ -5945,7 +5943,6 @@ function onPnLFilterChange() {
             
             let itemsHtml = '';
             if (purchase.items) {
-                const truckNo = purchase.truck || '';
                 const lrNo = purchase.lrNumber || '';
                 purchase.items.forEach((item) => {
                     const bagsDisplay = item.isCoconut ? (item.discountQty || 0) : (item.bags ?? '');
@@ -5959,7 +5956,6 @@ function onPnLFilterChange() {
                             <td class="inv-td text-center">${item.netWeight}</td>
                             <td class="inv-td text-right">${RU}${item.rate}</td>
                             <td class="inv-td text-right">${RU}${item.total.toFixed(2)}</td>
-                            <td class="inv-td text-center">${truckNo || '—'}</td>
                             <td class="inv-td text-center">${lrNo || '—'}</td>
                         </tr>
                     `;
@@ -6057,7 +6053,7 @@ function onPnLFilterChange() {
                     <div class="inv-title">PURCHASE INVOICE</div>
                     <div class="inv-details-wrap">
                         <div class="inv-billto">
-                            <div class="label">Bill From (Supplier)</div>
+                            <div class="label">Supplier</div>
                             <div class="name">${purchase.supplierName || '—'}</div>
                             ${supplier && supplier.mobile ? `<div style="margin-top:6px;font-size:13px;">Mobile: ${supplier.mobile}</div>` : ''}
                             ${supplier && supplier.account ? `<div style="font-size:12px;">Account: ${supplier.account}${supplier.ifsc ? ' | IFSC: ' + supplier.ifsc : ''}</div>` : ''}
@@ -6066,7 +6062,6 @@ function onPnLFilterChange() {
                             <div><strong>Invoice No:</strong> ${purchase.invoice}</div>
                             <div><strong>Date:</strong> ${purchase.date}</div>
                             <div><strong>Truck No:</strong> ${purchase.truck || '—'}</div>
-                            <div><strong>LR Number:</strong> ${purchase.lrNumber || '—'}</div>
                         </div>
                     </div>
                     <table class="inv-table">
@@ -6074,12 +6069,11 @@ function onPnLFilterChange() {
                             <tr>
                                 <th>Item</th>
                                 <th class="text-center">Gross Wt</th>
-                                <th class="text-center">Bags</th>
+                                <th class="text-center">Bag/Quantity</th>
                                 <th class="text-center">Discount</th>
                                 <th class="text-center">Net Wt</th>
                                 <th class="text-right">Rate</th>
                                 <th class="text-right">Amount</th>
-                                <th class="text-center">Truck No</th>
                                 <th class="text-center">LR No</th>
                             </tr>
                         </thead>
@@ -6368,7 +6362,6 @@ function onPnLFilterChange() {
             // Build items table
             let itemsTable = '';
             if (purchase.items && purchase.items.length > 0) {
-                const truckNo = purchase.truck || '—';
                 const lrNo = purchase.lrNumber || '—';
                 itemsTable = `
                     <table class="w-full border border-slate-300 mt-4">
@@ -6376,12 +6369,11 @@ function onPnLFilterChange() {
                             <tr class="bg-slate-100">
                                 <th class="border border-slate-300 px-3 py-2 text-left text-sm">Item</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Gross Wt</th>
-                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Bags</th>
+                                <th class="border border-slate-300 px-3 py-2 text-right text-sm">Bag/Quantity</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Discount</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Net Wt</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Rate</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Amount</th>
-                                <th class="border border-slate-300 px-3 py-2 text-center text-sm">Truck No</th>
                                 <th class="border border-slate-300 px-3 py-2 text-center text-sm">LR No</th>
                             </tr>
                         </thead>
@@ -6399,7 +6391,6 @@ function onPnLFilterChange() {
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.netWeight} ${unit}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${item.rate.toFixed(2)}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm font-semibold">${RU}${item.total.toFixed(2)}</td>
-                                    <td class="border border-slate-300 px-3 py-2 text-center text-sm">${truckNo}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-center text-sm">${lrNo}</td>
                                 </tr>
                             `; }).join('')}
