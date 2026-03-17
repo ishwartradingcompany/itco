@@ -716,6 +716,7 @@ function deleteAllMasters() {
         function saveCompanyDetails() {
             appData.company = {
                 name: document.getElementById('companyName').value,
+                address: (document.getElementById('companyAddress') && document.getElementById('companyAddress').value) ? document.getElementById('companyAddress').value.trim() : '',
                 gstin: (document.getElementById('companyGSTIN') && document.getElementById('companyGSTIN').value) || '',
                 bank1: {
                     name: document.getElementById('bankName1').value,
@@ -736,6 +737,8 @@ function deleteAllMasters() {
         function loadCompanyDetails() {
             if (appData.company) {
                 document.getElementById('companyName').value = appData.company.name || '';
+                var addrEl = document.getElementById('companyAddress');
+                if (addrEl) addrEl.value = appData.company.address || '';
                 var gstinEl = document.getElementById('companyGSTIN');
                 if (gstinEl) gstinEl.value = appData.company.gstin || '';
                 document.getElementById('bankName1').value = appData.company.bank1?.name || '';
@@ -991,6 +994,8 @@ function deleteAllMasters() {
             const account = (document.getElementById('customerAccount').value || '').trim();
             var custGstinEl = document.getElementById('customerGSTIN');
             const custGstin = custGstinEl ? (custGstinEl.value || '').trim() : '';
+            var creditLimitEl = document.getElementById('customerCreditLimit');
+            const creditLimit = (creditLimitEl && creditLimitEl.value !== '') ? parseFloat(creditLimitEl.value) : 200000;
             if (name && address) {
                 if (editingCustomerId) {
                     if (isDuplicateCustomerName(name, editingCustomerId)) { alert('Another customer with this name already exists (including with different spaces).'); return; }
@@ -1001,6 +1006,7 @@ function deleteAllMasters() {
                         customer.address = address;
                         customer.account = account;
                         customer.gstin = custGstin;
+                        customer.creditLimit = creditLimit;
                     }
                     editingCustomerId = null;
                 } else {
@@ -1012,6 +1018,7 @@ function deleteAllMasters() {
                         address: address,
                         account: account,
                         gstin: custGstin,
+                        creditLimit: creditLimit,
                         active: true
                     };
                     appData.customers.push(customer);
@@ -1024,6 +1031,7 @@ function deleteAllMasters() {
                 document.getElementById('customerAddress').value = '';
                 document.getElementById('customerAccount').value = '';
                 if (custGstinEl) custGstinEl.value = '';
+                if (creditLimitEl) creditLimitEl.value = '';
                 hideCustomerForm();
             } else {
                 alert('Please fill in Name and Address');
@@ -1045,6 +1053,8 @@ function deleteAllMasters() {
             document.getElementById('customerAccount').value = '';
             var custGstinEl = document.getElementById('customerGSTIN');
             if (custGstinEl) custGstinEl.value = '';
+            var creditLimitEl = document.getElementById('customerCreditLimit');
+            if (creditLimitEl) creditLimitEl.value = '';
             editingCustomerId = null;
         }
 
@@ -1085,6 +1095,8 @@ function deleteAllMasters() {
                 document.getElementById('customerAccount').value = customer.account || '';
                 var custGstinEl = document.getElementById('customerGSTIN');
                 if (custGstinEl) custGstinEl.value = customer.gstin || '';
+                var creditLimitEl = document.getElementById('customerCreditLimit');
+                if (creditLimitEl) creditLimitEl.value = (customer.creditLimit != null && customer.creditLimit !== '') ? String(customer.creditLimit) : '';
             }
         }
 
@@ -1695,12 +1707,26 @@ function deleteAllMasters() {
             newRow.setAttribute('data-index', purchaseOthersIndex);
             newRow.innerHTML = `
                 <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Category</label>
+                    <select class="purchase-others-category w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="Cold Storage Rent">Cold Storage Rent</option>
+                        <option value="Labour">Labour</option>
+                        <option value="Transport">Transport</option>
+                        <option value="Stocking">Stocking</option>
+                        <option value="Seed Investment">Seed Investment</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="purchase-others-other-reason-wrap" style="display: none;">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Specify (Other)</label>
                     <input type="text" class="purchase-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason">
                 </div>
                 <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
                     <input type="number" class="purchase-others-amount w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter amount">
                 </div>
                 <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Operation</label>
                     <select class="purchase-others-operation w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <option value="add">Add (+)</option>
                         <option value="reduce">Reduce (-)</option>
@@ -1711,14 +1737,19 @@ function deleteAllMasters() {
                 </div>
             `;
             container.appendChild(newRow);
-            
-            // Add event listeners for real-time calculation
+            const catSelect = newRow.querySelector('.purchase-others-category');
+            const otherWrap = newRow.querySelector('.purchase-others-other-reason-wrap');
+            if (catSelect && otherWrap) {
+                catSelect.addEventListener('change', function() {
+                    otherWrap.style.display = this.value === 'Other' ? 'block' : 'none';
+                    calculatePurchaseTotals();
+                });
+            }
             const inputs = newRow.querySelectorAll('input, select');
             inputs.forEach(input => {
                 input.addEventListener('input', calculatePurchaseTotals);
                 input.addEventListener('change', calculatePurchaseTotals);
             });
-            
             purchaseOthersIndex++;
         }
         
@@ -1735,7 +1766,9 @@ function deleteAllMasters() {
             const entries = [];
             
             rows.forEach(row => {
-                const reason = row.querySelector('.purchase-others-reason').value;
+                const catEl = row.querySelector('.purchase-others-category');
+                const reasonEl = row.querySelector('.purchase-others-reason');
+                const reason = catEl ? (catEl.value === 'Other' ? (reasonEl && reasonEl.value) || '' : catEl.value) : (reasonEl && reasonEl.value) || '';
                 const amount = parseFloat(row.querySelector('.purchase-others-amount').value) || 0;
                 const operation = row.querySelector('.purchase-others-operation').value;
                 
@@ -2922,6 +2955,34 @@ function deleteAllMasters() {
                 alert('Selected customer not found');
                 return;
             }
+            // Negative stock check: ensure no item goes below zero
+            const requiredByItem = {};
+            currentSaleItems.forEach(item => {
+                requiredByItem[item.itemId] = (requiredByItem[item.itemId] || 0) + item.grossWeight;
+            });
+            let availableByItem = {};
+            Object.keys(appData.inventory || {}).forEach(id => {
+                availableByItem[id] = appData.inventory[id].quantity || 0;
+            });
+            if (editingSaleId) {
+                const existingSale = appData.sales.find(s => s.id === editingSaleId);
+                if (existingSale && existingSale.items) {
+                    existingSale.items.forEach(item => {
+                        availableByItem[item.itemId] = (availableByItem[item.itemId] || 0) + item.grossWeight;
+                    });
+                }
+            }
+            for (const itemId in requiredByItem) {
+                const required = requiredByItem[itemId];
+                const available = availableByItem[itemId] || 0;
+                if (available < required) {
+                    const item = appData.items.find(i => i.id == itemId);
+                    const name = item ? item.name : itemId;
+                    const unit = item ? (item.unit || 'kg') : 'kg';
+                    alert('Negative stock not allowed. "' + name + '" has available ' + available.toFixed(2) + ' ' + unit + ' but sale requires ' + required.toFixed(2) + ' ' + unit + '. Reduce quantity or add purchase first.');
+                    return;
+                }
+            }
             const itemsTotal = currentSaleItems.reduce((sum, item) => sum + item.total, 0);
             
             // Calculate grand total with Others AND truck advance
@@ -2933,6 +2994,17 @@ function deleteAllMasters() {
                     grandTotal -= entry.amount;
                 }
             });
+            
+            // Credit limit alert: balance after this sale exceeds customer credit limit (default 2 lacs)
+            const creditLimit = (customer.creditLimit != null && customer.creditLimit !== '') ? parseFloat(customer.creditLimit) : 200000;
+            const balanceBefore = getCustomerBalance(customerId, editingSaleId);
+            const balanceAfter = editingSaleId
+                ? (balanceBefore - ((appData.sales.find(s => s.id === editingSaleId) || {}).grandTotal || 0) + grandTotal)
+                : (balanceBefore + grandTotal);
+            if (balanceAfter > creditLimit) {
+                const ok = confirm('Credit limit alert: "' + customer.name + '" has credit limit ' + RU + creditLimit.toLocaleString('en-IN') + '. After this sale, balance will be ' + RU + balanceAfter.toLocaleString('en-IN') + '. Do you still want to save?');
+                if (!ok) return;
+            }
             
             if (editingSaleId) {
                 // Editing existing sale
@@ -4434,6 +4506,29 @@ function deleteAllMasters() {
                 }
             }
             
+            // Credit limit exceeded (customers with balance > credit limit, default 2 lacs)
+            var creditLimitListEl = document.getElementById('creditLimitExceededList');
+            var creditLimitCountEl = document.getElementById('creditLimitExceededCount');
+            if (creditLimitListEl && creditLimitCountEl && typeof getCustomerBalance === 'function') {
+                var overLimit = [];
+                (appData.customers || []).forEach(function(c) {
+                    if (c.active === false) return;
+                    var limit = (c.creditLimit != null && c.creditLimit !== '') ? parseFloat(c.creditLimit) : 200000;
+                    var bal = getCustomerBalance(c.id);
+                    if (bal > limit) overLimit.push({ name: c.name, balance: bal, limit: limit });
+                });
+                creditLimitCountEl.textContent = overLimit.length;
+                if (overLimit.length === 0) {
+                    creditLimitListEl.innerHTML = '<div class="text-xs text-slate-400 italic text-center py-4">No customers over limit</div>';
+                } else {
+                    creditLimitListEl.innerHTML = overLimit.map(function(o) {
+                        return '<div class="flex items-center gap-2 text-xs py-2 px-2 bg-red-50 rounded-lg border border-red-100">' +
+                            '<span class="flex-1 font-medium text-slate-700">' + escapeHtml(o.name) + '</span>' +
+                            '<span class="text-red-600 font-bold">' + RU + o.balance.toLocaleString('en-IN', {minimumFractionDigits: 2}) + ' &gt; ' + RU + o.limit.toLocaleString('en-IN') + '</span></div>';
+                    }).join('');
+                }
+            }
+            
             // Update Business Summary Footer
             const summaryItems = document.getElementById('summaryItems');
             const summarySuppliers = document.getElementById('summarySuppliers');
@@ -5007,6 +5102,31 @@ function onPnLFilterChange() {
     generatePnL();
   }
 }
+        // Customer balance (receivable) for credit limit checks
+        function getCustomerBalance(customerId, excludeSaleId) {
+            let balance = 0;
+            if (appData.openingBalances) {
+                appData.openingBalances
+                    .filter(ob => ob.entityType === 'customer' && String(ob.entityId) === String(customerId))
+                    .forEach(ob => { balance += ob.amount || 0; });
+            }
+            (appData.sales || []).filter(s => s.customerId == customerId && s.id !== excludeSaleId).forEach(s => {
+                balance += s.grandTotal || s.total || 0;
+            });
+            (appData.deductions || []).filter(d => d.customerId == customerId).forEach(d => {
+                balance -= d.amount || 0;
+            });
+            (appData.payments || []).filter(p => {
+                if (p.type === 'ledger_receipt' && p.entityType === 'customer' && p.entityId == customerId) return true;
+                if (p.type === 'sale') {
+                    const sale = (appData.sales || []).find(s => s.id === p.invoiceId);
+                    return sale && sale.customerId == customerId;
+                }
+                return false;
+            }).forEach(p => { balance -= p.amount || 0; });
+            return balance;
+        }
+
         // Ledger functions
         function updateLedgerOptions() {
             const type = document.getElementById('ledgerType').value;
@@ -5281,6 +5401,19 @@ function onPnLFilterChange() {
                 entry.balance = balance;
             });
             
+            // Date range filter
+            const fromDateEl = document.getElementById('ledgerFromDate');
+            const toDateEl = document.getElementById('ledgerToDate');
+            const fromDate = fromDateEl && fromDateEl.value ? fromDateEl.value : '';
+            const toDate = toDateEl && toDateEl.value ? toDateEl.value : '';
+            if (fromDate || toDate) {
+                entries = entries.filter(e => {
+                    if (fromDate && e.date < fromDate) return false;
+                    if (toDate && e.date > toDate) return false;
+                    return true;
+                });
+            }
+            
             // Update balance display
             const balanceSection = document.getElementById('ledgerBalanceSection');
             const entityNameElement = document.getElementById('ledgerEntityName');
@@ -5329,12 +5462,65 @@ function onPnLFilterChange() {
             // Render the table with pagination
             renderLedgerTable(entries);
             
+            var printLedgerBtn = document.getElementById('printLedgerBtn');
             if (entries.length === 0) {
                 balanceSection.style.display = 'none';
                 document.getElementById('exportLedgerBtn').style.display = 'none';
+                if (printLedgerBtn) printLedgerBtn.style.display = 'none';
             } else {
                 document.getElementById('exportLedgerBtn').style.display = 'block';
+                if (printLedgerBtn) printLedgerBtn.style.display = 'block';
             }
+        }
+        
+        function printLedgerStatement() {
+            const entries = typeof currentLedgerData !== 'undefined' && Array.isArray(currentLedgerData) ? currentLedgerData : [];
+            const meta = window.currentLedgerData || {};
+            const company = appData.company || {};
+            const entityName = meta.entityName || document.getElementById('ledgerEntityName').textContent || 'Ledger';
+            const balance = meta.balance != null ? meta.balance : 0;
+            const ledgerType = meta.type || 'ledger';
+            const typeLabel = ledgerType === 'supplier' ? 'Supplier' : ledgerType === 'customer' ? 'Customer' : 'Broker';
+            const fromEl = document.getElementById('ledgerFromDate');
+            const toEl = document.getElementById('ledgerToDate');
+            const fromDate = fromEl && fromEl.value ? fromEl.value : '';
+            const toDate = toEl && toEl.value ? toEl.value : '';
+            const dateRangeText = (fromDate || toDate) ? ('Period: ' + (fromDate || '...') + ' to ' + (toDate || '...')) : 'All entries';
+            let rowsHtml = entries.map(e => 
+                '<tr><td class="inv-td">' + e.date + '</td><td class="inv-td">' + escapeHtml(e.description) + '</td><td class="inv-td">' + escapeHtml(e.invoice || '') + '</td><td class="inv-td text-right">' + (e.debit ? RU + e.debit.toFixed(2) : '-') + '</td><td class="inv-td text-right">' + (e.credit ? RU + e.credit.toFixed(2) : '-') + '</td><td class="inv-td text-right">' + RU + (e.balance || 0).toFixed(2) + '</td></tr>'
+            ).join('');
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html><head><title>Ledger - ${escapeHtml(entityName)}</title>
+                <style>
+                    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
+                    .inv-header { background: linear-gradient(135deg, #4f46e5 0%, #5b21b6 100%); color: #fff; text-align: center; padding: 20px; margin: -24px -24px 24px -24px; }
+                    .inv-header h1 { margin: 0; font-size: 22px; }
+                    .inv-header p { margin: 6px 0 0; font-size: 13px; opacity: 0.95; }
+                    .inv-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+                    .inv-table th { background: #4f46e5; color: #fff; padding: 10px; text-align: left; font-size: 12px; }
+                    .inv-table td { border: 1px solid #e2e8f0; padding: 8px; font-size: 13px; }
+                    .inv-td.text-right { text-align: right; }
+                    .ledger-meta { margin-bottom: 16px; font-size: 13px; color: #64748b; }
+                    .ledger-balance { margin-top: 16px; padding: 12px; background: #f1f5f9; border-radius: 8px; font-weight: 700; font-size: 16px; }
+                </style></head><body>
+                <div class="inv-header">
+                    <h1>${escapeHtml(company.name || 'ITCO')}</h1>
+                    ${company.address ? '<p>' + escapeHtml(company.address) + '</p>' : ''}
+                    <p>${typeLabel} Ledger Statement</p>
+                </div>
+                <div class="ledger-meta">
+                    <strong>${escapeHtml(entityName)}</strong><br>${dateRangeText}
+                </div>
+                <table class="inv-table">
+                <thead><tr><th>Date</th><th>Description</th><th>Invoice</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
+                <tbody>${rowsHtml || '<tr><td colspan="6" class="inv-td text-center">No entries</td></tr>'}</tbody>
+                </table>
+                <div class="ledger-balance">Closing Balance: ${RU}${balance.toFixed(2)}</div>
+                </body></html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
         }
         
         function renderLedgerTable(entries) {
@@ -6045,6 +6231,7 @@ function onPnLFilterChange() {
                 <body>
                     <div class="inv-header">
                         <h1>${company.name || 'Ishwar Trading Company'}</h1>
+                        ${company.address ? `<p class="company-meta" style="margin-top:6px;font-size:13px;opacity:0.95;">${company.address}</p>` : ''}
                         <p class="tagline">Purchase Invoice</p>
                         ${company.gstin ? `<div class="company-meta">GST No: ${company.gstin}</div>` : ''}
                     </div>
@@ -6218,7 +6405,8 @@ function onPnLFilterChange() {
                 <body>
                     <div class="header">
                         <h1>${company.name || 'ITCO Trade Management'}</h1>
-                        <h2>SALE INVOICE</h2></div>
+                        ${company.address ? `<p style="margin:6px 0 0;font-size:13px;color:#374151;">${company.address}</p>` : ''}
+                        <h2>SALE INVOICE</h2>
                     </div>
                     
                     <div class="invoice-details">
@@ -6551,14 +6739,25 @@ function onPnLFilterChange() {
             var pdEl = document.getElementById('purchaseDiscount');
             if (pdEl) pdEl.value = '0';
             
-            // Clear Others fields
+            // Clear Others fields (same structure as index.html: category + optional reason)
             const othersContainer = document.getElementById('purchaseOthersContainer');
             if (othersContainer) {
                 othersContainer.innerHTML = `
-                    <div class="purchase-others-row grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div class="purchase-others-row grid grid-cols-1 md:grid-cols-4 gap-4 mb-3" data-index="0">
                         <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Reason</label>
-                            <input type="text" class="purchase-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason (e.g., Transport, Commission)">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Category</label>
+                            <select class="purchase-others-category w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" onchange="var w=this.closest('.purchase-others-row').querySelector('.purchase-others-other-reason-wrap');if(w) w.style.display=this.value==='Other'?'block':'none'; calculatePurchaseTotals();">
+                                <option value="Cold Storage Rent">Cold Storage Rent</option>
+                                <option value="Labour">Labour</option>
+                                <option value="Transport">Transport</option>
+                                <option value="Stocking">Stocking</option>
+                                <option value="Seed Investment">Seed Investment</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="purchase-others-other-reason-wrap" style="display: none;">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Specify (Other)</label>
+                            <input type="text" class="purchase-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
