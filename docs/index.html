@@ -513,12 +513,9 @@
     <!-- Page 2: Master -->
     <div id="master" class="page-content hidden">
         <div class="max-w-7xl mx-auto px-4 py-8">
-            <div class="mb-6 border-l-4 border-blue-600 pl-4 flex flex-wrap items-center justify-between gap-4">
+                <div class="mb-6 border-l-4 border-blue-600 pl-4">
                 <h2 class="text-3xl font-bold text-slate-900">Master Data Management</h2>
-                <div class="flex items-center gap-2">
-                    <label for="masterDataSearch" class="text-sm text-slate-600 sr-only">Search masters</label>
-                    <input type="text" id="masterDataSearch" placeholder="Search Items, Suppliers, Customers, Brokers..." class="w-64 md:w-80 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm" oninput="applyMasterSearch()">
-                </div>
+                <p class="text-slate-600 text-sm mt-1">Search within each section below to filter that master list.</p>
             </div>
             
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -542,7 +539,10 @@
 
                 <!-- Items & Categories -->
                 <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
-                    <h3 class="text-xl font-semibold mb-4 text-primary">Items & Categories</h3>
+                    <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+                        <h3 class="text-xl font-semibold text-primary">Items & Categories</h3>
+                        <input type="text" id="masterSearchItems" placeholder="Search items (name, category, unit)..." class="w-48 md:w-64 p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm" oninput="updateItemsList()">
+                    </div>
                     <div class="space-y-4">
                         <input type="text" id="itemName" placeholder="Item Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <select id="itemCategory" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
@@ -567,12 +567,15 @@
 
                 <!-- Suppliers -->
                 <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
-                    <div class="flex justify-between items-center mb-4">
+                    <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
                         <h3 class="text-xl font-semibold text-primary">Suppliers</h3>
-                        <button onclick="showSupplierForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="masterSearchSuppliers" placeholder="Search suppliers..." class="w-48 md:w-64 p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm" oninput="updateSuppliersList()">
+                            <button onclick="showSupplierForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                             <span>Add Supplier</span>
                         </button>
+                        </div>
                     </div>
                     <!-- Suppliers List View -->
                     <div id="suppliersListView">
@@ -595,12 +598,15 @@
 
                 <!-- Customers -->
                 <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
-                    <div class="flex justify-between items-center mb-4">
+                    <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
                         <h3 class="text-xl font-semibold text-primary">Customers</h3>
-                        <button onclick="showCustomerForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="masterSearchCustomers" placeholder="Search customers..." class="w-48 md:w-64 p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm" oninput="updateCustomersList()">
+                            <button onclick="showCustomerForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                             <span>Add Customer</span>
                         </button>
+                        </div>
                     </div>
                     <!-- Customers List View -->
                     <div id="customersListView">
@@ -623,12 +629,15 @@
 
                 <!-- Brokers -->
                 <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
-                    <div class="flex justify-between items-center mb-4">
+                    <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
                         <h3 class="text-xl font-semibold text-primary">Brokers</h3>
-                        <button onclick="showBrokerForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="masterSearchBrokers" placeholder="Search brokers..." class="w-48 md:w-64 p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm" oninput="updateBrokersList()">
+                            <button onclick="showBrokerForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                             <span>Add Broker</span>
                         </button>
+                        </div>
                     </div>
                     <!-- Brokers List View -->
                     <div id="brokersListView">
