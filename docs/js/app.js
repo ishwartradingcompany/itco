@@ -794,14 +794,14 @@ function deleteAllMasters() {
             }
         }
 
-        function getMasterSearchTerm() {
-            var el = document.getElementById('masterDataSearch');
+        function getMasterSearchTerm(inputId) {
+            var el = document.getElementById(inputId);
             return (el && el.value) ? el.value.trim().toLowerCase() : '';
         }
         function updateItemsList() {
             const container = document.getElementById('itemsList');
             if (!container) return;
-            var term = getMasterSearchTerm();
+            var term = getMasterSearchTerm('masterSearchItems');
             container.innerHTML = '';
             var items = (appData.items || []).filter(function(item) {
                 if (!term) return true;
@@ -941,7 +941,7 @@ function deleteAllMasters() {
         function updateSuppliersList() {
             const container = document.getElementById('suppliersList');
             if (!container) return;
-            var term = getMasterSearchTerm();
+            var term = getMasterSearchTerm('masterSearchSuppliers');
             container.innerHTML = '';
             var suppliers = (appData.suppliers || []).filter(function(s) {
                 if (!term) return true;
@@ -1061,7 +1061,7 @@ function deleteAllMasters() {
         function updateCustomersList() {
             const container = document.getElementById('customersList');
             if (!container) return;
-            var term = getMasterSearchTerm();
+            var term = getMasterSearchTerm('masterSearchCustomers');
             container.innerHTML = '';
             var customers = (appData.customers || []).filter(function(c) {
                 if (!term) return true;
@@ -1172,7 +1172,7 @@ function deleteAllMasters() {
         function updateBrokersList() {
             const container = document.getElementById('brokersList');
             if (!container) return;
-            var term = getMasterSearchTerm();
+            var term = getMasterSearchTerm('masterSearchBrokers');
             container.innerHTML = '';
             var brokers = (appData.brokers || []).filter(function(b) {
                 if (!term) return true;
