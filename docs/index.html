@@ -465,6 +465,17 @@
                         <div class="text-xs text-slate-400 italic text-center py-4">No low stock items</div>
                     </div>
                 </div>
+
+                <!-- Credit Limit Exceeded -->
+                <div class="bg-white rounded-xl shadow-lg border border-red-200 p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Credit Limit Exceeded</h3>
+                        <span id="creditLimitExceededCount" class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-medium">0</span>
+                    </div>
+                    <div id="creditLimitExceededList" class="space-y-2 max-h-52 overflow-y-auto">
+                        <div class="text-xs text-slate-400 italic text-center py-4">No customers over limit</div>
+                    </div>
+                </div>
             </div>
 
             <!-- Business Summary Footer -->
@@ -516,6 +527,7 @@
                     <h3 class="text-xl font-semibold mb-4 text-primary">Company Details</h3>
                     <div class="space-y-4">
                         <input type="text" id="companyName" placeholder="Company Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <textarea id="companyAddress" placeholder="851/1/2 Kelod kartal, 6 Lane highway bypass, Indore M.P. 452020" rows="2" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"></textarea>
                         <input type="text" id="companyGSTIN" placeholder="GSTIN (optional)" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <input type="text" id="bankName1" placeholder="Bank 1 Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <input type="text" id="bankAccount1" placeholder="Bank 1 Account Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
@@ -601,6 +613,7 @@
                         <textarea id="customerAddress" placeholder="Customer Address" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" rows="3"></textarea>
                         <input type="text" id="customerAccount" placeholder="Account Details" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <input type="text" id="customerGSTIN" placeholder="GSTIN (optional)" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="number" id="customerCreditLimit" placeholder="Credit limit (e.g. 200000)" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" min="0" step="1000">
                         <div class="flex space-x-2">
                             <button onclick="addCustomer()" class="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors">Save Customer</button>
                             <button onclick="hideCustomerForm()" class="flex-1 bg-gray-500 text-white py-3 rounded-lg hover:bg-gray-600 transition-colors">Cancel</button>
@@ -906,10 +919,21 @@
                     </div>
                     <div id="purchaseOthersContainer">
                         <!-- First row (always present) -->
-                        <div class="purchase-others-row grid grid-cols-1 md:grid-cols-3 gap-4 mb-3" data-index="0">
+                        <div class="purchase-others-row grid grid-cols-1 md:grid-cols-4 gap-4 mb-3" data-index="0">
                             <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-2">Reason/Description</label>
-                                <input type="text" class="purchase-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason (e.g., Transport, Commission)">
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Category</label>
+                                <select class="purchase-others-category w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" onchange="var w=this.closest('.purchase-others-row').querySelector('.purchase-others-other-reason-wrap');if(w) w.style.display=this.value==='Other'?'block':'none'; calculatePurchaseTotals();">
+                                    <option value="Cold Storage Rent">Cold Storage Rent</option>
+                                    <option value="Labour">Labour</option>
+                                    <option value="Transport">Transport</option>
+                                    <option value="Stocking">Stocking</option>
+                                    <option value="Seed Investment">Seed Investment</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="purchase-others-other-reason-wrap" style="display: none;">
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Specify (Other)</label>
+                                <input type="text" class="purchase-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
@@ -924,6 +948,7 @@
                             </div>
                         </div>
                     </div>
+                    <p class="text-xs text-slate-500 mt-2">Use for cold storage rent, labour, transport, stocking, seed investment, etc.</p>
                 </div>
 
                 <div class="bg-gray-50 p-6 rounded-lg">
@@ -1932,7 +1957,7 @@
             
             <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
                 <h3 class="text-xl font-semibold mb-6 text-primary">Ledger Filters</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     <select id="ledgerType" onchange="updateLedgerOptions()" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <option value="">Select Ledger Type</option>
                         <option value="supplier">Supplier Ledger</option>
@@ -1942,6 +1967,14 @@
                     <select id="ledgerEntity" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <option value="">Select Entity</option>
                     </select>
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm text-slate-600 whitespace-nowrap">From</label>
+                        <input type="date" id="ledgerFromDate" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent flex-1">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm text-slate-600 whitespace-nowrap">To</label>
+                        <input type="date" id="ledgerToDate" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent flex-1">
+                    </div>
                     <button onclick="generateLedger()" class="bg-primary text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors">Generate Ledger</button>
                 </div>
             </div>
@@ -1949,7 +1982,10 @@
             <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-xl font-semibold text-primary">Ledger Statement</h3>
-                    <button onclick="exportLedgerStatement()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportLedgerBtn" style="display: none;">Export to CSV</button>
+                    <div class="flex gap-2">
+                        <button onclick="printLedgerStatement()" class="bg-slate-600 text-white px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors" id="printLedgerBtn" style="display: none;">Print</button>
+                        <button onclick="exportLedgerStatement()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportLedgerBtn" style="display: none;">Export to CSV</button>
+                    </div>
                 </div>
                 
                 <!-- Balance Display Section -->
@@ -2404,6 +2440,7 @@
                         <option value="upi">UPI</option>
                         <option value="bank">Bank Transfer</option>
                         <option value="cheque">Cheque</option>
+                        <option value="advance">Advance (e.g. seed to farmer)</option>
                     </select>
                 </div>
                 
