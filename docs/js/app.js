@@ -5091,6 +5091,29 @@ function deleteAllMasters() {
                 });
                 return { netLoss: netLoss, adjustmentTotal: adjustmentTotal };
             }
+
+            // Helper: brokerage totals linked to specific sale/purchase invoice.
+            function getBrokerageForSale(sale) {
+                if (!sale || !filteredBrokerage || !filteredBrokerage.length) return 0;
+                var saleInvoice = String(sale.invoice || '').trim();
+                return filteredBrokerage
+                    .filter(function(b) {
+                        if (String(b.type || '').toLowerCase() !== 'sale') return false;
+                        return String(b.reference || '').trim() === saleInvoice;
+                    })
+                    .reduce(function(sum, b) { return sum + (parseFloat(b.amount) || 0); }, 0);
+            }
+
+            function getBrokerageForPurchase(purchase) {
+                if (!purchase || !filteredBrokerage || !filteredBrokerage.length) return 0;
+                var purchaseInvoice = String(purchase.invoice || '').trim();
+                return filteredBrokerage
+                    .filter(function(b) {
+                        if (String(b.type || '').toLowerCase() !== 'purchase') return false;
+                        return String(b.reference || '').trim() === purchaseInvoice;
+                    })
+                    .reduce(function(sum, b) { return sum + (parseFloat(b.amount) || 0); }, 0);
+            }
             
             // Create P&L rows based on linked purchases
             const pnlRows = [];
@@ -5101,6 +5124,7 @@ function deleteAllMasters() {
                 const saleTruckAdvance = sale.truckAdvance || 0;
                 const invoiceAdvance = parseFloat(sale.advance) || 0;
                 const saleNetAmount = saleTotal - saleTruckAdvance + invoiceAdvance; // exclude invoice advance from P&L
+                const saleBrokerageTotal = getBrokerageForSale(sale);
                 var deductionTotals = getDeductionsForSale(sale);
                 var totalDeductionForSale = deductionTotals.netLoss;
                 var totalAdjustmentForSale = deductionTotals.adjustmentTotal || 0;
@@ -5117,13 +5141,18 @@ function deleteAllMasters() {
                             const purchaseInvoiceAdvance = parseFloat(purchase.advance) || 0;
                             const purchaseTotalForPnL = purchaseTotalRaw + purchaseInvoiceAdvance; // exclude invoice advance from P&L
                             const proportionalPurchaseCost = totalPurchaseQty > 0 ? (purchaseTotalForPnL / totalPurchaseQty) * link.quantityUsed : 0;
+                            const purchaseBrokerageTotal = getBrokerageForPurchase(purchase);
                             
                             // Calculate proportional sale amount
                             const proportionalSaleAmount = totalSaleQty > 0 ? (saleNetAmount / totalSaleQty) * link.quantityUsed : 0;
                             var ratio = totalSaleQty > 0 ? (link.quantityUsed / totalSaleQty) : (1 / sale.linkedPurchases.length);
                             var deductionAllocation = totalDeductionForSale * ratio;
                             var adjustmentAllocation = totalAdjustmentForSale * ratio;
-                            const profitLoss = proportionalSaleAmount - proportionalPurchaseCost - deductionAllocation;
+                            var saleBrokerageAllocation = saleBrokerageTotal * ratio;
+                            var purchaseRatio = totalPurchaseQty > 0 ? (link.quantityUsed / totalPurchaseQty) : ratio;
+                            var purchaseBrokerageAllocation = purchaseBrokerageTotal * purchaseRatio;
+                            var brokerageAllocation = saleBrokerageAllocation + purchaseBrokerageAllocation;
+                            const profitLoss = proportionalSaleAmount - proportionalPurchaseCost - deductionAllocation - brokerageAllocation;
                             
                             pnlRows.push({
                                 purchaseDate: purchase.date,
@@ -5137,12 +5166,14 @@ function deleteAllMasters() {
                                 profitLoss: profitLoss,
                                 quantityUsed: link.quantityUsed,
                                 deductionsAmount: deductionAllocation,
-                                adjustmentAmount: adjustmentAllocation
+                                adjustmentAmount: adjustmentAllocation,
+                                brokerageAmount: brokerageAllocation
                             });
                         }
                     });
                 } else {
                     // Sale without linked purchases - show as standalone
+                    var standaloneSaleBrokerage = saleBrokerageTotal;
                     pnlRows.push({
                         purchaseDate: null,
                         purchaseInvoice: null,
@@ -5152,10 +5183,11 @@ function deleteAllMasters() {
                         saleInvoice: sale.invoice,
                         saleCustomer: sale.customerName,
                         saleTotal: saleNetAmount,
-                        profitLoss: saleNetAmount - totalDeductionForSale,
+                        profitLoss: saleNetAmount - totalDeductionForSale - standaloneSaleBrokerage,
                         quantityUsed: null,
                         deductionsAmount: totalDeductionForSale,
-                        adjustmentAmount: totalAdjustmentForSale
+                        adjustmentAmount: totalAdjustmentForSale,
+                        brokerageAmount: standaloneSaleBrokerage
                     });
                 }
             });
@@ -5173,6 +5205,7 @@ function deleteAllMasters() {
             filteredPurchases.forEach(purchase => {
                 if (!linkedPurchaseIds.has(purchase.id)) {
                     const purchaseTotal = (purchase.grandTotal || purchase.total || 0) + (parseFloat(purchase.advance) || 0); // exclude invoice advance from P&L
+                    const purchaseBrokerage = getBrokerageForPurchase(purchase);
                     pnlRows.push({
                         purchaseDate: purchase.date,
                         purchaseInvoice: purchase.invoice,
@@ -5182,13 +5215,37 @@ function deleteAllMasters() {
                         saleInvoice: null,
                         saleCustomer: null,
                         saleTotal: 0,
-                        profitLoss: -purchaseTotal,
+                        profitLoss: -(purchaseTotal + purchaseBrokerage),
                         quantityUsed: null,
                         deductionsAmount: 0,
-                        adjustmentAmount: 0
+                        adjustmentAmount: 0,
+                        brokerageAmount: purchaseBrokerage
                     });
                 }
             });
+
+            // Add standalone brokerage rows for entries not tied to any displayed invoice row.
+            var representedBrokerage = pnlRows.reduce(function(sum, row) {
+                return sum + (parseFloat(row.brokerageAmount) || 0);
+            }, 0);
+            var brokerageRemainder = totalBrokerage - representedBrokerage;
+            if (Math.abs(brokerageRemainder) > 0.05) {
+                pnlRows.push({
+                    purchaseDate: null,
+                    purchaseInvoice: null,
+                    purchaseSupplier: null,
+                    purchaseTotal: 0,
+                    saleDate: null,
+                    saleInvoice: null,
+                    saleCustomer: null,
+                    saleTotal: 0,
+                    profitLoss: -brokerageRemainder,
+                    quantityUsed: null,
+                    deductionsAmount: 0,
+                    adjustmentAmount: 0,
+                    brokerageAmount: brokerageRemainder
+                });
+            }
             
             // Sort by date (purchase date or sale date)
             pnlRows.sort((a, b) => {
@@ -5239,6 +5296,7 @@ function deleteAllMasters() {
                         ${row.profitLoss >= 0 ? '+' : ''}${RU}${row.profitLoss.toFixed(2)}
                         ${row.quantityUsed ? `<br><small class="text-xs text-slate-500">(${row.quantityUsed} kg)</small>` : ''}
                         ${(row.deductionsAmount || 0) > 0 ? `<br><small class="text-xs text-red-600">Ded: ${RU}${(row.deductionsAmount || 0).toFixed(2)}</small>` : ''}
+                        ${(row.brokerageAmount || 0) > 0 ? `<br><small class="text-xs text-indigo-600">Brkg: ${RU}${(row.brokerageAmount || 0).toFixed(2)}</small>` : ''}
                         ${(row.adjustmentAmount || 0) > 0 ? `<br><small class="text-xs text-slate-600">Adj: ${RU}${(row.adjustmentAmount || 0).toFixed(2)}</small>` : ''}
                     </td>
                 `;
