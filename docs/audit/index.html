@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ITCO Auto Audit</title>
+  <link rel="stylesheet" href="css/audit.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Auto Audit - CA Ready</h1>
+      <p>Bank-aware debit and credit audit summary</p>
+    </header>
+
+    <section class="card">
+      <div class="actions">
+        <button id="loadFromParentBtn">Load Live Data</button>
+        <label class="file-label">
+          Load JSON Backup
+          <input type="file" id="jsonFileInput" accept=".json">
+        </label>
+        <button id="exportCsvBtn">Export Bank Audit CSV</button>
+      </div>
+      <p id="statusText" class="status">No data loaded yet.</p>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h2>Summary</h2>
+        <div id="summaryList"></div>
+      </div>
+      <div class="card">
+        <h2>Compliance Checks</h2>
+        <ul id="checksList"></ul>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Bank-wise Debit/Credit Trail</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Bank Account</th>
+              <th class="num">Supplier Payments (Credit)</th>
+              <th class="num">Customer Receipts (Debit)</th>
+              <th class="num">Net Movement</th>
+            </tr>
+          </thead>
+          <tbody id="bankAuditTableBody">
+            <tr><td colspan="4" class="empty">Load data to generate audit summary.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Exceptions (Missing/Invalid Bank Capture)</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Party</th>
+              <th>Mode</th>
+              <th>Issue</th>
+            </tr>
+          </thead>
+          <tbody id="exceptionsTableBody">
+            <tr><td colspan="5" class="empty">No exceptions.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script src="js/audit-engine.js"></script>
+  <script src="js/audit-ui.js"></script>
+  <script src="js/audit-export.js"></script>
+</body>
+</html>
