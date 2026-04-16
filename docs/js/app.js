@@ -748,9 +748,15 @@ function deleteAllMasters() {
                     account: document.getElementById('bankAccount2').value,
                     ifsc: document.getElementById('ifsc2').value
                 },
+                bank3: {
+                    name: (document.getElementById('bankName3') && document.getElementById('bankName3').value) || '',
+                    account: (document.getElementById('bankAccount3') && document.getElementById('bankAccount3').value) || '',
+                    ifsc: (document.getElementById('ifsc3') && document.getElementById('ifsc3').value) || ''
+                },
                 upi: document.getElementById('upiNumber').value
             };
             saveData();
+            if (typeof populatePaymentBankAccounts === 'function') populatePaymentBankAccounts();
             alert('Company details saved successfully!');
         }
 
@@ -767,8 +773,32 @@ function deleteAllMasters() {
                 document.getElementById('bankName2').value = appData.company.bank2?.name || '';
                 document.getElementById('bankAccount2').value = appData.company.bank2?.account || '';
                 document.getElementById('ifsc2').value = appData.company.bank2?.ifsc || '';
+                var b3Name = document.getElementById('bankName3');
+                var b3Acc = document.getElementById('bankAccount3');
+                var b3Ifsc = document.getElementById('ifsc3');
+                if (b3Name) b3Name.value = appData.company.bank3?.name || '';
+                if (b3Acc) b3Acc.value = appData.company.bank3?.account || '';
+                if (b3Ifsc) b3Ifsc.value = appData.company.bank3?.ifsc || '';
                 document.getElementById('upiNumber').value = appData.company.upi || '';
             }
+        }
+
+        function getCompanyBankAccounts() {
+            const company = appData.company || {};
+            const result = [];
+            ['bank1', 'bank2', 'bank3'].forEach((key, idx) => {
+                const bank = company[key] || {};
+                const name = (bank.name || '').trim();
+                const account = (bank.account || '').trim();
+                if (!name && !account) return;
+                result.push({
+                    id: key,
+                    label: `${name || `Bank ${idx + 1}`}${account ? ` - ${account}` : ''}`,
+                    name: name || `Bank ${idx + 1}`,
+                    account: account
+                });
+            });
+            return result;
         }
 
         let editingItemId = null;
@@ -4139,6 +4169,12 @@ function deleteAllMasters() {
             document.getElementById('balanceDisplay').textContent = `Amount: ${RU}${entry.amount.toFixed(2)}`;
             document.getElementById('paymentAmount').value = entry.amount;
             document.getElementById('paymentMode').value = '';
+            var paymentModeEl = document.getElementById('paymentMode');
+            if (paymentModeEl) paymentModeEl.onchange = onPaymentModeChange;
+            populatePaymentBankAccounts();
+            const paymentBankAccountEl = document.getElementById('paymentBankAccount');
+            if (paymentBankAccountEl) paymentBankAccountEl.value = '';
+            onPaymentModeChange();
             document.getElementById('paidThrough').value = '';
             document.getElementById('paymentRemarks').value = '';
             
@@ -5449,7 +5485,7 @@ function onPnLFilterChange() {
                             type: 'payment',
                             sourceId: payment.id,
                             date: payment.date,
-                            description: `Payment - ${payment.mode} ${payment.paidThrough ? 'via ' + payment.paidThrough : ''}`,
+                            description: `Payment - ${payment.mode}${payment.bankAccountName ? ' (' + payment.bankAccountName + ')' : ''} ${payment.paidThrough ? 'via ' + payment.paidThrough : ''}`,
                             invoice: payment.invoice,
                             debit: 0,
                             credit: payment.amount,
@@ -5524,7 +5560,7 @@ function onPnLFilterChange() {
                             type: 'payment',
                             sourceId: payment.id,
                             date: payment.date,
-                            description: `Receipt - ${payment.mode} ${payment.paidThrough ? 'via ' + payment.paidThrough : ''}`,
+                            description: `Receipt - ${payment.mode}${payment.bankAccountName ? ' (' + payment.bankAccountName + ')' : ''} ${payment.paidThrough ? 'via ' + payment.paidThrough : ''}`,
                             invoice: payment.invoice,
                             debit: 0,
                             credit: payment.amount,
@@ -5584,7 +5620,7 @@ function onPnLFilterChange() {
                             type: 'payment',
                             sourceId: payment.id,
                             date: payment.date,
-                            description: `Payment - ${payment.mode} ${payment.paidThrough ? 'via ' + payment.paidThrough : ''}`,
+                            description: `Payment - ${payment.mode}${payment.bankAccountName ? ' (' + payment.bankAccountName + ')' : ''} ${payment.paidThrough ? 'via ' + payment.paidThrough : ''}`,
                             invoice: payment.invoice,
                             debit: 0,
                             credit: payment.amount,
@@ -6640,6 +6676,11 @@ function onPnLFilterChange() {
                                 <strong>IFSC:</strong> ${company.bank2?.ifsc || 'N/A'}
                             </div>
                             <div>
+                                <strong>Bank 3:</strong> ${company.bank3?.name || 'N/A'}<br>
+                                <strong>Account:</strong> ${company.bank3?.account || 'N/A'}<br>
+                                <strong>IFSC:</strong> ${company.bank3?.ifsc || 'N/A'}
+                            </div>
+                            <div>
                                 <strong>UPI:</strong> ${company.upi || 'N/A'}
                             </div>
                         </div>
@@ -7232,6 +7273,12 @@ function onPnLFilterChange() {
             document.getElementById('balanceDisplay').textContent = `Balance: ${RU}${purchase.balance.toFixed(2)}`;
             document.getElementById('paymentAmount').value = '';
             document.getElementById('paymentMode').value = '';
+            var paymentModeEl = document.getElementById('paymentMode');
+            if (paymentModeEl) paymentModeEl.onchange = onPaymentModeChange;
+            populatePaymentBankAccounts();
+            const paymentBankAccountEl = document.getElementById('paymentBankAccount');
+            if (paymentBankAccountEl) paymentBankAccountEl.value = '';
+            onPaymentModeChange();
             document.getElementById('paidThrough').value = '';
             document.getElementById('paymentRemarks').value = '';
             
@@ -7254,6 +7301,12 @@ function onPnLFilterChange() {
             document.getElementById('balanceDisplay').textContent = `Balance: ${RU}${sale.balance.toFixed(2)}`;
             document.getElementById('paymentAmount').value = '';
             document.getElementById('paymentMode').value = '';
+            var paymentModeEl = document.getElementById('paymentMode');
+            if (paymentModeEl) paymentModeEl.onchange = onPaymentModeChange;
+            populatePaymentBankAccounts();
+            const paymentBankAccountEl = document.getElementById('paymentBankAccount');
+            if (paymentBankAccountEl) paymentBankAccountEl.value = '';
+            onPaymentModeChange();
             document.getElementById('paidThrough').value = '';
             document.getElementById('paymentRemarks').value = '';
             
@@ -7264,17 +7317,54 @@ function onPnLFilterChange() {
             document.getElementById('paymentModal').classList.add('hidden');
             currentPaymentData = null;
         }
+        function populatePaymentBankAccounts() {
+            const selectEl = document.getElementById('paymentBankAccount');
+            if (!selectEl) return;
+            const currentValue = selectEl.value;
+            const bankOptions = getCompanyBankAccounts();
+            selectEl.innerHTML = '<option value="">Select Bank Account</option>';
+            bankOptions.forEach(opt => {
+                selectEl.innerHTML += `<option value="${opt.id}">${escapeHtml(opt.label)}</option>`;
+            });
+            if (currentValue && bankOptions.some(b => b.id === currentValue)) {
+                selectEl.value = currentValue;
+            }
+        }
+        function onPaymentModeChange() {
+            const modeEl = document.getElementById('paymentMode');
+            const wrapEl = document.getElementById('paymentBankAccountWrap');
+            const selectEl = document.getElementById('paymentBankAccount');
+            if (!modeEl || !wrapEl || !selectEl) return;
+            const mode = String(modeEl.value || '').trim().toLowerCase();
+            // Bank Transfer + UPI both should require a bank account selection.
+            const needsBankAccount = mode === 'bank' || mode === 'upi';
+            wrapEl.classList.toggle('hidden', !needsBankAccount);
+            // Hardening: some themes/CSS can interfere with `hidden` class.
+            // Use inline display as a backup to guarantee visibility.
+            wrapEl.style.display = needsBankAccount ? '' : 'none';
+            if (needsBankAccount) {
+                populatePaymentBankAccounts();
+            } else {
+                selectEl.value = '';
+            }
+        }
         function printPaymentVoucherFromModal() {
             var titleEl = document.getElementById('paymentModalTitle');
             var amountEl = document.getElementById('paymentAmount');
             var modeEl = document.getElementById('paymentMode');
             var throughEl = document.getElementById('paidThrough');
+            var bankAccountEl = document.getElementById('paymentBankAccount');
             var remarksEl = document.getElementById('paymentRemarks');
             var party = currentPaymentData ? currentPaymentData.party : '';
             var invoice = currentPaymentData ? currentPaymentData.invoice : '';
             var amount = amountEl ? parseFloat(amountEl.value) || 0 : 0;
             var mode = modeEl ? (modeEl.options[modeEl.selectedIndex] && modeEl.options[modeEl.selectedIndex].text) || modeEl.value : '';
             var paidThrough = throughEl ? throughEl.value : '';
+            var bankAccountLabel = '-';
+            if (bankAccountEl && bankAccountEl.value) {
+                var selectedBank = bankAccountEl.options[bankAccountEl.selectedIndex];
+                bankAccountLabel = selectedBank ? selectedBank.text : '-';
+            }
             var remarks = remarksEl ? remarksEl.value : '';
             var companyName = (appData.company && appData.company.name) ? appData.company.name : 'ITCO';
             var d = new Date();
@@ -7290,6 +7380,7 @@ function onPnLFilterChange() {
                 '<p style="margin: 4px 0;"><strong>Amount:</strong> ' + RU + ' ' + amount.toFixed(2) + '</p>' +
                 '<p style="margin: 4px 0;"><strong>Amount in Words:</strong> ' + (typeof numberToWords === "function" ? numberToWords(amount) : amount.toFixed(2)) + '</p>' +
                 '<p style="margin: 4px 0;"><strong>Mode:</strong> ' + (mode || '-') + '</p>' +
+                ((modeEl && (modeEl.value === 'bank' || modeEl.value === 'upi')) ? '<p style="margin: 4px 0;"><strong>Bank Account:</strong> ' + bankAccountLabel + '</p>' : '') +
                 (paidThrough ? '<p style="margin: 4px 0;"><strong>Paid Through:</strong> ' + paidThrough + '</p>' : '') +
                 (remarks ? '<p style="margin: 4px 0;"><strong>Remarks:</strong> ' + remarks + '</p>' : '') +
                 '<hr style="margin: 16px 0;">' +
@@ -7304,6 +7395,7 @@ function onPnLFilterChange() {
             
             const amount = parseFloat(document.getElementById('paymentAmount').value);
             const mode = document.getElementById('paymentMode').value;
+            const bankAccountId = (document.getElementById('paymentBankAccount') && document.getElementById('paymentBankAccount').value) || '';
             const paidThrough = document.getElementById('paidThrough').value;
             const remarks = document.getElementById('paymentRemarks').value;
             
@@ -7314,6 +7406,12 @@ function onPnLFilterChange() {
             
             if (!mode) {
                 alert('Please select payment mode');
+                return;
+            }
+
+            const needsBankAccount = mode === 'bank' || mode === 'upi';
+            if (needsBankAccount && !bankAccountId) {
+                alert('Please select bank account for Bank Transfer/UPI payment mode');
                 return;
             }
             
@@ -7344,6 +7442,7 @@ function onPnLFilterChange() {
             }
             
             // Record payment
+            const selectedBank = getCompanyBankAccounts().find(b => b.id === bankAccountId);
             const paymentRecord = {
                 id: Date.now(),
                 type: currentPaymentData.type,
@@ -7352,6 +7451,9 @@ function onPnLFilterChange() {
                 party: currentPaymentData.party,
                 amount: amount,
                 mode: mode,
+                bankAccountId: bankAccountId || null,
+                bankAccountName: selectedBank ? selectedBank.name : null,
+                bankAccountNumber: selectedBank ? selectedBank.account : null,
                 paidThrough: paidThrough,
                 remarks: remarks,
                 date: new Date().toISOString().split('T')[0]
@@ -7530,6 +7632,12 @@ function onPnLFilterChange() {
             document.getElementById('balanceDisplay').textContent = `Balance: ${RU}${ledgerData.balance.toFixed(2)}`;
             document.getElementById('paymentAmount').value = ledgerData.balance;
             document.getElementById('paymentMode').value = '';
+            var paymentModeEl = document.getElementById('paymentMode');
+            if (paymentModeEl) paymentModeEl.onchange = onPaymentModeChange;
+            populatePaymentBankAccounts();
+            const paymentBankAccountEl = document.getElementById('paymentBankAccount');
+            if (paymentBankAccountEl) paymentBankAccountEl.value = '';
+            onPaymentModeChange();
             document.getElementById('paidThrough').value = '';
             document.getElementById('paymentRemarks').value = '';
             
@@ -7552,6 +7660,12 @@ function onPnLFilterChange() {
             document.getElementById('balanceDisplay').textContent = `Balance: ${RU}${ledgerData.balance.toFixed(2)}`;
             document.getElementById('paymentAmount').value = ledgerData.balance;
             document.getElementById('paymentMode').value = '';
+            var paymentModeEl = document.getElementById('paymentMode');
+            if (paymentModeEl) paymentModeEl.onchange = onPaymentModeChange;
+            populatePaymentBankAccounts();
+            const paymentBankAccountEl = document.getElementById('paymentBankAccount');
+            if (paymentBankAccountEl) paymentBankAccountEl.value = '';
+            onPaymentModeChange();
             document.getElementById('paidThrough').value = '';
             document.getElementById('paymentRemarks').value = '';
             
@@ -7678,9 +7792,10 @@ function exportLedgerStatement() {
                     var party = (p.party || '').toLowerCase();
                     var invoice = (p.invoice || '').toLowerCase();
                     var mode = (p.mode || '').toLowerCase();
+                    var bankAccount = (p.bankAccountName || p.bankAccountNumber || '').toLowerCase();
                     var remarks = (p.remarks != null ? String(p.remarks) : '').toLowerCase();
                     var amountStr = (p.amount != null ? String(p.amount) : '');
-                    return party.indexOf(searchTerm) >= 0 || invoice.indexOf(searchTerm) >= 0 || mode.indexOf(searchTerm) >= 0 || remarks.indexOf(searchTerm) >= 0 || amountStr.indexOf(searchTerm) >= 0;
+                    return party.indexOf(searchTerm) >= 0 || invoice.indexOf(searchTerm) >= 0 || mode.indexOf(searchTerm) >= 0 || bankAccount.indexOf(searchTerm) >= 0 || remarks.indexOf(searchTerm) >= 0 || amountStr.indexOf(searchTerm) >= 0;
                 });
             }
             var totalAmount = list.reduce(function(s, p) { return s + (parseFloat(p.amount) || 0); }, 0);
@@ -7698,11 +7813,12 @@ function exportLedgerStatement() {
             }
             if (list.length === 0) {
                 var msg = searchTerm ? 'No payments match your search. Try clearing the search or changing filters.' : 'No payments found. Try <strong>Type: All</strong> or leave date range empty to see all payments.';
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">' + msg + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">' + msg + '</td></tr>';
             } else {
                 tbody.innerHTML = pageList.map(function(p) {
                     var amt = parseFloat(p.amount) || 0;
                     var typeLabel = getPaymentDisplayType(p);
+                    var bankLabel = p.bankAccountName || p.bankAccountNumber || '-';
                     return '<tr class="border-b border-slate-200 hover:bg-slate-50">' +
                         '<td class="px-4 py-3">' + escapeHtml(p.date || '-') + '</td>' +
                         '<td class="px-4 py-3">' + escapeHtml(typeLabel) + '</td>' +
@@ -7710,6 +7826,7 @@ function exportLedgerStatement() {
                         '<td class="px-4 py-3">' + escapeHtml(p.invoice || '-') + '</td>' +
                         '<td class="px-4 py-3 text-right font-semibold">' + RU + (amt.toFixed(2)) + '</td>' +
                         '<td class="px-4 py-3">' + escapeHtml(p.mode || '-') + '</td>' +
+                        '<td class="px-4 py-3">' + escapeHtml(bankLabel) + '</td>' +
                         '<td class="px-4 py-3 text-slate-600">' + escapeHtml((p.remarks || '-').toString().slice(0, 50)) + '</td>' +
                         '</tr>';
                 }).join('');
@@ -7740,9 +7857,10 @@ function exportLedgerStatement() {
                     var party = (p.party || '').toLowerCase();
                     var invoice = (p.invoice || '').toLowerCase();
                     var mode = (p.mode || '').toLowerCase();
+                    var bankAccount = (p.bankAccountName || p.bankAccountNumber || '').toLowerCase();
                     var remarks = (p.remarks != null ? String(p.remarks) : '').toLowerCase();
                     var amountStr = (p.amount != null ? String(p.amount) : '');
-                    return party.indexOf(searchTerm) >= 0 || invoice.indexOf(searchTerm) >= 0 || mode.indexOf(searchTerm) >= 0 || remarks.indexOf(searchTerm) >= 0 || amountStr.indexOf(searchTerm) >= 0;
+                    return party.indexOf(searchTerm) >= 0 || invoice.indexOf(searchTerm) >= 0 || mode.indexOf(searchTerm) >= 0 || bankAccount.indexOf(searchTerm) >= 0 || remarks.indexOf(searchTerm) >= 0 || amountStr.indexOf(searchTerm) >= 0;
                 });
             }
             function getPaymentDisplayTypeExport(p) {
@@ -7750,11 +7868,12 @@ function exportLedgerStatement() {
                 if (p.type === 'sale' || (p.type === 'ledger_receipt' && p.entityType === 'customer')) return 'Sales payment';
                 return p.type || 'Other';
             }
-            var csv = '\uFEFFDate,Type,Party,Invoice/Ref,Amount,Mode,Remarks\n';
+            var csv = '\uFEFFDate,Type,Party,Invoice/Ref,Amount,Mode,Bank Account,Remarks\n';
             list.forEach(function(p) {
                 var amt = (parseFloat(p.amount) || 0).toFixed(2);
                 var typeLabel = getPaymentDisplayTypeExport(p);
-                csv += '"' + (p.date || '') + '","' + typeLabel + '","' + (p.party || '').replace(/"/g, '""') + '","' + (p.invoice || '').replace(/"/g, '""') + '",' + amt + ',"' + (p.mode || '').replace(/"/g, '""') + '","' + (p.remarks || '').toString().replace(/"/g, '""').slice(0, 100) + '"\n';
+                var bankLabel = (p.bankAccountName || p.bankAccountNumber || '-').toString().replace(/"/g, '""');
+                csv += '"' + (p.date || '') + '","' + typeLabel + '","' + (p.party || '').replace(/"/g, '""') + '","' + (p.invoice || '').replace(/"/g, '""') + '",' + amt + ',"' + (p.mode || '').replace(/"/g, '""') + '","' + bankLabel + '","' + (p.remarks || '').toString().replace(/"/g, '""').slice(0, 100) + '"\n';
             });
             var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
             var url = window.URL.createObjectURL(blob);
@@ -8198,6 +8317,16 @@ function exportLedgerStatement() {
             updateDeductionsHistory();
             populateOpeningBalanceDropdowns();
             updateOpeningBalanceHistory();
+            populatePaymentBankAccounts();
+            onPaymentModeChange();
+
+            // Ensure payment mode toggle always works (in addition to inline onchange attribute)
+            var paymentModeEl = document.getElementById('paymentMode');
+            if (paymentModeEl) {
+                paymentModeEl.addEventListener('change', function() {
+                    if (typeof onPaymentModeChange === 'function') onPaymentModeChange();
+                });
+            }
             
             // Set default dates to today
             const today = new Date().toISOString().split('T')[0];
