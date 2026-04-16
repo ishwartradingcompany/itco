@@ -5044,13 +5044,21 @@ function deleteAllMasters() {
     sampleSaleDate: appData.sales[0]?.date
   });
         
-            // Calculate totals - EXCLUDE truck advance from revenue for profit calculation
+            // Calculate totals for P&L:
+            // - EXCLUDE `truckAdvance` from sale revenue (already done earlier)
+            // - EXCLUDE invoice-level `advance` from both purchase costs and sale revenue by ADDING it back.
+            //   This prevents advance (received/paid) fields from affecting profit/loss.
             const totalRevenue = filteredSales.reduce((sum, sale) => {
                 const saleTotal = (sale.grandTotal || sale.total || 0);
                 const truckAdvance = sale.truckAdvance || 0;
-                return sum + saleTotal - truckAdvance; // Subtract truck advance as it's not profit
+                const invoiceAdvance = parseFloat(sale.advance) || 0;
+                return sum + saleTotal - truckAdvance + invoiceAdvance; // subtract truck advance; add invoice advance back
             }, 0);
-            const totalCosts = filteredPurchases.reduce((sum, purchase) => sum + (purchase.grandTotal || purchase.total || 0), 0);
+            const totalCosts = filteredPurchases.reduce((sum, purchase) => {
+                const purchaseTotal = (purchase.grandTotal || purchase.total || 0);
+                const invoiceAdvance = parseFloat(purchase.advance) || 0;
+                return sum + purchaseTotal + invoiceAdvance; // add invoice advance back to exclude from P&L
+            }, 0);
             const totalBrokerage = filteredBrokerage.reduce((sum, entry) => sum + (entry.amount || 0), 0);
             const totalDeductionsAmount = filteredDeductions.reduce((sum, d) => {
                 var amt = parseFloat(d.amount) || 0;
@@ -5091,7 +5099,8 @@ function deleteAllMasters() {
             filteredSales.forEach(sale => {
                 const saleTotal = sale.grandTotal || sale.total || 0;
                 const saleTruckAdvance = sale.truckAdvance || 0;
-                const saleNetAmount = saleTotal - saleTruckAdvance;
+                const invoiceAdvance = parseFloat(sale.advance) || 0;
+                const saleNetAmount = saleTotal - saleTruckAdvance + invoiceAdvance; // exclude invoice advance from P&L
                 var deductionTotals = getDeductionsForSale(sale);
                 var totalDeductionForSale = deductionTotals.netLoss;
                 var totalAdjustmentForSale = deductionTotals.adjustmentTotal || 0;
@@ -5104,8 +5113,10 @@ function deleteAllMasters() {
                         if (purchase && filteredPurchases.some(fp => fp.id === purchase.id)) {
                             // Calculate proportional amounts based on quantity used
                             const totalPurchaseQty = purchase.items ? purchase.items.reduce((sum, item) => sum + item.grossWeight, 0) : 1;
-                            const purchaseTotal = purchase.grandTotal || purchase.total || 0;
-                            const proportionalPurchaseCost = totalPurchaseQty > 0 ? (purchaseTotal / totalPurchaseQty) * link.quantityUsed : 0;
+                            const purchaseTotalRaw = purchase.grandTotal || purchase.total || 0;
+                            const purchaseInvoiceAdvance = parseFloat(purchase.advance) || 0;
+                            const purchaseTotalForPnL = purchaseTotalRaw + purchaseInvoiceAdvance; // exclude invoice advance from P&L
+                            const proportionalPurchaseCost = totalPurchaseQty > 0 ? (purchaseTotalForPnL / totalPurchaseQty) * link.quantityUsed : 0;
                             
                             // Calculate proportional sale amount
                             const proportionalSaleAmount = totalSaleQty > 0 ? (saleNetAmount / totalSaleQty) * link.quantityUsed : 0;
@@ -5161,7 +5172,7 @@ function deleteAllMasters() {
             
             filteredPurchases.forEach(purchase => {
                 if (!linkedPurchaseIds.has(purchase.id)) {
-                    const purchaseTotal = purchase.grandTotal || purchase.total || 0;
+                    const purchaseTotal = (purchase.grandTotal || purchase.total || 0) + (parseFloat(purchase.advance) || 0); // exclude invoice advance from P&L
                     pnlRows.push({
                         purchaseDate: purchase.date,
                         purchaseInvoice: purchase.invoice,
