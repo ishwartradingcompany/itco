@@ -667,6 +667,25 @@ function deleteAllMasters() {
             const nextNumber = maxExistingNumber + 1;
             return prefix + String(nextNumber).padStart(3, '0');
         }
+
+        function generateNextPurchaseInvoiceNumber(reservedInvoices) {
+            const fy = getFinancialYear();
+            const prefix = `PUR-${fy}-`;
+            const existingNumbers = new Set(appData.purchases
+                .map(p => p.invoice)
+                .filter(inv => inv && inv.startsWith(prefix))
+                .map(inv => parseInt(inv.replace(prefix, ''), 10) || 0)
+                .filter(n => n >= 1));
+            (reservedInvoices || new Set()).forEach(inv => {
+                if (inv && inv.startsWith(prefix)) {
+                    const n = parseInt(inv.replace(prefix, ''), 10) || 0;
+                    if (n >= 1) existingNumbers.add(n);
+                }
+            });
+            let nextNumber = 1;
+            while (existingNumbers.has(nextNumber)) nextNumber++;
+            return prefix + String(nextNumber).padStart(3, '0');
+        }
         
         function generateSaleInvoiceNumber() {
             const fy = getFinancialYear();
@@ -687,6 +706,7 @@ function deleteAllMasters() {
             document.getElementById('addPurchaseBtn').classList.add('hidden');
             // Auto-generate invoice number
             document.getElementById('purchaseInvoice').value = generatePurchaseInvoiceNumber();
+            onPurchaseChargeModeChange();
         }
 
         function hidePurchaseForm() {
@@ -1580,18 +1600,24 @@ function deleteAllMasters() {
 
         function addItemToPurchase() {
             const itemId = document.getElementById('purchaseItem').value;
+            const supplierId = document.getElementById('purchaseSupplier').value;
             const grossWeight = parseFloat(document.getElementById('purchaseQuantity').value);
             const bags = parseFloat(document.getElementById('purchaseBags').value) || 0;
             const discountQty = parseFloat(document.getElementById('purchaseDiscountQty').value) || 0;
             const rate = parseFloat(document.getElementById('purchaseRate').value) || 0;
             const amount = parseFloat(document.getElementById('purchaseAmount').value) || 0;
             
-            if (!itemId || !grossWeight) {
-                alert('Please select item and enter gross weight');
+            if (!supplierId || !itemId || !grossWeight) {
+                alert('Please select supplier, item and enter gross weight');
                 return;
             }
             
+            const supplier = appData.suppliers.find(s => s.id == supplierId);
             const item = appData.items.find(i => i.id == itemId);
+            if (!supplier || !item) {
+                alert('Invalid supplier or item selected');
+                return;
+            }
             let netWeight = grossWeight;
             let total = 0;
             
@@ -1629,6 +1655,8 @@ function deleteAllMasters() {
             
             const purchaseItem = {
                 id: Date.now(),
+                supplierId: supplierId,
+                supplierName: supplier.name,
                 itemId: itemId,
                 itemName: item.name,
                 grossWeight: grossWeight,
@@ -1663,7 +1691,7 @@ function deleteAllMasters() {
             tbody.innerHTML = '';
             
             if (currentPurchaseItems.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
                 return;
             }
             
@@ -1676,6 +1704,7 @@ function deleteAllMasters() {
                 const discountDisplay = discountVal(item.grossWeight, item.netWeight);
                 
                 row.innerHTML = `
+                    <td class="px-4 py-3">${item.supplierName || '-'}</td>
                     <td class="px-4 py-3">${item.itemName}</td>
                     <td class="px-4 py-3">${item.grossWeight}</td>
                     <td class="px-4 py-3">${bagsDisplay}</td>
@@ -1689,11 +1718,95 @@ function deleteAllMasters() {
                 `;
                 tbody.appendChild(row);
             });
+            renderPurchaseSupplierChargeRows();
         }
 
         function removeItemFromPurchase(index) {
             currentPurchaseItems.splice(index, 1);
             updateCurrentPurchaseItemsDisplay();
+            calculatePurchaseTotals();
+        }
+
+        function getPurchaseChargeMode() {
+            const selected = document.querySelector('input[name="purchaseChargeMode"]:checked');
+            return selected ? selected.value : 'total';
+        }
+
+        function getCurrentPurchaseSupplierGroups() {
+            const grouped = {};
+            currentPurchaseItems.forEach(item => {
+                const supplierId = item.supplierId;
+                if (!supplierId) return;
+                if (!grouped[supplierId]) {
+                    grouped[supplierId] = {
+                        supplierId: supplierId,
+                        supplierName: item.supplierName || 'Unknown',
+                        items: [],
+                        itemsTotal: 0
+                    };
+                }
+                grouped[supplierId].items.push(item);
+                grouped[supplierId].itemsTotal += (item.total || 0);
+            });
+            return grouped;
+        }
+
+        function renderPurchaseSupplierChargeRows() {
+            const body = document.getElementById('purchaseSupplierChargesBody');
+            if (!body) return;
+            const groups = Object.values(getCurrentPurchaseSupplierGroups());
+            if (groups.length === 0) {
+                body.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Add items with suppliers to enter manual charges</td></tr>';
+                return;
+            }
+
+            const currentInputs = {};
+            body.querySelectorAll('tr[data-supplier-id]').forEach(row => {
+                const supplierId = row.getAttribute('data-supplier-id');
+                currentInputs[supplierId] = {
+                    hammali: parseFloat(row.querySelector('.purchase-supplier-charge-hammali')?.value) || 0,
+                    advance: parseFloat(row.querySelector('.purchase-supplier-charge-advance')?.value) || 0,
+                    other: parseFloat(row.querySelector('.purchase-supplier-charge-other')?.value) || 0
+                };
+            });
+
+            body.innerHTML = groups.map(group => {
+                const existing = currentInputs[group.supplierId] || { hammali: 0, advance: 0, other: 0 };
+                return `
+                    <tr class="border-b border-slate-200" data-supplier-id="${group.supplierId}">
+                        <td class="px-4 py-3">${escapeHtml(group.supplierName)}</td>
+                        <td class="px-4 py-3">${RU}${group.itemsTotal.toFixed(2)}</td>
+                        <td class="px-4 py-3"><input type="number" class="purchase-supplier-charge-hammali w-full p-2 border border-slate-300 rounded" value="${existing.hammali}" oninput="calculatePurchaseTotals()"></td>
+                        <td class="px-4 py-3"><input type="number" class="purchase-supplier-charge-advance w-full p-2 border border-slate-300 rounded" value="${existing.advance}" oninput="calculatePurchaseTotals()"></td>
+                        <td class="px-4 py-3"><input type="number" class="purchase-supplier-charge-other w-full p-2 border border-slate-300 rounded" value="${existing.other}" oninput="calculatePurchaseTotals()"></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function getManualSupplierCharges() {
+            const rows = document.querySelectorAll('#purchaseSupplierChargesBody tr[data-supplier-id]');
+            const chargesBySupplier = {};
+            rows.forEach(row => {
+                const supplierId = row.getAttribute('data-supplier-id');
+                chargesBySupplier[supplierId] = {
+                    hammali: parseFloat(row.querySelector('.purchase-supplier-charge-hammali')?.value) || 0,
+                    advance: parseFloat(row.querySelector('.purchase-supplier-charge-advance')?.value) || 0,
+                    other: parseFloat(row.querySelector('.purchase-supplier-charge-other')?.value) || 0
+                };
+            });
+            return chargesBySupplier;
+        }
+
+        function onPurchaseChargeModeChange() {
+            const mode = getPurchaseChargeMode();
+            const totalChargesSection = document.getElementById('purchaseTotalChargesSection');
+            const totalOthersSection = document.getElementById('purchaseTotalOthersSection');
+            const supplierChargesSection = document.getElementById('purchaseSupplierChargesSection');
+            if (totalChargesSection) totalChargesSection.classList.toggle('hidden', mode !== 'total');
+            if (totalOthersSection) totalOthersSection.classList.toggle('hidden', mode !== 'total');
+            if (supplierChargesSection) supplierChargesSection.classList.toggle('hidden', mode !== 'supplier-wise');
+            renderPurchaseSupplierChargeRows();
             calculatePurchaseTotals();
         }
 
@@ -1782,32 +1895,42 @@ function deleteAllMasters() {
 
         function calculatePurchaseTotals() {
             const itemsTotal = currentPurchaseItems.reduce((sum, item) => sum + item.total, 0);
-            const hammali = parseFloat(document.getElementById('purchaseHammali').value) || 0;
-            const advance = parseFloat(document.getElementById('purchaseAdvance').value) || 0;
-            
-            // Get all Others entries
-            const othersEntries = getPurchaseOthersEntries();
+            const mode = getPurchaseChargeMode();
+            let hammali = 0;
+            let advance = 0;
             let othersTotal = 0;
-            
-            othersEntries.forEach(entry => {
-                if (entry.operation === 'add') {
-                    othersTotal += entry.amount;
-                } else {
-                    othersTotal -= entry.amount;
+
+            if (mode === 'supplier-wise') {
+                const supplierCharges = getManualSupplierCharges();
+                Object.keys(supplierCharges).forEach(supplierId => {
+                    const charge = supplierCharges[supplierId];
+                    hammali += charge.hammali;
+                    advance += charge.advance;
+                    othersTotal += charge.other;
+                });
+                document.getElementById('purchaseOthersDisplayContainer').style.display = othersTotal !== 0 ? 'block' : 'none';
+                if (othersTotal !== 0) {
+                    document.getElementById('purchaseOthersDisplay').textContent = Math.abs(othersTotal).toFixed(2);
+                    document.getElementById('purchaseOthersSign').textContent = othersTotal >= 0 ? '+' : '-';
                 }
-            });
-            
-            // Calculate grand total with all Others
-            let grandTotal = itemsTotal + hammali - advance + othersTotal;
-            
-            // Display Others total if any entries exist
-            if (othersEntries.length > 0) {
-                document.getElementById('purchaseOthersDisplayContainer').style.display = 'block';
-                document.getElementById('purchaseOthersDisplay').textContent = Math.abs(othersTotal).toFixed(2);
-                document.getElementById('purchaseOthersSign').textContent = othersTotal >= 0 ? '+' : '-';
             } else {
-                document.getElementById('purchaseOthersDisplayContainer').style.display = 'none';
+                hammali = parseFloat(document.getElementById('purchaseHammali').value) || 0;
+                advance = parseFloat(document.getElementById('purchaseAdvance').value) || 0;
+                const othersEntries = getPurchaseOthersEntries();
+                othersEntries.forEach(entry => {
+                    if (entry.operation === 'add') othersTotal += entry.amount;
+                    else othersTotal -= entry.amount;
+                });
+                if (othersEntries.length > 0) {
+                    document.getElementById('purchaseOthersDisplayContainer').style.display = 'block';
+                    document.getElementById('purchaseOthersDisplay').textContent = Math.abs(othersTotal).toFixed(2);
+                    document.getElementById('purchaseOthersSign').textContent = othersTotal >= 0 ? '+' : '-';
+                } else {
+                    document.getElementById('purchaseOthersDisplayContainer').style.display = 'none';
+                }
             }
+
+            let grandTotal = itemsTotal + hammali - advance + othersTotal;
             
             document.getElementById('purchaseItemsTotal').textContent = itemsTotal.toFixed(2);
             document.getElementById('purchaseHammaliDisplay').textContent = hammali.toFixed(2);
@@ -1821,40 +1944,42 @@ function deleteAllMasters() {
             const supplierId = document.getElementById('purchaseSupplier').value;
             const truck = document.getElementById('purchaseTruck').value;
             const lrNumber = (document.getElementById('purchaseLRNumber') && document.getElementById('purchaseLRNumber').value) ? document.getElementById('purchaseLRNumber').value.trim() : '';
-            const hammali = parseFloat(document.getElementById('purchaseHammali').value) || 0;
-            const advance = parseFloat(document.getElementById('purchaseAdvance').value) || 0;
-            const othersEntries = getPurchaseOthersEntries();
+            const chargeMode = getPurchaseChargeMode();
             
-            if (!date || !invoice || !supplierId || currentPurchaseItems.length === 0) {
+            if (!date || !invoice || currentPurchaseItems.length === 0) {
                 alert('Please fill in all required fields and add at least one item');
                 return;
             }
 
-            const invoiceTrim = (invoice || '').trim().toUpperCase();
-            const duplicatePurchase = appData.purchases.find(p => (p.invoice || '').trim().toUpperCase() === invoiceTrim && p.id !== editingPurchaseId);
-            if (duplicatePurchase) {
-                alert('This Purchase invoice number is already used. Please use a unique invoice number.');
+            const purchaseGroups = Object.values(getCurrentPurchaseSupplierGroups());
+            if (purchaseGroups.length === 0) {
+                alert('Please select supplier for each item before saving.');
                 return;
             }
-            
-            const supplier = appData.suppliers.find(s => s.id == supplierId);
-            if (!supplier) {
-                alert('Selected supplier not found');
-                return;
-            }
-            const itemsTotal = currentPurchaseItems.reduce((sum, item) => sum + item.total, 0);
-            
-            // Calculate grand total with Others
-            let grandTotal = itemsTotal + hammali - advance;
-            othersEntries.forEach(entry => {
-                if (entry.operation === 'add') {
-                    grandTotal += entry.amount;
-                } else {
-                    grandTotal -= entry.amount;
-                }
-            });
-            
+
             if (editingPurchaseId) {
+                const hammali = parseFloat(document.getElementById('purchaseHammali').value) || 0;
+                const advance = parseFloat(document.getElementById('purchaseAdvance').value) || 0;
+                const othersEntries = getPurchaseOthersEntries();
+                const itemsTotal = currentPurchaseItems.reduce((sum, item) => sum + item.total, 0);
+                let grandTotal = itemsTotal + hammali - advance;
+                othersEntries.forEach(entry => {
+                    if (entry.operation === 'add') grandTotal += entry.amount;
+                    else grandTotal -= entry.amount;
+                });
+
+                const invoiceTrim = (invoice || '').trim().toUpperCase();
+                const duplicatePurchase = appData.purchases.find(p => (p.invoice || '').trim().toUpperCase() === invoiceTrim && p.id !== editingPurchaseId);
+                if (duplicatePurchase) {
+                    alert('This Purchase invoice number is already used. Please use a unique invoice number.');
+                    return;
+                }
+                const supplier = appData.suppliers.find(s => s.id == supplierId);
+                if (!supplier) {
+                    alert('Selected supplier not found');
+                    return;
+                }
+
                 // Editing existing purchase
                 const existingPurchase = appData.purchases.find(p => p.id === editingPurchaseId);
                 if (existingPurchase) {
@@ -1898,28 +2023,106 @@ function deleteAllMasters() {
                 }
                 editingPurchaseId = null;
             } else {
-                // Creating new purchase
-                const purchase = {
-                    id: Date.now(),
-                    date: date,
-                    invoice: invoice,
-                    supplierId: supplierId,
-                    supplierName: supplier.name,
-                    truck: truck,
-                    lrNumber: lrNumber,
-                    items: [...currentPurchaseItems],
-                    itemsTotal: itemsTotal,
-                    hammali: hammali,
-                    advance: advance,
-                    othersEntries: othersEntries,
-                    grandTotal: grandTotal,
-                    paid: 0, // Don't count advance as paid initially
-                    balance: grandTotal, // Full amount is balance initially
-                    ...getAuditMeta(true)
-                };
-                appData.purchases.push(purchase);
-                
-                // Update inventory for new purchase (using gross weight)
+                const manualCharges = getManualSupplierCharges();
+                const totalHammali = parseFloat(document.getElementById('purchaseHammali').value) || 0;
+                const totalAdvance = parseFloat(document.getElementById('purchaseAdvance').value) || 0;
+                const totalOthersEntries = getPurchaseOthersEntries();
+                const totalItemsValue = purchaseGroups.reduce((sum, group) => sum + group.itemsTotal, 0);
+                const allocatedGroups = [];
+
+                purchaseGroups.forEach(group => {
+                    let hammali = 0;
+                    let advance = 0;
+                    let othersEntries = [];
+
+                    if (chargeMode === 'supplier-wise') {
+                        const charge = manualCharges[group.supplierId] || { hammali: 0, advance: 0, other: 0 };
+                        hammali = charge.hammali;
+                        advance = charge.advance;
+                        if (charge.other !== 0) {
+                            othersEntries = [{ reason: 'Manual supplier charge adjustment', amount: Math.abs(charge.other), operation: charge.other >= 0 ? 'add' : 'reduce' }];
+                        }
+                    } else {
+                        const ratio = totalItemsValue > 0 ? (group.itemsTotal / totalItemsValue) : 0;
+                        hammali = +(totalHammali * ratio).toFixed(2);
+                        advance = +(totalAdvance * ratio).toFixed(2);
+                        othersEntries = totalOthersEntries
+                            .filter(entry => entry.amount > 0)
+                            .map(entry => ({ reason: entry.reason, amount: +(entry.amount * ratio).toFixed(2), operation: entry.operation }))
+                            .filter(entry => entry.amount > 0);
+                    }
+
+                    let grandTotal = group.itemsTotal + hammali - advance;
+                    othersEntries.forEach(entry => {
+                        if (entry.operation === 'add') grandTotal += entry.amount;
+                        else grandTotal -= entry.amount;
+                    });
+
+                    allocatedGroups.push({
+                        supplierId: group.supplierId,
+                        supplierName: group.supplierName,
+                        items: group.items,
+                        itemsTotal: group.itemsTotal,
+                        hammali: hammali,
+                        advance: advance,
+                        othersEntries: othersEntries,
+                        grandTotal: +grandTotal.toFixed(2)
+                    });
+                });
+
+                if (chargeMode === 'total' && allocatedGroups.length > 0) {
+                    const allocatedGrand = allocatedGroups.reduce((sum, group) => sum + group.grandTotal, 0);
+                    let expectedGrand = totalItemsValue + totalHammali - totalAdvance;
+                    totalOthersEntries.forEach(entry => {
+                        if (entry.operation === 'add') expectedGrand += entry.amount;
+                        else expectedGrand -= entry.amount;
+                    });
+                    const delta = +(expectedGrand - allocatedGrand).toFixed(2);
+                    if (delta !== 0) {
+                        allocatedGroups[allocatedGroups.length - 1].grandTotal = +(allocatedGroups[allocatedGroups.length - 1].grandTotal + delta).toFixed(2);
+                    }
+                }
+
+                const reservedInvoices = new Set();
+                const singleSupplierEntry = allocatedGroups.length === 1;
+                let createdCount = 0;
+                allocatedGroups.forEach((group, idx) => {
+                    const groupInvoice = singleSupplierEntry && idx === 0
+                        ? invoice
+                        : generateNextPurchaseInvoiceNumber(reservedInvoices);
+                    const invoiceTrim = (groupInvoice || '').trim().toUpperCase();
+                    const duplicatePurchase = appData.purchases.find(p => (p.invoice || '').trim().toUpperCase() === invoiceTrim);
+                    if (duplicatePurchase) return;
+                    reservedInvoices.add(groupInvoice);
+
+                    const purchase = {
+                        id: Date.now() + idx,
+                        date: date,
+                        invoice: groupInvoice,
+                        supplierId: group.supplierId,
+                        supplierName: group.supplierName,
+                        truck: truck,
+                        lrNumber: lrNumber,
+                        items: [...group.items],
+                        itemsTotal: +group.itemsTotal.toFixed(2),
+                        hammali: +group.hammali.toFixed(2),
+                        advance: +group.advance.toFixed(2),
+                        othersEntries: group.othersEntries,
+                        grandTotal: group.grandTotal,
+                        paid: 0,
+                        balance: group.grandTotal,
+                        sourceChargeMode: chargeMode,
+                        ...getAuditMeta(true)
+                    };
+                    appData.purchases.push(purchase);
+                    createdCount++;
+                });
+
+                if (createdCount === 0) {
+                    alert('Could not save purchase invoices due to invoice number conflicts. Please try again.');
+                    return;
+                }
+
                 currentPurchaseItems.forEach(item => {
                     if (!appData.inventory[item.itemId]) {
                         appData.inventory[item.itemId] = { quantity: 0, totalCost: 0 };
@@ -1947,7 +2150,7 @@ function deleteAllMasters() {
             clearPurchaseForm();
             const wasEditing = editingPurchaseId !== null;
             editingPurchaseId = null;
-            alert(wasEditing ? 'Purchase updated successfully!' : 'Purchase invoice saved successfully!');
+            alert(wasEditing ? 'Purchase updated successfully!' : 'Purchase invoice(s) saved successfully!');
             
             // Return to history view
             hidePurchaseForm();
@@ -6697,10 +6900,13 @@ function onPnLFilterChange() {
             if (plrEl) plrEl.value = purchase.lrNumber || '';
             document.getElementById('purchaseHammali').value = purchase.hammali || 0;
             document.getElementById('purchaseAdvance').value = purchase.advance || 0;
+            const totalModeRadio = document.getElementById('purchaseChargeModeTotal');
+            if (totalModeRadio) totalModeRadio.checked = true;
             
             // Load items into current items array
             currentPurchaseItems = purchase.items ? [...purchase.items] : [];
             updateCurrentPurchaseItemsDisplay();
+            onPurchaseChargeModeChange();
             calculatePurchaseTotals();
             
             // Show the purchase form
@@ -6777,6 +6983,9 @@ function onPnLFilterChange() {
             // Clear current items
             currentPurchaseItems = [];
             updateCurrentPurchaseItemsDisplay();
+            const totalModeRadio = document.getElementById('purchaseChargeModeTotal');
+            if (totalModeRadio) totalModeRadio.checked = true;
+            onPurchaseChargeModeChange();
             calculatePurchaseTotals();
             editingPurchaseId = null;
         }
