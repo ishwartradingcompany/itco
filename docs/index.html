@@ -887,6 +887,7 @@
                         <table class="w-full table-auto border border-slate-200 rounded-lg">
                             <thead>
                                 <tr class="bg-slate-50">
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Supplier</th>
                                     <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Item</th>
                                     <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Gross Weight</th>
                                     <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Bag/Quantity</th>
@@ -899,7 +900,7 @@
                             </thead>
                             <tbody id="currentPurchaseItems">
                                 <tr>
-                                    <td colspan="8" class="px-4 py-8 text-center text-slate-500">No items added yet</td>
+                                    <td colspan="9" class="px-4 py-8 text-center text-slate-500">No items added yet</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -907,7 +908,23 @@
                 </div>
 
                 <!-- Invoice Totals -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Charges Entry Mode</label>
+                        <div class="flex flex-col md:flex-row gap-3">
+                            <label class="inline-flex items-center gap-2 p-3 border border-slate-300 rounded-lg cursor-pointer">
+                                <input type="radio" name="purchaseChargeMode" id="purchaseChargeModeTotal" value="total" checked onchange="onPurchaseChargeModeChange()">
+                                <span class="text-sm text-slate-700">Total Charges (Auto Split Supplier-wise)</span>
+                            </label>
+                            <label class="inline-flex items-center gap-2 p-3 border border-slate-300 rounded-lg cursor-pointer">
+                                <input type="radio" name="purchaseChargeMode" id="purchaseChargeModeSupplierWise" value="supplier-wise" onchange="onPurchaseChargeModeChange()">
+                                <span class="text-sm text-slate-700">Supplier-wise Charges (Manual)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="purchaseTotalChargesSection" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-2">Hammali (Loading/Unloading)</label>
                         <input type="number" id="purchaseHammali" placeholder="Hammali Amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
@@ -919,7 +936,7 @@
                 </div>
 
                 <!-- Others Section -->
-                <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
+                <div id="purchaseTotalOthersSection" class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
                     <div class="flex justify-between items-center mb-4">
                         <h4 class="text-lg font-semibold text-slate-700">Others (Additional Charges/Deductions)</h4>
                         <button type="button" onclick="addPurchaseOthersRow()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">
@@ -958,6 +975,31 @@
                         </div>
                     </div>
                     <p class="text-xs text-slate-500 mt-2">Use for cold storage rent, labour, transport, stocking, seed investment, etc.</p>
+                </div>
+
+                <div id="purchaseSupplierChargesSection" class="bg-amber-50 border-2 border-amber-200 rounded-lg p-4 mb-6 hidden">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="text-lg font-semibold text-slate-700">Supplier-wise Charges (Manual)</h4>
+                        <span class="text-xs text-slate-500">Values entered here will be used per supplier bill</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-auto border border-slate-200 rounded-lg">
+                            <thead>
+                                <tr class="bg-slate-100">
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Supplier</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Items Total</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Hammali</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Advance</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Other (+/-)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="purchaseSupplierChargesBody">
+                                <tr>
+                                    <td colspan="5" class="px-4 py-6 text-center text-slate-500">Add items with suppliers to enter manual charges</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <div class="bg-gray-50 p-6 rounded-lg">
