@@ -1,75 +1,79 @@
-function computeBankAudit(appData) {
-  const payments = (appData && appData.payments) ? appData.payments : [];
-  const result = {};
-  const exceptions = [];
-  let supplierCredit = 0;
-  let customerDebit = 0;
+// Bank-aware audit engine (CA-ready checks)
+// Uses appData.payments as the source of truth.
+function computeAutoAuditBank(data) {
+  var payments = (data && data.payments) ? data.payments : [];
+  var resultByBank = {};
+  var exceptions = [];
+  var supplierCreditTotal = 0;
+  var customerDebitTotal = 0;
 
-  function getBankLabel(p) {
-    return p.bankAccountName || p.bankAccountNumber || p.bankAccountId || "Unknown/Not Captured";
+  function bankLabel(p) {
+    return p.bankAccountName || p.bankAccountNumber || p.bankAccountId || 'Unknown/Not Captured';
   }
 
-  payments.forEach(p => {
-    const amount = parseFloat(p.amount) || 0;
-    const mode = (p.mode || "").toLowerCase();
-    const needsBank = mode === "bank" || mode === "upi";
-    const hasBank = !!(p.bankAccountId || p.bankAccountName || p.bankAccountNumber);
-    const bankLabel = getBankLabel(p);
+  payments.forEach(function(p) {
+    var amount = parseFloat(p.amount) || 0;
+    var mode = (p.mode || '').toLowerCase();
 
-    if (!result[bankLabel]) {
-      result[bankLabel] = {
-        bank: bankLabel,
-        supplierCredit: 0,
-        customerDebit: 0
-      };
-    }
+    var needsBankAccount = (mode === 'bank' || mode === 'upi');
+    var hasBankAccount = !!(p.bankAccountId || p.bankAccountName || p.bankAccountNumber);
 
-    const isSupplierPayment = p.type === "purchase" || (p.type === "ledger_payment" && p.entityType === "supplier");
-    const isCustomerReceipt = p.type === "sale" || (p.type === "ledger_receipt" && p.entityType === "customer");
+    var isSupplierPayment = p.type === 'purchase' || (p.type === 'ledger_payment' && p.entityType === 'supplier');
+    var isCustomerReceipt = p.type === 'sale' || (p.type === 'ledger_receipt' && p.entityType === 'customer');
+
+    var label = bankLabel(p);
+    if (!resultByBank[label]) resultByBank[label] = { bank: label, supplierCredit: 0, customerDebit: 0 };
 
     if (isSupplierPayment) {
-      result[bankLabel].supplierCredit += amount;
-      supplierCredit += amount;
-    }
-    if (isCustomerReceipt) {
-      result[bankLabel].customerDebit += amount;
-      customerDebit += amount;
+      resultByBank[label].supplierCredit += amount;
+      supplierCreditTotal += amount;
     }
 
-    if (needsBank && !hasBank) {
+    if (isCustomerReceipt) {
+      resultByBank[label].customerDebit += amount;
+      customerDebitTotal += amount;
+    }
+
+    if (needsBankAccount && !hasBankAccount) {
       exceptions.push({
-        date: p.date || "-",
-        type: p.type || "-",
-        party: p.party || "-",
-        mode: p.mode || "-",
-        issue: "Bank/UPI mode used but bank account not captured"
+        date: p.date || '-',
+        type: p.type || '-',
+        party: p.party || '-',
+        mode: p.mode || '-',
+        issue: 'Bank/UPI mode used but bank account not captured'
       });
     }
   });
 
-  const rows = Object.values(result).map(r => ({
-    bank: r.bank,
-    supplierCredit: r.supplierCredit,
-    customerDebit: r.customerDebit,
-    netMovement: r.customerDebit - r.supplierCredit
-  }));
+  var bankRows = Object.keys(resultByBank).map(function(k) {
+    var r = resultByBank[k];
+    return {
+      bank: r.bank,
+      supplierCredit: r.supplierCredit,
+      customerDebit: r.customerDebit,
+      netMovement: r.customerDebit - r.supplierCredit
+    };
+  });
 
   return {
     summary: {
       totalPayments: payments.length,
-      totalSupplierCredit: supplierCredit,
-      totalCustomerDebit: customerDebit,
-      totalNetMovement: customerDebit - supplierCredit,
-      uniqueBankAccounts: rows.length
+      totalSupplierCredit: supplierCreditTotal,
+      totalCustomerDebit: customerDebitTotal,
+      totalNetMovement: customerDebitTotal - supplierCreditTotal,
+      uniqueBankAccounts: bankRows.length
     },
     checks: [
       {
-        name: "Bank capture for Bank/UPI",
-        status: exceptions.length === 0 ? "PASS" : "FAIL",
-        detail: exceptions.length === 0 ? "All bank/UPI entries have bank account captured" : `${exceptions.length} entries missing bank account`
+        name: 'Bank capture for Bank/UPI',
+        status: exceptions.length === 0 ? 'PASS' : 'FAIL',
+        detail: exceptions.length === 0
+          ? 'All bank/UPI entries have bank account captured'
+          : exceptions.length + ' entries missing bank account'
       }
     ],
-    bankRows: rows,
+    bankRows: bankRows,
     exceptions: exceptions
   };
 }
+
