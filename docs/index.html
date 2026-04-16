@@ -14,6 +14,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-storage-compat.js"></script>
     <script src="js/firebase-config.js" charset="UTF-8"></script>
     <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/audit.css">
 </head>
 <body class="bg-slate-100 font-sans min-h-screen antialiased">
 <!-- Styles loaded from css/main.css -->
@@ -402,6 +403,12 @@
                             </div>
                             <span class="text-xs font-medium text-slate-600">Ledger</span>
                         </button>
+                        <button onclick="showPage('audit'); runAutoAudit();" class="flex flex-col items-center gap-1 p-2 bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg hover:from-rose-50 hover:to-rose-100 transition-all group">
+                            <div class="w-8 h-8 bg-rose-100 rounded-lg flex items-center justify-center group-hover:bg-rose-200 transition-colors">
+                                <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6m3 6V7m3 10v-3M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
+                            </div>
+                            <span class="text-xs font-medium text-slate-600">Auto Audit</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -532,6 +539,9 @@
                         <input type="text" id="bankName2" placeholder="Bank 2 Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <input type="text" id="bankAccount2" placeholder="Bank 2 Account Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <input type="text" id="ifsc2" placeholder="Bank 2 IFSC Code" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="bankName3" placeholder="Bank 3 Name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="bankAccount3" placeholder="Bank 3 Account Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="ifsc3" placeholder="Bank 3 IFSC Code" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <input type="text" id="upiNumber" placeholder="UPI Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <button onclick="saveCompanyDetails()" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors">Save Company Details</button>
                     </div>
@@ -1901,7 +1911,7 @@
                 </div>
                 <div class="mb-4 flex flex-wrap items-center gap-3">
                     <label class="text-sm font-medium text-slate-700">Search</label>
-                    <input type="text" id="paymentsSearch" placeholder="Search by party, invoice, mode, remarks..." oninput="onPaymentsFilterChange()" class="flex-1 min-w-[200px] p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    <input type="text" id="paymentsSearch" placeholder="Search by party, invoice, mode, bank account, remarks..." oninput="onPaymentsFilterChange()" class="flex-1 min-w-[200px] p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                     <button type="button" onclick="document.getElementById('paymentsSearch').value=''; onPaymentsFilterChange();" class="px-3 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 text-sm">Clear</button>
                 </div>
                 <div class="overflow-x-auto">
@@ -1914,11 +1924,12 @@
                                 <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Invoice / Ref</th>
                                 <th class="px-4 py-3 text-right text-sm font-medium text-slate-700">Amount</th>
                                 <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Mode</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Bank Account</th>
                                 <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Remarks</th>
                             </tr>
                         </thead>
                         <tbody id="paymentsTableBody">
-                            <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Select filters and apply, or view all payments.</td></tr>
+                            <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">Select filters and apply, or view all payments.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -2464,6 +2475,88 @@
         </div>
     </div>
 
+    <!-- Page 12: Auto Audit -->
+    <div id="audit" class="page-content hidden">
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <div class="mb-6 border-l-4 border-rose-600 pl-3">
+                <h2 class="text-2xl font-bold text-slate-900">Auto Audit (CA Ready)</h2>
+                <p class="text-slate-600 text-sm mt-1">Bank-aware debit/credit checks based on your payment capture.</p>
+            </div>
+
+            <div class="audit-card">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <div class="min-w-[240px]">
+                        <h3 class="text-lg font-semibold text-slate-800 mb-1">Run Audit</h3>
+                        <p class="text-slate-600 text-sm">Generates bank-wise trail + exceptions.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-3">
+                        <button onclick="runAutoAudit()" class="bg-primary text-white px-5 py-2 rounded-lg hover:bg-green-700 transition-colors font-medium">
+                            Run Auto Audit
+                        </button>
+                        <button onclick="exportAutoAuditCsv()" class="bg-slate-700 text-white px-5 py-2 rounded-lg hover:bg-slate-800 transition-colors font-medium">
+                            Export CSV
+                        </button>
+                    </div>
+                </div>
+                <p id="auditStatusText" class="text-slate-600 text-sm mt-4">No data loaded yet.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="audit-card">
+                    <h3 class="text-lg font-semibold text-slate-800 mb-3">Summary</h3>
+                    <div id="auditSummaryList" class="space-y-2 text-slate-700"></div>
+                </div>
+                <div class="audit-card">
+                    <h3 class="text-lg font-semibold text-slate-800 mb-3">Compliance Checks</h3>
+                    <ul id="auditChecksList" class="space-y-2 text-slate-700"></ul>
+                </div>
+            </div>
+
+            <div class="audit-card">
+                <h3 class="text-lg font-semibold text-slate-800 mb-3">Bank-wise Debit/Credit Trail</h3>
+                <div class="audit-table-wrap">
+                    <table class="audit-table">
+                        <thead>
+                            <tr>
+                                <th>Bank Account</th>
+                                <th class="num">Supplier Payments (Credit)</th>
+                                <th class="num">Customer Receipts (Debit)</th>
+                                <th class="num">Net Movement</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditBankTableBody">
+                            <tr>
+                                <td colspan="4" class="audit-empty">Run audit to see bank-wise details.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="audit-card">
+                <h3 class="text-lg font-semibold text-slate-800 mb-3">Exceptions (Missing/Invalid Bank Capture)</h3>
+                <div class="audit-table-wrap">
+                    <table class="audit-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Party</th>
+                                <th>Mode</th>
+                                <th>Issue</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditExceptionsTableBody">
+                            <tr>
+                                <td colspan="5" class="audit-empty">No exceptions found.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Payment Modal -->
     <div id="paymentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
         <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
@@ -2485,7 +2578,7 @@
                 
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-2">Payment Mode</label>
-                    <select id="paymentMode" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    <select id="paymentMode" onchange="onPaymentModeChange()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <option value="">Select Payment Mode</option>
                         <option value="cash">Cash</option>
                         <option value="upi">UPI</option>
@@ -2493,6 +2586,14 @@
                         <option value="cheque">Cheque</option>
                         <option value="advance">Advance (e.g. seed to farmer)</option>
                     </select>
+                </div>
+
+                <div id="paymentBankAccountWrap" class="hidden">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Bank Account <span class="text-red-500">*</span></label>
+                    <select id="paymentBankAccount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="">Select Bank Account</option>
+                    </select>
+                    <small class="text-slate-500">Required for Bank Transfer and UPI mode</small>
                 </div>
                 
                 <div>
@@ -2574,6 +2675,9 @@
 
     <script src="js/ui.js" charset="UTF-8"></script>
     <script src="js/app.js" charset="UTF-8"></script>
+    <script src="js/audit-engine.js" charset="UTF-8"></script>
+    <script src="js/audit-ui.js" charset="UTF-8"></script>
+    <script src="js/audit-export.js" charset="UTF-8"></script>
     <script src="js/auth.js" charset="UTF-8"></script>
 
 
