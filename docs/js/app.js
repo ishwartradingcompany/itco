@@ -658,26 +658,26 @@ function deleteAllMasters() {
         function generatePurchaseInvoiceNumber() {
             const fy = getFinancialYear();
             const prefix = `PUR-${fy}-`;
-            const existingNumbers = new Set(appData.purchases
+            const maxExistingNumber = appData.purchases
                 .map(p => p.invoice)
                 .filter(inv => inv && inv.startsWith(prefix))
                 .map(inv => parseInt(inv.replace(prefix, ''), 10) || 0)
-                .filter(n => n >= 1));
-            let nextNumber = 1;
-            while (existingNumbers.has(nextNumber)) nextNumber++;
+                .filter(n => n >= 1)
+                .reduce((max, n) => Math.max(max, n), 0);
+            const nextNumber = maxExistingNumber + 1;
             return prefix + String(nextNumber).padStart(3, '0');
         }
         
         function generateSaleInvoiceNumber() {
             const fy = getFinancialYear();
             const prefix = `SALE-${fy}-`;
-            const existingNumbers = new Set(appData.sales
+            const maxExistingNumber = appData.sales
                 .map(s => s.invoice)
                 .filter(inv => inv && inv.startsWith(prefix))
                 .map(inv => parseInt(inv.replace(prefix, ''), 10) || 0)
-                .filter(n => n >= 1));
-            let nextNumber = 1;
-            while (existingNumbers.has(nextNumber)) nextNumber++;
+                .filter(n => n >= 1)
+                .reduce((max, n) => Math.max(max, n), 0);
+            const nextNumber = maxExistingNumber + 1;
             return prefix + String(nextNumber).padStart(3, '0');
         }
         
