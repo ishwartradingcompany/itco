@@ -269,13 +269,15 @@ function computePeriodSummary(data, fromDateStr, toDateStr) {
   var totalPurchases = 0;
   purchases.forEach(function(p) {
     if (!inPeriod(p.date)) return;
-    totalPurchases += (parseFloat(p.grandTotal) || 0);
+    // Exclude invoice-level advance from P&L-style audit totals.
+    totalPurchases += (parseFloat(p.grandTotal) || 0) + (parseFloat(p.advance) || 0);
   });
 
   var totalSales = 0;
   sales.forEach(function(s) {
     if (!inPeriod(s.date)) return;
-    totalSales += (parseFloat(s.grandTotal) || 0);
+    // Keep truckAdvance excluded, and add invoice advance back to avoid advance-adjusted profit.
+    totalSales += (parseFloat(s.grandTotal) || 0) - (parseFloat(s.truckAdvance) || 0) + (parseFloat(s.advance) || 0);
   });
 
   var totalBrokerage = 0;
