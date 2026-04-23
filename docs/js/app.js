@@ -2955,6 +2955,8 @@ function deleteAllMasters() {
             }
         }
 
+        let editingSaleItemIndex = -1;
+
         function addItemToSale() {
             const itemId = document.getElementById('saleItem').value;
             const grossWeight = parseFloat(document.getElementById('saleQuantity').value);
@@ -2986,14 +2988,23 @@ function deleteAllMasters() {
                 total = netWeight * rate;
             }
             
-            // Check if enough stock is available (using gross weight)
-            if (!appData.inventory[itemId] || appData.inventory[itemId].quantity < grossWeight) {
+            // Effective availability: include gross weight of the row being edited (if same item).
+            let effectiveAvailable = (appData.inventory[itemId] && appData.inventory[itemId].quantity) || 0;
+            if (editingSaleItemIndex >= 0) {
+                const existingRow = currentSaleItems[editingSaleItemIndex];
+                if (existingRow && String(existingRow.itemId) === String(itemId)) {
+                    effectiveAvailable += parseFloat(existingRow.grossWeight) || 0;
+                }
+            }
+            if (effectiveAvailable < grossWeight) {
                 alert('Insufficient stock available!');
                 return;
             }
             
             const saleItem = {
-                id: Date.now(),
+                id: (editingSaleItemIndex >= 0 && currentSaleItems[editingSaleItemIndex])
+                    ? currentSaleItems[editingSaleItemIndex].id
+                    : Date.now(),
                 itemId: itemId,
                 itemName: item.name,
                 grossWeight: grossWeight, // Gross quantity to be deducted from inventory
@@ -3005,7 +3016,13 @@ function deleteAllMasters() {
                 isCoconut: item.name.toLowerCase().includes('coconut') // Flag for special handling
             };
             
-            currentSaleItems.push(saleItem);
+            if (editingSaleItemIndex >= 0) {
+                currentSaleItems[editingSaleItemIndex] = saleItem;
+                editingSaleItemIndex = -1;
+                resetSaleItemFormMode();
+            } else {
+                currentSaleItems.push(saleItem);
+            }
             updateCurrentSaleItemsDisplay();
             calculateSaleTotals();
             
@@ -3022,6 +3039,66 @@ function deleteAllMasters() {
             document.getElementById('saleDiscountQtyContainer').style.display = 'none';
         }
 
+        function editItemInSale(index) {
+            const item = currentSaleItems[index];
+            if (!item) return;
+            editingSaleItemIndex = index;
+            
+            document.getElementById('saleItem').value = item.itemId;
+            document.getElementById('saleQuantity').value = item.grossWeight || '';
+            document.getElementById('saleBags').value = item.bags || '';
+            document.getElementById('saleDiscount').value = (item.grossWeight - item.netWeight).toFixed(2);
+            document.getElementById('saleNetWeight').value = item.netWeight || '';
+            document.getElementById('saleDiscountQty').value = item.discountQty || 0;
+            document.getElementById('saleRate').value = item.rate || '';
+            document.getElementById('saleItemTotal').value = (item.total || 0).toFixed(2);
+            
+            // Refresh available stock display for this item
+            if (typeof updateAvailableStock === 'function') {
+                updateAvailableStock();
+            }
+            document.getElementById('saleDiscountQtyContainer').style.display = item.isCoconut ? '' : 'none';
+            
+            // Change the "Add Item" button to "Update Item" visually.
+            const btn = document.querySelector('button[onclick="addItemToSale()"]');
+            if (btn) {
+                btn.textContent = 'Update Item';
+                btn.classList.remove('bg-secondary');
+                btn.classList.add('bg-amber-600');
+            }
+            
+            updateCurrentSaleItemsDisplay();
+            var target = document.getElementById('saleItem');
+            if (target && typeof target.scrollIntoView === 'function') {
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        function cancelEditSaleItem() {
+            editingSaleItemIndex = -1;
+            resetSaleItemFormMode();
+            document.getElementById('saleItem').value = '';
+            document.getElementById('saleQuantity').value = '';
+            document.getElementById('saleBags').value = '';
+            document.getElementById('saleDiscount').value = '0';
+            document.getElementById('saleNetWeight').value = '';
+            document.getElementById('saleDiscountQty').value = '0';
+            document.getElementById('saleRate').value = '';
+            document.getElementById('saleItemTotal').value = '';
+            document.getElementById('availableStock').textContent = 'Available: 0';
+            document.getElementById('saleDiscountQtyContainer').style.display = 'none';
+            updateCurrentSaleItemsDisplay();
+        }
+
+        function resetSaleItemFormMode() {
+            const btn = document.querySelector('button[onclick="addItemToSale()"]');
+            if (btn) {
+                btn.textContent = 'Add Item to Invoice';
+                btn.classList.remove('bg-amber-600');
+                btn.classList.add('bg-secondary');
+            }
+        }
+
         function updateCurrentSaleItemsDisplay() {
             const tbody = document.getElementById('currentSaleItems');
             tbody.innerHTML = '';
@@ -3033,13 +3110,20 @@ function deleteAllMasters() {
             
             currentSaleItems.forEach((item, index) => {
                 const row = document.createElement('tr');
-                row.className = 'border-b border-slate-200';
+                const isEditing = (index === editingSaleItemIndex);
+                row.className = 'border-b border-slate-200' + (isEditing ? ' bg-amber-50' : '');
                 
                 // For coconut, show discount quantity instead of bags
                 const middleColumn = item.isCoconut 
                     ? `<td class="px-4 py-3">${item.discountQty || 0}</td>` 
                     : `<td class="px-4 py-3">${item.bags}</td>`;
                 
+                const actionCell = isEditing
+                    ? `<button onclick="cancelEditSaleItem()" class="text-slate-600 hover:text-slate-800 font-medium mr-3">Cancel</button>
+                       <button onclick="removeItemFromSale(${index})" class="text-red-500 hover:text-red-700 font-medium">Remove</button>`
+                    : `<button onclick="editItemInSale(${index})" class="text-blue-600 hover:text-blue-800 font-medium mr-3">Edit</button>
+                       <button onclick="removeItemFromSale(${index})" class="text-red-500 hover:text-red-700 font-medium">Remove</button>`;
+
                 row.innerHTML = `
                     <td class="px-4 py-3">${item.itemName}</td>
                     <td class="px-4 py-3">${item.grossWeight}</td>
@@ -3047,15 +3131,20 @@ function deleteAllMasters() {
                     <td class="px-4 py-3">${item.netWeight}</td>
                     <td class="px-4 py-3">${RU}${item.rate}</td>
                     <td class="px-4 py-3">${RU}${item.total.toFixed(2)}</td>
-                    <td class="px-4 py-3">
-                        <button onclick="removeItemFromSale(${index})" class="text-red-500 hover:text-red-700 font-medium">Remove</button>
-                    </td>
+                    <td class="px-4 py-3">${actionCell}</td>
                 `;
                 tbody.appendChild(row);
             });
         }
 
         function removeItemFromSale(index) {
+            if (editingSaleItemIndex === index) {
+                // Cancel edit mode first before removing.
+                editingSaleItemIndex = -1;
+                resetSaleItemFormMode();
+            } else if (editingSaleItemIndex > index) {
+                editingSaleItemIndex -= 1;
+            }
             currentSaleItems.splice(index, 1);
             updateCurrentSaleItemsDisplay();
             calculateSaleTotals();
@@ -3384,6 +3473,8 @@ function deleteAllMasters() {
             
             currentSaleItems = [];
             editingSaleId = null;
+            editingSaleItemIndex = -1;
+            resetSaleItemFormMode();
             updateCurrentSaleItemsDisplay();
             calculateSaleTotals();
             
@@ -7322,6 +7413,8 @@ function onPnLFilterChange() {
             updateCurrentSaleItemsDisplay();
             calculateSaleTotals();
             editingSaleId = null;
+            editingSaleItemIndex = -1;
+            resetSaleItemFormMode();
         }
 
         let currentPaymentData = null;
