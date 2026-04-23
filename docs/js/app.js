@@ -995,6 +995,130 @@ function deleteAllMasters() {
             var n = normalizedName(name);
             return (appData.brokers || []).some(function(b) { return (b.id !== excludeId) && normalizedName(b.name) === n; });
         }
+        function normalizeMobileForWhatsApp(rawMobile) {
+            var digits = String(rawMobile || '').replace(/\D/g, '');
+            if (!digits) return '';
+            if (digits.length === 10) return '91' + digits;
+            if (digits.length === 12 && digits.indexOf('91') === 0) return digits;
+            return digits;
+        }
+        function formatDateForMessage(dateStr) {
+            if (!dateStr) return '-';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB');
+            }
+            return dateStr;
+        }
+        function openWhatsAppChat(rawMobile, message) {
+            var mobile = normalizeMobileForWhatsApp(rawMobile);
+            if (!mobile || mobile.length < 10) return false;
+            var text = encodeURIComponent(String(message || '').trim());
+            window.open('https://wa.me/' + mobile + '?text=' + text, '_blank');
+            return true;
+        }
+        function buildPurchaseWhatsAppMessage(purchase) {
+            if (!purchase) return '';
+            var total = parseFloat(purchase.grandTotal || purchase.total || 0);
+            var paid = parseFloat(purchase.paid || 0);
+            var balance = total - paid;
+            return [
+                (appData.company && appData.company.name) ? appData.company.name : 'Ishwar Trading Company',
+                'Purchase Invoice: ' + (purchase.invoice || '-'),
+                'Date: ' + formatDateForMessage(purchase.date),
+                'Supplier: ' + (purchase.supplierName || '-'),
+                'Total: ' + RU + total.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                'Paid: ' + RU + paid.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                'Balance: ' + RU + balance.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                '',
+                'Please verify ledger details.'
+            ].join('\n');
+        }
+        function buildSaleWhatsAppMessage(sale) {
+            if (!sale) return '';
+            var total = parseFloat(sale.grandTotal || sale.total || 0);
+            var received = parseFloat(sale.received || 0);
+            var balance = total - received;
+            return [
+                (appData.company && appData.company.name) ? appData.company.name : 'Ishwar Trading Company',
+                'Sales Invoice: ' + (sale.invoice || '-'),
+                'Date: ' + formatDateForMessage(sale.date),
+                'Customer: ' + (sale.customerName || '-'),
+                'Total: ' + RU + total.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                'Received: ' + RU + received.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                'Balance: ' + RU + balance.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                '',
+                'Thank you for your business.'
+            ].join('\n');
+        }
+        function buildLedgerWhatsAppMessage() {
+            var meta = window.currentLedgerData || {};
+            var entries = (typeof currentLedgerData !== 'undefined' && Array.isArray(currentLedgerData)) ? currentLedgerData : [];
+            var fromDate = (document.getElementById('ledgerFromDate') || {}).value || '';
+            var toDate = (document.getElementById('ledgerToDate') || {}).value || '';
+            var periodLine = (fromDate || toDate)
+                ? ('Period: ' + (fromDate || 'Start') + ' to ' + (toDate || 'Today'))
+                : 'Period: All entries';
+            var topEntries = entries.slice(-5).map(function(e) {
+                return '- ' + (e.date || '-') + ' | ' + (e.description || '-') + ' | Bal ' + RU + (parseFloat(e.balance) || 0).toFixed(2);
+            });
+            return [
+                (appData.company && appData.company.name) ? appData.company.name : 'Ishwar Trading Company',
+                'Ledger Statement',
+                'Party: ' + (meta.entityName || '-'),
+                periodLine,
+                'Current Balance: ' + RU + (parseFloat(meta.balance) || 0).toFixed(2),
+                '',
+                'Recent Entries:',
+                topEntries.join('\n') || '- No entries',
+                '',
+                'Please confirm the ledger balance.'
+            ].join('\n');
+        }
+        function sendPurchaseWhatsApp(purchaseId) {
+            var purchase = (appData.purchases || []).find(function(p) { return p.id === purchaseId; });
+            if (!purchase) return;
+            var supplier = (appData.suppliers || []).find(function(s) { return String(s.id) === String(purchase.supplierId); });
+            if (!supplier || !supplier.mobile) {
+                alert('Mobile not found for this supplier. Please update it in Masters first.');
+                return;
+            }
+            if (!openWhatsAppChat(supplier.mobile, buildPurchaseWhatsAppMessage(purchase))) {
+                alert('Invalid mobile number for this supplier. Please correct it in Masters.');
+            }
+        }
+        function sendSaleWhatsApp(saleId) {
+            var sale = (appData.sales || []).find(function(s) { return s.id === saleId; });
+            if (!sale) return;
+            var customer = (appData.customers || []).find(function(c) { return String(c.id) === String(sale.customerId); });
+            if (!customer || !customer.mobile) {
+                alert('Mobile not found for this customer. Please update it in Masters first.');
+                return;
+            }
+            if (!openWhatsAppChat(customer.mobile, buildSaleWhatsAppMessage(sale))) {
+                alert('Invalid mobile number for this customer. Please correct it in Masters.');
+            }
+        }
+        function sendLedgerWhatsApp() {
+            var meta = window.currentLedgerData || {};
+            if (!meta.type || !meta.entityId) {
+                alert('Please generate a supplier or customer ledger first.');
+                return;
+            }
+            if (meta.type !== 'supplier' && meta.type !== 'customer') {
+                alert('WhatsApp is available only for supplier and customer ledgers.');
+                return;
+            }
+            var party = meta.type === 'supplier'
+                ? (appData.suppliers || []).find(function(s) { return String(s.id) === String(meta.entityId); })
+                : (appData.customers || []).find(function(c) { return String(c.id) === String(meta.entityId); });
+            if (!party || !party.mobile) {
+                alert('Mobile not found for this party. Please update it in Masters first.');
+                return;
+            }
+            if (!openWhatsAppChat(party.mobile, buildLedgerWhatsAppMessage())) {
+                alert('Invalid mobile number for this party. Please correct it in Masters.');
+            }
+        }
         function addSupplier() {
             var rawName = document.getElementById('supplierName').value;
             const name = rawName ? String(rawName).trim() : '';
@@ -1004,7 +1128,7 @@ function deleteAllMasters() {
             const ifsc = (document.getElementById('supplierIFSC').value || '').trim();
             var gstinEl = document.getElementById('supplierGSTIN');
             const gstin = gstinEl ? (gstinEl.value || '').trim() : '';
-            if (name && address) {
+            if (name && mobile && address) {
                 if (editingSupplierId) {
                     if (isDuplicateSupplierName(name, editingSupplierId)) { alert('Another supplier with this name already exists (including with different spaces).'); return; }
                     const supplier = appData.suppliers.find(s => s.id === editingSupplierId);
@@ -1042,7 +1166,7 @@ function deleteAllMasters() {
                 if (gstinEl) gstinEl.value = '';
                 hideSupplierForm();
             } else {
-                alert('Please fill in Name and Address');
+                alert('Please fill in Name, Mobile and Address');
             }
         }
 
@@ -1123,7 +1247,7 @@ function deleteAllMasters() {
             const custGstin = custGstinEl ? (custGstinEl.value || '').trim() : '';
             var creditLimitEl = document.getElementById('customerCreditLimit');
             const creditLimit = (creditLimitEl && creditLimitEl.value !== '') ? parseFloat(creditLimitEl.value) : 200000;
-            if (name && address) {
+            if (name && mobile && address) {
                 if (editingCustomerId) {
                     if (isDuplicateCustomerName(name, editingCustomerId)) { alert('Another customer with this name already exists (including with different spaces).'); return; }
                     const customer = appData.customers.find(c => c.id === editingCustomerId);
@@ -1161,7 +1285,7 @@ function deleteAllMasters() {
                 if (creditLimitEl) creditLimitEl.value = '';
                 hideCustomerForm();
             } else {
-                alert('Please fill in Name and Address');
+                alert('Please fill in Name, Mobile and Address');
             }
         }
 
@@ -1240,7 +1364,7 @@ function deleteAllMasters() {
             const mobile = (document.getElementById('brokerMobile').value || '').trim();
             const details = (document.getElementById('brokerDetails').value || '').trim();
             const account = (document.getElementById('brokerAccount').value || '').trim();
-            if (name && details) {
+            if (name && mobile && details) {
                 if (editingBrokerId) {
                     if (isDuplicateBrokerName(name, editingBrokerId)) { alert('Another broker with this name already exists (including with different spaces).'); return; }
                     const broker = appData.brokers.find(b => b.id === editingBrokerId);
@@ -1276,7 +1400,7 @@ function deleteAllMasters() {
                 // Hide form after adding
                 hideBrokerForm();
             } else {
-                alert('Please fill in Name and Details');
+                alert('Please fill in Name, Mobile and Details');
             }
         }
 
@@ -1507,13 +1631,14 @@ function deleteAllMasters() {
         }
         function saveQuickAddSupplier() {
             var name = (document.getElementById('quickSupplierName').value || '').trim();
+            var mobile = (document.getElementById('quickSupplierMobile').value || '').trim();
             var address = (document.getElementById('quickSupplierAddress').value || '').trim();
-            if (!name || !address) { alert('Name and Address are required.'); return; }
+            if (!name || !mobile || !address) { alert('Name, Mobile and Address are required.'); return; }
             if (isDuplicateSupplierName(name)) { alert('Supplier with this name already exists (including with different spaces).'); return; }
             var supplier = {
                 id: Date.now(),
                 name: name,
-                mobile: (document.getElementById('quickSupplierMobile').value || '').trim(),
+                mobile: mobile,
                 address: address,
                 account: (document.getElementById('quickSupplierAccount').value || '').trim(),
                 ifsc: (document.getElementById('quickSupplierIFSC').value || '').trim(),
@@ -1543,13 +1668,14 @@ function deleteAllMasters() {
         }
         function saveQuickAddCustomer() {
             var name = (document.getElementById('quickCustomerName').value || '').trim();
+            var mobile = (document.getElementById('quickCustomerMobile').value || '').trim();
             var address = (document.getElementById('quickCustomerAddress').value || '').trim();
-            if (!name || !address) { alert('Name and Address are required.'); return; }
+            if (!name || !mobile || !address) { alert('Name, Mobile and Address are required.'); return; }
             if (isDuplicateCustomerName(name)) { alert('Customer with this name already exists (including with different spaces).'); return; }
             var customer = {
                 id: Date.now(),
                 name: name,
-                mobile: (document.getElementById('quickCustomerMobile').value || '').trim(),
+                mobile: mobile,
                 address: address,
                 account: (document.getElementById('quickCustomerAccount').value || '').trim(),
                 gstin: (document.getElementById('quickCustomerGSTIN').value || '').trim(),
@@ -2052,6 +2178,7 @@ function deleteAllMasters() {
             const truck = document.getElementById('purchaseTruck').value;
             const lrNumber = (document.getElementById('purchaseLRNumber') && document.getElementById('purchaseLRNumber').value) ? document.getElementById('purchaseLRNumber').value.trim() : '';
             const chargeMode = getPurchaseChargeMode();
+            const purchaseMessageTargets = [];
             
             if (!date || !invoice || currentPurchaseItems.length === 0) {
                 alert('Please fill in all required fields and add at least one item');
@@ -2127,6 +2254,7 @@ function deleteAllMasters() {
                         appData.inventory[item.itemId].quantity += item.grossWeight;
                         appData.inventory[item.itemId].totalCost += item.total;
                     });
+                    purchaseMessageTargets.push(existingPurchase.id);
                 }
                 editingPurchaseId = null;
             } else {
@@ -2223,6 +2351,7 @@ function deleteAllMasters() {
                     };
                     appData.purchases.push(purchase);
                     createdCount++;
+                    purchaseMessageTargets.push(purchase.id);
                 });
 
                 if (createdCount === 0) {
@@ -2258,6 +2387,13 @@ function deleteAllMasters() {
             const wasEditing = editingPurchaseId !== null;
             editingPurchaseId = null;
             alert(wasEditing ? 'Purchase updated successfully!' : 'Purchase invoice(s) saved successfully!');
+
+            if (purchaseMessageTargets.length > 0) {
+                const doSend = confirm('Do you want to send this purchase invoice on WhatsApp now?');
+                if (doSend) {
+                    purchaseMessageTargets.forEach(function(id) { sendPurchaseWhatsApp(id); });
+                }
+            }
             
             // Return to history view
             hidePurchaseForm();
@@ -2581,6 +2717,7 @@ function deleteAllMasters() {
                         <div class="flex items-center justify-center gap-1">
                             <button onclick="viewPurchase(${purchase.id})" class="action-btn action-view" title="View"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg></button>
                             <button onclick="printPurchaseInvoice(${purchase.id})" class="action-btn action-print" title="Print"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
+                            <button onclick="sendPurchaseWhatsApp(${purchase.id})" class="action-btn" title="Send WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="currentColor"><path d="M19.11 17.43c-.28-.14-1.63-.81-1.88-.9-.25-.09-.43-.14-.61.14-.18.28-.7.9-.86 1.09-.16.19-.32.21-.6.07-.28-.14-1.17-.43-2.24-1.37-.83-.74-1.39-1.65-1.55-1.93-.16-.28-.02-.44.12-.58.13-.13.28-.32.42-.49.14-.16.19-.28.28-.46.09-.19.05-.35-.02-.49-.07-.14-.61-1.47-.84-2.02-.22-.52-.44-.45-.61-.46-.16-.01-.35-.01-.53-.01-.19 0-.49.07-.75.35-.25.28-.96.94-.96 2.3 0 1.35.98 2.66 1.11 2.85.14.19 1.93 2.95 4.68 4.13.65.28 1.16.45 1.56.58.66.21 1.27.18 1.74.11.53-.08 1.63-.67 1.86-1.32.23-.65.23-1.21.16-1.32-.07-.12-.25-.19-.53-.33z"/><path d="M16.01 3.2c-7.05 0-12.78 5.73-12.78 12.78 0 2.24.58 4.42 1.68 6.34l-1.79 6.53 6.7-1.76c1.84 1 3.91 1.53 6.02 1.53h.01c7.05 0 12.78-5.73 12.78-12.78 0-3.42-1.33-6.63-3.75-9.05-2.42-2.42-5.63-3.75-9.06-3.75zm-.16 22.99h-.01c-1.89 0-3.75-.51-5.37-1.48l-.39-.23-3.97 1.04 1.06-3.87-.25-.4c-1.05-1.66-1.6-3.58-1.6-5.54 0-5.72 4.66-10.38 10.39-10.38 2.77 0 5.38 1.08 7.33 3.03 1.96 1.96 3.03 4.56 3.03 7.33 0 5.73-4.66 10.39-10.38 10.39z"/></svg></button>
                             <button onclick="editPurchase(${purchase.id})" class="action-btn action-edit" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg></button>
                             <button onclick="payPurchase(${purchase.id})" class="action-btn action-pay" title="Pay"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12v2H6V3zm0 4h12v2h-4.5c-.83 2.07-2.6 3.56-4.74 3.94L14 21h-2.5l-5.24-8H6v-2h4.5c1.38 0 2.56-.8 3.12-1.94L6 9V7z"/></svg></button>
                             <button onclick="deletePurchase(${purchase.id})" class="action-btn action-delete" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd"/></svg></button>
@@ -3423,6 +3560,7 @@ function deleteAllMasters() {
             const advance = parseFloat(document.getElementById('saleAdvance').value) || 0;
             const truckAdvance = parseFloat(document.getElementById('saleTruckAdvance').value) || 0;
             const othersEntries = getSaleOthersEntries();
+            let saleMessageTargetId = null;
             
             if (!date || !invoice || !customerId || currentSaleItems.length === 0) {
                 alert('Please fill in all required fields and add at least one item');
@@ -3550,6 +3688,7 @@ function deleteAllMasters() {
                     
                     // Deduct new inventory for updated sale (using gross weight)
                     adjustInventoryForSaleItems(currentSaleItems, -1);
+                    saleMessageTargetId = existingSale.id;
                 }
                 resetSaleEditSessionState();
                 editingSaleId = null;
@@ -3576,6 +3715,7 @@ function deleteAllMasters() {
                     ...getAuditMeta(true)
                 };
                 appData.sales.push(sale);
+                saleMessageTargetId = sale.id;
                 
                 // Update inventory for new sale (using gross weight)
                 adjustInventoryForSaleItems(currentSaleItems, -1);
@@ -3599,6 +3739,13 @@ function deleteAllMasters() {
             const wasEditing = editingSaleId !== null;
             editingSaleId = null;
             alert(wasEditing ? 'Sale updated successfully!' : 'Sale invoice saved successfully!');
+
+            if (saleMessageTargetId != null) {
+                const doSend = confirm('Do you want to send this sales invoice on WhatsApp now?');
+                if (doSend) {
+                    sendSaleWhatsApp(saleMessageTargetId);
+                }
+            }
             
             // Return to history view
             hideSalesForm();
@@ -4341,6 +4488,7 @@ function deleteAllMasters() {
                         <div class="flex items-center justify-center gap-1">
                             <button onclick="viewSale(${sale.id})" class="action-btn action-view" title="View"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg></button>
                             <button onclick="printSaleInvoice(${sale.id})" class="action-btn action-print" title="Print Invoice"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
+                            <button onclick="sendSaleWhatsApp(${sale.id})" class="action-btn" title="Send WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="currentColor"><path d="M19.11 17.43c-.28-.14-1.63-.81-1.88-.9-.25-.09-.43-.14-.61.14-.18.28-.7.9-.86 1.09-.16.19-.32.21-.6.07-.28-.14-1.17-.43-2.24-1.37-.83-.74-1.39-1.65-1.55-1.93-.16-.28-.02-.44.12-.58.13-.13.28-.32.42-.49.14-.16.19-.28.28-.46.09-.19.05-.35-.02-.49-.07-.14-.61-1.47-.84-2.02-.22-.52-.44-.45-.61-.46-.16-.01-.35-.01-.53-.01-.19 0-.49.07-.75.35-.25.28-.96.94-.96 2.3 0 1.35.98 2.66 1.11 2.85.14.19 1.93 2.95 4.68 4.13.65.28 1.16.45 1.56.58.66.21 1.27.18 1.74.11.53-.08 1.63-.67 1.86-1.32.23-.65.23-1.21.16-1.32-.07-.12-.25-.19-.53-.33z"/><path d="M16.01 3.2c-7.05 0-12.78 5.73-12.78 12.78 0 2.24.58 4.42 1.68 6.34l-1.79 6.53 6.7-1.76c1.84 1 3.91 1.53 6.02 1.53h.01c7.05 0 12.78-5.73 12.78-12.78 0-3.42-1.33-6.63-3.75-9.05-2.42-2.42-5.63-3.75-9.06-3.75zm-.16 22.99h-.01c-1.89 0-3.75-.51-5.37-1.48l-.39-.23-3.97 1.04 1.06-3.87-.25-.4c-1.05-1.66-1.6-3.58-1.6-5.54 0-5.72 4.66-10.38 10.39-10.38 2.77 0 5.38 1.08 7.33 3.03 1.96 1.96 3.03 4.56 3.03 7.33 0 5.73-4.66 10.39-10.38 10.39z"/></svg></button>
                             <button onclick="printDeliveryChallan(${sale.id})" class="action-btn" title="Delivery Challan"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/><path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z"/></svg></button>
                             <button onclick="editSale(${sale.id})" class="action-btn action-edit" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg></button>
                             <button onclick="receiveSale(${sale.id})" class="action-btn action-pay" title="Receive Payment"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12v2H6V3zm0 4h12v2h-4.5c-.83 2.07-2.6 3.56-4.74 3.94L14 21h-2.5l-5.24-8H6v-2h4.5c1.38 0 2.56-.8 3.12-1.94L6 9V7z"/></svg></button>
@@ -6317,13 +6465,18 @@ function onPnLFilterChange() {
             renderLedgerTable(entries);
             
             var printLedgerBtn = document.getElementById('printLedgerBtn');
+            var sendLedgerWhatsAppBtn = document.getElementById('sendLedgerWhatsAppBtn');
             if (entries.length === 0) {
                 balanceSection.style.display = 'none';
                 document.getElementById('exportLedgerBtn').style.display = 'none';
                 if (printLedgerBtn) printLedgerBtn.style.display = 'none';
+                if (sendLedgerWhatsAppBtn) sendLedgerWhatsAppBtn.style.display = 'none';
             } else {
                 document.getElementById('exportLedgerBtn').style.display = 'block';
                 if (printLedgerBtn) printLedgerBtn.style.display = 'block';
+                if (sendLedgerWhatsAppBtn) {
+                    sendLedgerWhatsAppBtn.style.display = (type === 'supplier' || type === 'customer') ? 'block' : 'none';
+                }
             }
         }
         
