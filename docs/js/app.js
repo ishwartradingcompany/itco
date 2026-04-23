@@ -2766,12 +2766,14 @@ function deleteAllMasters() {
         function updateStockMovement() {
             // Collect all stock movements from purchases and sales
             allStockMovements = [];
+            let movementSeq = 1;
             
             // Add purchase movements
             appData.purchases.forEach(purchase => {
                 if (purchase.items) {
                     purchase.items.forEach(item => {
                         allStockMovements.push({
+                            movementId: movementSeq++,
                             date: purchase.date,
                             itemName: item.itemName,
                             itemId: item.itemId,
@@ -2790,6 +2792,7 @@ function deleteAllMasters() {
                 if (sale.items) {
                     sale.items.forEach(item => {
                         allStockMovements.push({
+                            movementId: movementSeq++,
                             date: sale.date,
                             itemName: item.itemName,
                             itemId: item.itemId,
@@ -2887,30 +2890,53 @@ function deleteAllMasters() {
                 return;
             }
             
-            // Calculate running balances per item
-            const balances = {};
-            const movementsWithBalance = filteredStockMovements.map(m => {
-                if (!balances[m.itemName]) balances[m.itemName] = 0;
-                balances[m.itemName] += m.quantity;
-                return { ...m, balance: balances[m.itemName] };
+            // Calculate running balances per item using chronological order
+            // (independent of current display sort) for a stable, audit-friendly balance.
+            const balanceLookup = {};
+            const groupedByItem = {};
+            filteredStockMovements.forEach(function(m) {
+                const key = String(m.itemId || m.itemName || '');
+                if (!groupedByItem[key]) groupedByItem[key] = [];
+                groupedByItem[key].push(m);
+            });
+            Object.keys(groupedByItem).forEach(function(key) {
+                const rows = groupedByItem[key].slice().sort(function(a, b) {
+                    const d = String(a.date || '').localeCompare(String(b.date || ''));
+                    if (d !== 0) return d;
+                    const t = String(a.type || '').localeCompare(String(b.type || ''));
+                    if (t !== 0) return t;
+                    return (a.movementId || 0) - (b.movementId || 0);
+                });
+                let running = 0;
+                rows.forEach(function(r) {
+                    running += (parseFloat(r.quantity) || 0);
+                    balanceLookup[r.movementId] = running;
+                });
             });
             
             // Paginate
             const { currentPage, pageSize } = paginationState.stockMovement;
             const startIndex = (currentPage - 1) * pageSize;
-            const paginatedMovements = movementsWithBalance.slice(startIndex, startIndex + pageSize);
+            const paginatedMovements = filteredStockMovements.slice(startIndex, startIndex + pageSize);
             
             paginatedMovements.forEach(m => {
+                const qty = parseFloat(m.quantity) || 0;
+                const runningBalance = (m.movementId != null && balanceLookup[m.movementId] != null)
+                    ? balanceLookup[m.movementId]
+                    : qty;
+                const dateText = (m.date && /^\d{4}-\d{2}-\d{2}$/.test(m.date))
+                    ? new Date(m.date + 'T00:00:00').toLocaleDateString('en-GB')
+                    : (m.date || '-');
                 const tr = document.createElement('tr');
                 tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
                 tr.innerHTML = `
-                    <td class="px-4 py-3">
-                        <span class="text-sm font-medium text-slate-700">${m.date}</span>
+                    <td class="px-4 py-3 align-top">
+                        <span class="text-sm font-medium text-slate-700">${dateText}</span>
                     </td>
-                    <td class="px-4 py-3">
+                    <td class="px-4 py-3 align-top">
                         <span class="font-semibold text-slate-800">${m.itemName}</span>
                     </td>
-                    <td class="px-4 py-3">
+                    <td class="px-4 py-3 align-top">
                         <div class="flex items-center gap-2">
                             <span class="w-6 h-6 rounded-full flex items-center justify-center ${m.type === 'Purchase' ? 'bg-green-100' : 'bg-red-100'}">
                                 <svg class="w-3 h-3 ${m.type === 'Purchase' ? 'text-green-600' : 'text-red-600'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2922,20 +2948,20 @@ function deleteAllMasters() {
                             </span>
                         </div>
                     </td>
-                    <td class="px-4 py-3">
-                        <div class="text-xs">
-                            <span class="font-medium text-slate-700">${m.invoice}</span>
-                            <span class="text-slate-400 block">${m.reference}</span>
+                    <td class="px-4 py-3 align-top">
+                        <div class="text-xs leading-5">
+                            <span class="font-semibold text-slate-700">${m.invoice || '-'}</span>
+                            <span class="text-slate-500 block">${m.reference || '-'}</span>
                         </div>
                     </td>
-                    <td class="px-4 py-3 text-right">
-                        <span class="font-bold ${m.quantity > 0 ? 'text-green-600' : 'text-red-600'}">
-                            ${m.quantity > 0 ? '+' : ''}${m.quantity.toLocaleString('en-IN', {minimumFractionDigits: 2})} ${m.unit}
+                    <td class="px-4 py-3 text-right align-top">
+                        <span class="font-bold tabular-nums ${qty > 0 ? 'text-green-600' : 'text-red-600'}">
+                            ${qty > 0 ? '+' : ''}${qty.toLocaleString('en-IN', {minimumFractionDigits: 2})} ${m.unit}
                         </span>
                     </td>
-                    <td class="px-4 py-3 text-right">
-                        <span class="font-semibold text-slate-800 bg-slate-100 px-2 py-1 rounded">
-                            ${m.balance.toLocaleString('en-IN', {minimumFractionDigits: 2})} ${m.unit}
+                    <td class="px-4 py-3 text-right align-top">
+                        <span class="font-semibold tabular-nums text-slate-800 bg-slate-100 px-2 py-1 rounded">
+                            ${runningBalance.toLocaleString('en-IN', {minimumFractionDigits: 2})} ${m.unit}
                         </span>
                     </td>
                 `;
