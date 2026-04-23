@@ -3310,7 +3310,7 @@ function deleteAllMasters() {
             });
             if (editingSaleId) {
                 const existingSale = appData.sales.find(s => s.id === editingSaleId);
-                if (existingSale && existingSale.items) {
+                if (existingSale && existingSale.items && !saleEditInventoryReversed) {
                     existingSale.items.forEach(item => {
                         availableByItem[item.itemId] = (availableByItem[item.itemId] || 0) + item.grossWeight;
                     });
@@ -3354,17 +3354,10 @@ function deleteAllMasters() {
                 // Editing existing sale
                 const existingSale = appData.sales.find(s => s.id === editingSaleId);
                 if (existingSale) {
-                    // Reverse old inventory changes (using gross weight)
-                    if (existingSale.items) {
-                        existingSale.items.forEach(item => {
-                            if (!appData.inventory[item.itemId]) {
-                                appData.inventory[item.itemId] = { quantity: 0, totalCost: 0 };
-                            }
-                            appData.inventory[item.itemId].quantity += item.grossWeight;
-                            const prevQty = appData.inventory[item.itemId].quantity - item.grossWeight;
-                            const avgCost = prevQty > 0 ? appData.inventory[item.itemId].totalCost / prevQty : 0;
-                            appData.inventory[item.itemId].totalCost += (avgCost * item.grossWeight);
-                        });
+                    // In normal edit flow we already restored old stock when edit was opened.
+                    // Keep fallback for safety when save is called without active edit session.
+                    if (!saleEditInventoryReversed) {
+                        adjustInventoryForSaleItems(existingSale.items || [], +1);
                     }
                     
                     // Update sale with new data
@@ -3386,15 +3379,9 @@ function deleteAllMasters() {
                     Object.assign(existingSale, getAuditMeta(false));
                     
                     // Deduct new inventory for updated sale (using gross weight)
-                    currentSaleItems.forEach(item => {
-                        if (appData.inventory[item.itemId]) {
-                            appData.inventory[item.itemId].quantity -= item.grossWeight;
-                            const totalQty = appData.inventory[item.itemId].quantity + item.grossWeight;
-                            const avgCost = totalQty > 0 ? appData.inventory[item.itemId].totalCost / totalQty : 0;
-                            appData.inventory[item.itemId].totalCost -= (avgCost * item.grossWeight);
-                        }
-                    });
+                    adjustInventoryForSaleItems(currentSaleItems, -1);
                 }
+                resetSaleEditSessionState();
                 editingSaleId = null;
             } else {
                 // Creating new sale
@@ -3421,14 +3408,7 @@ function deleteAllMasters() {
                 appData.sales.push(sale);
                 
                 // Update inventory for new sale (using gross weight)
-                currentSaleItems.forEach(item => {
-                    if (appData.inventory[item.itemId]) {
-                        appData.inventory[item.itemId].quantity -= item.grossWeight;
-                        const totalQty = appData.inventory[item.itemId].quantity + item.grossWeight;
-                        const avgCost = totalQty > 0 ? appData.inventory[item.itemId].totalCost / totalQty : 0;
-                        appData.inventory[item.itemId].totalCost -= (avgCost * item.grossWeight);
-                    }
-                });
+                adjustInventoryForSaleItems(currentSaleItems, -1);
             }
             
             saveData();
@@ -6963,6 +6943,37 @@ function onPnLFilterChange() {
 
         let editingPurchaseId = null;
         let editingSaleId = null;
+        let saleEditOriginalItems = null;
+        let saleEditInventoryReversed = false;
+
+        function adjustInventoryForSaleItems(items, direction) {
+            if (!items || !items.length) return;
+            items.forEach(item => {
+                if (!appData.inventory[item.itemId]) {
+                    appData.inventory[item.itemId] = { quantity: 0, totalCost: 0 };
+                }
+                const qty = parseFloat(item.grossWeight) || 0;
+                if (qty <= 0) return;
+                if (direction > 0) {
+                    // Restore stock (used when opening edit session).
+                    appData.inventory[item.itemId].quantity += qty;
+                    const prevQty = appData.inventory[item.itemId].quantity - qty;
+                    const avgCost = prevQty > 0 ? (appData.inventory[item.itemId].totalCost / prevQty) : 0;
+                    appData.inventory[item.itemId].totalCost += (avgCost * qty);
+                } else {
+                    // Deduct stock (used on save/cancel from working stock).
+                    appData.inventory[item.itemId].quantity -= qty;
+                    const totalQty = appData.inventory[item.itemId].quantity + qty;
+                    const avgCost = totalQty > 0 ? (appData.inventory[item.itemId].totalCost / totalQty) : 0;
+                    appData.inventory[item.itemId].totalCost -= (avgCost * qty);
+                }
+            });
+        }
+
+        function resetSaleEditSessionState() {
+            saleEditOriginalItems = null;
+            saleEditInventoryReversed = false;
+        }
 
         function viewPurchase(purchaseId) {
             const purchase = appData.purchases.find(p => p.id === purchaseId);
@@ -7349,8 +7360,19 @@ function onPnLFilterChange() {
         function editSale(saleId) {
             const sale = appData.sales.find(s => s.id === saleId);
             if (!sale) return;
+
+            // If another sale edit session was left open, put inventory back first.
+            if (editingSaleId && saleEditInventoryReversed && saleEditOriginalItems) {
+                adjustInventoryForSaleItems(saleEditOriginalItems, -1);
+                resetSaleEditSessionState();
+            }
             
             editingSaleId = saleId;
+            saleEditOriginalItems = sale.items ? sale.items.map(i => ({ ...i })) : [];
+            // Start edit session by restoring original stock quantities to working inventory.
+            adjustInventoryForSaleItems(saleEditOriginalItems, +1);
+            saleEditInventoryReversed = true;
+            populateDropdowns();
             
             // Fill the form with existing data
             document.getElementById('saleDate').value = sale.date;
@@ -7381,6 +7403,12 @@ function onPnLFilterChange() {
         
         function cancelSaleEdit() {
             if (confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
+                // Restore inventory to original pre-edit state.
+                if (saleEditInventoryReversed && saleEditOriginalItems) {
+                    adjustInventoryForSaleItems(saleEditOriginalItems, -1);
+                }
+                resetSaleEditSessionState();
+                populateDropdowns();
                 editingSaleId = null;
                 currentSaleItems = [];
                 clearSaleForm();
@@ -7437,6 +7465,7 @@ function onPnLFilterChange() {
             editingSaleId = null;
             editingSaleItemIndex = -1;
             resetSaleItemFormMode();
+            resetSaleEditSessionState();
         }
 
         let currentPaymentData = null;
