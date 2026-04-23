@@ -1,4 +1,4 @@
-        // Indian Rupee, bullet, checkmark - from code points to avoid file encoding issues
+\        // Indian Rupee, bullet, checkmark - from code points to avoid file encoding issues
         const RU = String.fromCharCode(0x20B9);
         const BULLET = String.fromCharCode(0x2022);
         const CHECK = String.fromCharCode(0x2713);
@@ -3610,13 +3610,47 @@ function deleteAllMasters() {
         function showPurchaseLinkingModal() {
             const container = document.getElementById('availablePurchasesList');
             container.innerHTML = '';
+            const currentEditingSaleId = (editingSaleId !== null && editingSaleId !== undefined) ? String(editingSaleId) : null;
+            tempLinkedPurchases = normalizeLinkedPurchasesForItems(linkedPurchases, currentSaleItems);
+
+            // Allow linking before adding sale items: show all purchase items.
             if (!currentSaleItems || currentSaleItems.length === 0) {
-                container.innerHTML = '<p class="text-slate-500 text-center py-4">Add sale items first, then link purchase items.</p>';
+                let rows = 0;
+                (appData.purchases || []).forEach(function(purchase) {
+                    (purchase.items || []).forEach(function(pItem, pIdx) {
+                        const itemId = String(pItem.itemId);
+                        const itemName = pItem.itemName || ((appData.items || []).find(function(i){ return String(i.id) === itemId; }) || {}).name || itemId;
+                        const availableQty = getPurchaseItemAvailableQty(purchase.id, itemId, currentEditingSaleId, tempLinkedPurchases);
+                        const existingQty = tempLinkedPurchases.reduce(function(sum, lp) {
+                            if (String(lp.purchaseId) === String(purchase.id) && String(lp.itemId) === String(itemId)) return sum + getLinkedQtyValue(lp);
+                            return sum;
+                        }, 0);
+                        const inputId = 'link_pre_' + purchase.id + '_' + itemId + '_' + pIdx;
+                        const div = document.createElement('div');
+                        div.className = 'border border-slate-300 rounded-lg p-4 bg-white';
+                        div.innerHTML = `
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                                <div class="md:col-span-2">
+                                    <div class="font-medium text-slate-800">Invoice: ${escapeHtml(purchase.invoice)} | Supplier: ${escapeHtml(purchase.supplierName)}</div>
+                                    <div class="text-sm text-slate-600">Item: ${escapeHtml(itemName)}</div>
+                                    <div class="text-sm ${availableQty > 0 ? 'text-green-600' : 'text-red-600'}">Available Quantity: ${availableQty.toFixed(2)} kg</div>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-xs text-slate-600 mb-1">Qty to use from this purchase item (kg)</label>
+                                    <input type="number" id="${inputId}" data-purchase-id="${purchase.id}" data-item-id="${itemId}" value="${existingQty > 0 ? existingQty.toFixed(2) : ''}" max="${availableQty.toFixed(2)}" step="0.01" class="link-item-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">
+                                </div>
+                            </div>
+                        `;
+                        container.appendChild(div);
+                        rows++;
+                    });
+                });
+                if (rows === 0) {
+                    container.innerHTML = '<p class="text-slate-500 text-center py-4">No purchase items available for linking.</p>';
+                }
                 document.getElementById('purchaseLinkingModal').classList.remove('hidden');
                 return;
             }
-            const currentEditingSaleId = (editingSaleId !== null && editingSaleId !== undefined) ? String(editingSaleId) : null;
-            tempLinkedPurchases = normalizeLinkedPurchasesForItems(linkedPurchases, currentSaleItems);
 
             currentSaleItems.forEach(function(saleItem, saleIdx) {
                 const saleItemId = String(saleItem.itemId);
@@ -3700,6 +3734,45 @@ function deleteAllMasters() {
             });
         }
 
+        function buildSaleItemsFromLinks(links) {
+            const byItem = {};
+            (links || []).forEach(function(link) {
+                const itemId = String(link.itemId || '');
+                const qty = getLinkedQtyValue(link);
+                if (!itemId || qty <= 0) return;
+                const purchase = (appData.purchases || []).find(function(p) { return String(p.id) === String(link.purchaseId); });
+                const pItem = purchase && purchase.items
+                    ? purchase.items.find(function(pi) { return String(pi.itemId) === itemId; })
+                    : null;
+                const rate = parseFloat((pItem && pItem.rate) || 0) || 0;
+                if (!byItem[itemId]) byItem[itemId] = { qty: 0, weightedValue: 0 };
+                byItem[itemId].qty += qty;
+                byItem[itemId].weightedValue += (qty * rate);
+            });
+
+            const generated = [];
+            Object.keys(byItem).forEach(function(itemId, idx) {
+                const itemMaster = (appData.items || []).find(function(i) { return String(i.id) === itemId; });
+                const gross = +(byItem[itemId].qty || 0).toFixed(2);
+                if (gross <= 0) return;
+                const rate = gross > 0 ? +(byItem[itemId].weightedValue / gross).toFixed(2) : 0;
+                const isCoconut = !!(itemMaster && itemMaster.name && itemMaster.name.toLowerCase().includes('coconut'));
+                generated.push({
+                    id: Date.now() + idx,
+                    itemId: itemId,
+                    itemName: itemMaster ? itemMaster.name : ('Item ' + itemId),
+                    grossWeight: gross,
+                    bags: 0,
+                    netWeight: gross,
+                    discountQty: 0,
+                    rate: rate,
+                    total: +(gross * rate).toFixed(2),
+                    isCoconut: isCoconut
+                });
+            });
+            return generated;
+        }
+
         function confirmPurchaseLinking() {
             const inputs = Array.from(document.querySelectorAll('#availablePurchasesList .link-item-input'));
             const validatedLinks = [];
@@ -3714,6 +3787,21 @@ function deleteAllMasters() {
                     quantityUsed: +qty.toFixed(2)
                 });
             });
+
+            if (!currentSaleItems || currentSaleItems.length === 0) {
+                if (!validatedLinks.length) {
+                    alert('Please enter at least one item quantity to link from purchases.');
+                    return;
+                }
+                linkedPurchases = validatedLinks;
+                currentSaleItems = buildSaleItemsFromLinks(validatedLinks);
+                updateCurrentSaleItemsDisplay();
+                calculateSaleTotals();
+                updateLinkedPurchasesDisplay();
+                closePurchaseLinkingModal();
+                return;
+            }
+
             const tolerance = 0.01;
             const requiredByItem = {};
             currentSaleItems.forEach(function(row) {
