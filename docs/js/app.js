@@ -2916,26 +2916,35 @@ function deleteAllMasters() {
 
         function calculateSaleItemTotal() {
             const itemId = document.getElementById('saleItem').value;
-            if (!itemId) return;
-            
-            const item = appData.items.find(i => i.id == itemId);
+            const item = itemId ? appData.items.find(i => i.id == itemId) : null;
             const grossWeight = parseFloat(document.getElementById('saleQuantity').value) || 0;
             const discount = parseFloat(document.getElementById('saleDiscount').value) || 0;
             const discountQty = parseFloat(document.getElementById('saleDiscountQty').value) || 0;
             const rate = parseFloat(document.getElementById('saleRate').value) || 0;
-            
+
+            // Determine coconut-style discount handling:
+            //  1) By the selected item if present.
+            //  2) Otherwise, infer from the Discount Qty container visibility (used in edit mode
+            //     when the item dropdown may not include items with zero inventory).
+            let isCoconut = false;
+            if (item && item.name && item.name.toLowerCase().includes('coconut')) {
+                isCoconut = true;
+            } else {
+                const discountQtyContainer = document.getElementById('saleDiscountQtyContainer');
+                if (discountQtyContainer && discountQtyContainer.style.display !== 'none') {
+                    isCoconut = true;
+                }
+            }
+
             let netWeight = 0;
             let total = 0;
-            
-            if (item && item.name.toLowerCase().includes('coconut')) {
+            if (isCoconut) {
                 netWeight = grossWeight - discountQty;
-                total = netWeight * rate;
             } else {
-                // Net = Gross - Discount (Discount box; flows from Bags)
                 netWeight = grossWeight - discount;
-                total = netWeight * rate;
             }
-            
+            total = netWeight * rate;
+
             document.getElementById('saleNetWeight').value = netWeight;
             document.getElementById('saleItemTotal').value = total.toFixed(2);
         }
@@ -3043,8 +3052,18 @@ function deleteAllMasters() {
             const item = currentSaleItems[index];
             if (!item) return;
             editingSaleItemIndex = index;
-            
-            document.getElementById('saleItem').value = item.itemId;
+
+            const saleItemEl = document.getElementById('saleItem');
+            // The Sale Item dropdown only lists items with inventory>0. In edit mode
+            // the item may not be present, so ensure an option exists.
+            let option = saleItemEl.querySelector('option[value="' + item.itemId + '"]');
+            if (!option) {
+                option = document.createElement('option');
+                option.value = item.itemId;
+                option.textContent = item.itemName + ' (Editing)';
+                saleItemEl.appendChild(option);
+            }
+            saleItemEl.value = item.itemId;
             // Refresh available stock display (this switches coconut/non-coconut UI too).
             if (typeof updateAvailableStock === 'function') {
                 updateAvailableStock();
