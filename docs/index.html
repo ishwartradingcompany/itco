@@ -1319,17 +1319,17 @@
             <div id="salesEntryView" class="hidden bg-white rounded-lg shadow-medium border border-slate-200 p-6">
                 <h3 class="text-xl font-semibold mb-6 text-primary">New Sale Entry</h3>
                 
-                <!-- Purchase Linking Section (NEW) -->
+                <!-- Purchase Linking Section -->
                 <div class="bg-blue-50 border-2 border-blue-300 rounded-lg p-6 mb-6">
                     <div class="flex justify-between items-center mb-4">
-                        <h4 class="text-lg font-semibold text-slate-800">Link to Purchase Invoice(s)</h4>
+                        <h4 class="text-lg font-semibold text-slate-800">Link to Purchase Items (Compulsory)</h4>
                         <button type="button" onclick="showPurchaseLinkingModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
-                            + Link Purchase
+                            + Link Purchase Items
                         </button>
                     </div>
-                    <p class="text-sm text-slate-600 mb-3">Link this sale to purchase invoice(s) to track inventory flow and calculate accurate profit/loss</p>
+                    <p class="text-sm text-slate-600 mb-3">Link each sale item quantity to purchase item quantity. Save is allowed only after complete item-wise linking.</p>
                     <div id="linkedPurchasesList" class="space-y-2">
-                        <p class="text-slate-500 text-sm italic">No purchases linked yet. Click "Link Purchase" to add.</p>
+                        <p class="text-slate-500 text-sm italic">No item-wise links yet. Click "Link Purchase Items" to add.</p>
                     </div>
                 </div>
                 
@@ -1511,11 +1511,11 @@
     <div id="purchaseLinkingModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
         <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
             <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex justify-between items-center">
-                <h3 class="text-xl font-bold text-white">Link Purchase Invoice(s)</h3>
+                <h3 class="text-xl font-bold text-white">Link Purchase Items</h3>
                 <button onclick="closePurchaseLinkingModal()" class="text-white hover:text-slate-200 text-2xl font-bold">&times;</button>
             </div>
             <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-                <p class="text-slate-600 mb-4">Select purchase invoice(s) that this sale is linked to. You can link multiple purchases.</p>
+                <p class="text-slate-600 mb-4">Enter item-wise quantity links from purchase invoices. Available quantity is shown per item.</p>
                 
                 <div id="availablePurchasesList" class="space-y-3">
                     <!-- Purchase invoices will be listed here -->
