@@ -3501,6 +3501,8 @@ function deleteAllMasters() {
             if (appData.purchases.length === 0) {
                 container.innerHTML = '<p class="text-slate-500 text-center py-4">No purchase invoices available</p>';
             } else {
+                const currentEditingSaleId = (editingSaleId !== null && editingSaleId !== undefined) ? String(editingSaleId) : null;
+
                 appData.purchases.forEach(purchase => {
                     const isLinked = tempLinkedPurchases.some(lp => String(lp.purchaseId) === String(purchase.id));
                     
@@ -3508,17 +3510,26 @@ function deleteAllMasters() {
                     div.className = 'border border-slate-300 rounded-lg p-4 ' + (isLinked ? 'bg-blue-50 border-blue-400' : 'bg-white');
                     
                     // Calculate available quantity for this purchase
-                    const totalPurchased = purchase.items ? purchase.items.reduce((sum, item) => sum + item.grossWeight, 0) : 0;
+                    const totalPurchased = purchase.items
+                        ? purchase.items.reduce((sum, item) => sum + (parseFloat(item.grossWeight) || 0), 0)
+                        : 0;
                     const alreadyLinked = appData.sales ? appData.sales.reduce((sum, sale) => {
-                        if (sale.linkedPurchases && sale.id !== editingSaleId) {
-                            const linked = sale.linkedPurchases.find(lp => String(lp.purchaseId) === String(purchase.id));
-                            return sum + (linked ? linked.quantityUsed : 0);
+                        const saleIdStr = (sale && sale.id !== undefined && sale.id !== null) ? String(sale.id) : null;
+                        // Exclude current sale while editing so user can re-link freely.
+                        if (sale.linkedPurchases && (!currentEditingSaleId || saleIdStr !== currentEditingSaleId)) {
+                            const usedInThisSale = sale.linkedPurchases.reduce((acc, lp) => {
+                                if (String(lp.purchaseId) === String(purchase.id)) {
+                                    return acc + (parseFloat(lp.quantityUsed) || 0);
+                                }
+                                return acc;
+                            }, 0);
+                            return sum + usedInThisSale;
                         }
                         return sum;
                     }, 0) : 0;
                     const currentlyLinked = tempLinkedPurchases.find(lp => String(lp.purchaseId) === String(purchase.id));
-                    const currentLinkedQty = currentlyLinked ? currentlyLinked.quantityUsed : 0;
-                    const availableQty = totalPurchased - alreadyLinked + currentLinkedQty;
+                    const currentLinkedQty = currentlyLinked ? (parseFloat(currentlyLinked.quantityUsed) || 0) : 0;
+                    const availableQty = Math.max(0, totalPurchased - alreadyLinked + currentLinkedQty);
                     
                     div.innerHTML = `
                         <div class="flex justify-between items-start mb-2">
