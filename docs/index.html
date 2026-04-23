@@ -1983,7 +1983,13 @@
             <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-xl font-semibold text-primary">Detailed P&L Statement</h3>
-                    <button onclick="exportPnLReport()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportPnLBtn" style="display: none;">Export to CSV</button>
+                    <div class="flex items-center gap-3">
+                        <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                            <input type="checkbox" id="pnlGroupByPurchase" onchange="onPnLViewModeChange()">
+                            <span>Group by Purchase Invoice</span>
+                        </label>
+                        <button onclick="exportPnLReport()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportPnLBtn" style="display: none;">Export to CSV</button>
+                    </div>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full table-auto">
@@ -2008,6 +2014,29 @@
                     </table>
                 </div>
                 <div id="pnlPagination" class="pagination-container"></div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6 mt-6">
+                <h3 class="text-xl font-semibold text-primary mb-4">Purchase-wise P&L Summary</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto">
+                        <thead>
+                            <tr class="bg-slate-50">
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Purchase Invoice</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Supplier</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Linked Sales</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-slate-700">Purchase Total</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-slate-700">Sale Total</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium text-slate-700">Net Profit/Loss</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pnlPurchaseSummaryBody">
+                            <tr>
+                                <td colspan="6" class="px-4 py-8 text-center text-slate-500">Generate a report to view purchase-wise summary</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
