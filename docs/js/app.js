@@ -247,10 +247,12 @@ function onPaymentsFilterChange() {
 
 // Store current data for P&L and Ledger for pagination
 let currentPnLData = [];
+let currentPnLPurchaseSummary = [];
 let currentLedgerData = [];
 
 function renderPnLWithCurrentData() {
     renderPnLTable(currentPnLData);
+    renderPnLPurchaseSummary(currentPnLPurchaseSummary);
 }
 
 function renderLedgerWithCurrentData() {
@@ -5628,13 +5630,75 @@ function deleteAllMasters() {
             
             // Store for pagination
             currentPnLData = pnlRows;
+            currentPnLPurchaseSummary = buildPnLPurchaseSummary(pnlRows);
             paginationState.pnl.currentPage = 1; // Reset to first page
             
             // Render the table with pagination
             renderPnLTable(pnlRows);
+            renderPnLPurchaseSummary(currentPnLPurchaseSummary);
             
             // Show export button after generating report
             document.getElementById('exportPnLBtn').style.display = 'block';
+        }
+
+        function buildPnLPurchaseSummary(pnlRows) {
+            const grouped = {};
+            (pnlRows || []).forEach(function(row) {
+                const invoice = row.purchaseInvoice || '-';
+                const key = invoice + '|' + (row.purchaseSupplier || '-');
+                if (!grouped[key]) {
+                    grouped[key] = {
+                        purchaseInvoice: invoice,
+                        purchaseSupplier: row.purchaseSupplier || '-',
+                        purchaseTotal: 0,
+                        saleTotal: 0,
+                        profitLoss: 0,
+                        linkedSales: new Set()
+                    };
+                }
+                grouped[key].purchaseTotal += (parseFloat(row.purchaseTotal) || 0);
+                grouped[key].saleTotal += (parseFloat(row.saleTotal) || 0);
+                grouped[key].profitLoss += (parseFloat(row.profitLoss) || 0);
+                if (row.saleInvoice && row.saleInvoice !== '-') grouped[key].linkedSales.add(row.saleInvoice);
+            });
+            return Object.keys(grouped).map(function(k) {
+                const g = grouped[k];
+                return {
+                    purchaseInvoice: g.purchaseInvoice,
+                    purchaseSupplier: g.purchaseSupplier,
+                    purchaseTotal: +g.purchaseTotal.toFixed(2),
+                    saleTotal: +g.saleTotal.toFixed(2),
+                    profitLoss: +g.profitLoss.toFixed(2),
+                    linkedSalesCount: g.linkedSales.size
+                };
+            }).sort(function(a, b) {
+                return String(a.purchaseInvoice).localeCompare(String(b.purchaseInvoice));
+            });
+        }
+
+        function renderPnLPurchaseSummary(summaryRows) {
+            const tbody = document.getElementById('pnlPurchaseSummaryBody');
+            if (!tbody) return;
+            const rows = summaryRows || [];
+            if (rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">Generate a report to view purchase-wise summary</td></tr>';
+                return;
+            }
+            tbody.innerHTML = rows.map(function(r) {
+                return '<tr class="border-b border-slate-200 hover:bg-slate-50">' +
+                    '<td class="px-4 py-3 font-medium text-slate-800">' + escapeHtml(r.purchaseInvoice) + '</td>' +
+                    '<td class="px-4 py-3 text-slate-700">' + escapeHtml(r.purchaseSupplier) + '</td>' +
+                    '<td class="px-4 py-3 text-slate-700">' + r.linkedSalesCount + '</td>' +
+                    '<td class="px-4 py-3 text-right text-slate-700">' + RU + r.purchaseTotal.toFixed(2) + '</td>' +
+                    '<td class="px-4 py-3 text-right text-slate-700">' + RU + r.saleTotal.toFixed(2) + '</td>' +
+                    '<td class="px-4 py-3 text-right ' + (r.profitLoss >= 0 ? 'text-green-600' : 'text-red-600') + ' font-semibold">' +
+                    (r.profitLoss >= 0 ? '+' : '') + RU + r.profitLoss.toFixed(2) + '</td>' +
+                '</tr>';
+            }).join('');
+        }
+
+        function onPnLViewModeChange() {
+            renderPnLTable(currentPnLData || []);
         }
         
         function renderPnLTable(pnlRows) {
@@ -5648,9 +5712,32 @@ function deleteAllMasters() {
                 return;
             }
             
+            // Optional grouped view
+            const groupedToggle = document.getElementById('pnlGroupByPurchase');
+            const useGrouped = !!(groupedToggle && groupedToggle.checked);
+            const sourceRows = useGrouped
+                ? buildPnLPurchaseSummary(pnlRows).map(function(g) {
+                    return {
+                        purchaseDate: '-',
+                        purchaseInvoice: g.purchaseInvoice,
+                        purchaseSupplier: g.purchaseSupplier,
+                        purchaseTotal: g.purchaseTotal,
+                        saleDate: '-',
+                        saleInvoice: 'Linked Sales: ' + g.linkedSalesCount,
+                        saleCustomer: '-',
+                        saleTotal: g.saleTotal,
+                        profitLoss: g.profitLoss,
+                        quantityUsed: null,
+                        deductionsAmount: 0,
+                        adjustmentAmount: 0,
+                        brokerageAmount: 0
+                    };
+                })
+                : pnlRows;
+
             // Get paginated data
             const { currentPage, pageSize } = paginationState.pnl;
-            const paginatedRows = getPaginatedData(pnlRows, currentPage, pageSize);
+            const paginatedRows = getPaginatedData(sourceRows, currentPage, pageSize);
             
             paginatedRows.forEach(row => {
                 const tr = document.createElement('tr');
@@ -5676,13 +5763,12 @@ function deleteAllMasters() {
             });
             
             // Calculate totals from all data (not just paginated) - net profit is sum of row profit (already includes deductions)
-            const totalCosts = pnlRows.reduce((sum, row) => sum + (row.purchaseTotal || 0), 0);
-            const totalRevenue = pnlRows.reduce((sum, row) => sum + (row.saleTotal || 0), 0);
-            const totalDeductionsInRows = pnlRows.reduce((sum, row) => sum + (row.deductionsAmount || 0), 0);
-            const netProfit = pnlRows.reduce((sum, row) => sum + (row.profitLoss || 0), 0);
+            const totalCosts = sourceRows.reduce((sum, row) => sum + (row.purchaseTotal || 0), 0);
+            const totalRevenue = sourceRows.reduce((sum, row) => sum + (row.saleTotal || 0), 0);
+            const netProfit = sourceRows.reduce((sum, row) => sum + (row.profitLoss || 0), 0);
             
             // Add grand total row only on last page
-            const totalPages = Math.ceil(pnlRows.length / pageSize);
+            const totalPages = Math.ceil(sourceRows.length / pageSize);
             if (currentPage === totalPages) {
                 const grandTotalRow = document.createElement('tr');
                 grandTotalRow.className = 'bg-slate-200 font-bold text-lg';
@@ -5701,7 +5787,7 @@ function deleteAllMasters() {
             // Render pagination
             renderPagination(
                 'pnlPagination',
-                pnlRows.length,
+                sourceRows.length,
                 currentPage,
                 pageSize,
                 'changePnlPage',
@@ -5755,6 +5841,17 @@ function deleteAllMasters() {
                 var ded = (row.deductionsAmount != null && row.deductionsAmount > 0) ? row.deductionsAmount.toFixed(2) : '';
                 var adj = (row.adjustmentAmount != null && row.adjustmentAmount > 0) ? row.adjustmentAmount.toFixed(2) : '';
                 csv += '"' + (row.purchaseDate || '-') + '","' + (row.purchaseInvoice || '-') + '","' + (row.purchaseSupplier || '-') + '",' + purchaseTotal + ',"' + (row.saleDate || '-') + '","' + (row.saleInvoice || '-') + '","' + (row.saleCustomer || '-') + '",' + saleTotal + ',' + profitLoss + ',' + ded + ',' + adj + '\n';
+            });
+
+            var summaryRows = (typeof currentPnLPurchaseSummary !== 'undefined' && currentPnLPurchaseSummary) ? currentPnLPurchaseSummary : [];
+            csv += '\nPURCHASE-WISE P&L SUMMARY\n';
+            csv += 'Purchase Invoice,Supplier,Linked Sales Count,Purchase Total,Sale Total,Net Profit/Loss\n';
+            summaryRows.forEach(function(r) {
+                csv += '"' + (r.purchaseInvoice || '-') + '","' + (r.purchaseSupplier || '-') + '",' +
+                    (r.linkedSalesCount || 0) + ',' +
+                    (r.purchaseTotal != null ? r.purchaseTotal.toFixed(2) : '0.00') + ',' +
+                    (r.saleTotal != null ? r.saleTotal.toFixed(2) : '0.00') + ',' +
+                    (r.profitLoss != null ? r.profitLoss.toFixed(2) : '0.00') + '\n';
             });
             
             var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
