@@ -1016,6 +1016,168 @@ function deleteAllMasters() {
             window.open('https://wa.me/' + mobile + '?text=' + text, '_blank');
             return true;
         }
+        function createPdfDocument(title) {
+            if (!(window.jspdf && window.jspdf.jsPDF)) {
+                alert('PDF engine not loaded. Please refresh and try again.');
+                return null;
+            }
+            var jsPDF = window.jspdf.jsPDF;
+            var doc = new jsPDF({ unit: 'mm', format: 'a4' });
+            var state = {
+                x: 12,
+                y: 14,
+                maxWidth: 186,
+                lineHeight: 6,
+                bottom: 286
+            };
+            if (title) {
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(14);
+                doc.text(String(title), state.x, state.y);
+                state.y += 8;
+            }
+            return { doc: doc, state: state };
+        }
+        function pdfAddText(doc, state, text, options) {
+            var opts = options || {};
+            var fontSize = opts.fontSize || 10;
+            var fontStyle = opts.bold ? 'bold' : 'normal';
+            var lines = Array.isArray(text) ? text : doc.splitTextToSize(String(text || ''), state.maxWidth);
+            doc.setFont('helvetica', fontStyle);
+            doc.setFontSize(fontSize);
+            lines.forEach(function(line) {
+                if (state.y > state.bottom) {
+                    doc.addPage();
+                    state.y = 14;
+                }
+                doc.text(String(line), state.x, state.y);
+                state.y += opts.lineHeight || state.lineHeight;
+            });
+        }
+        function pdfAddGap(state, amount) {
+            state.y += amount || 2;
+        }
+        function formatCurrency(value) {
+            return RU + (parseFloat(value || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        function downloadPurchaseInvoicePdf(purchase) {
+            if (!purchase) return false;
+            var bundle = createPdfDocument('PURCHASE INVOICE');
+            if (!bundle) return false;
+            var doc = bundle.doc;
+            var state = bundle.state;
+            var supplier = (appData.suppliers || []).find(function(s) { return String(s.id) === String(purchase.supplierId); }) || {};
+            var items = Array.isArray(purchase.items) ? purchase.items : [];
+
+            pdfAddText(doc, state, (appData.company && appData.company.name) ? appData.company.name : 'Ishwar Trading Company', { bold: true, fontSize: 12 });
+            pdfAddText(doc, state, 'Invoice: ' + (purchase.invoice || '-') + '   Date: ' + formatDateForMessage(purchase.date));
+            pdfAddText(doc, state, 'Supplier: ' + (purchase.supplierName || '-') + (supplier.mobile ? ('   Mobile: ' + supplier.mobile) : ''));
+            pdfAddText(doc, state, 'Truck: ' + (purchase.truck || '-') + '   LR: ' + (purchase.lrNumber || '-'));
+            pdfAddGap(state, 2);
+            pdfAddText(doc, state, 'Items', { bold: true });
+
+            items.forEach(function(item, idx) {
+                var line = (idx + 1) + '. ' + (item.itemName || '-') +
+                    ' | Gross: ' + (parseFloat(item.grossWeight || 0).toFixed(2)) +
+                    ' | Net: ' + (parseFloat(item.netWeight || 0).toFixed(2)) +
+                    ' | Rate: ' + formatCurrency(item.rate || 0) +
+                    ' | Amt: ' + formatCurrency(item.total || 0);
+                pdfAddText(doc, state, line);
+            });
+
+            pdfAddGap(state, 3);
+            pdfAddText(doc, state, 'Items Total: ' + formatCurrency(purchase.itemsTotal || purchase.total || 0), { bold: true });
+            pdfAddText(doc, state, 'Hammali: ' + formatCurrency(purchase.hammali || 0));
+            pdfAddText(doc, state, 'Advance: ' + formatCurrency(purchase.advance || 0));
+            if (Array.isArray(purchase.othersEntries) && purchase.othersEntries.length) {
+                purchase.othersEntries.forEach(function(entry) {
+                    var sign = entry.operation === 'reduce' ? '-' : '+';
+                    pdfAddText(doc, state, 'Other ' + sign + ' ' + (entry.reason || 'Adjustment') + ': ' + formatCurrency(entry.amount || 0));
+                });
+            }
+            pdfAddText(doc, state, 'Grand Total: ' + formatCurrency(purchase.grandTotal || purchase.total || 0), { bold: true, fontSize: 11 });
+
+            var fileName = 'purchase-invoice-' + String(purchase.invoice || purchase.id || Date.now()).replace(/[^\w-]/g, '_') + '.pdf';
+            doc.save(fileName);
+            return true;
+        }
+        function downloadSaleInvoicePdf(sale) {
+            if (!sale) return false;
+            var bundle = createPdfDocument('SALES INVOICE');
+            if (!bundle) return false;
+            var doc = bundle.doc;
+            var state = bundle.state;
+            var customer = (appData.customers || []).find(function(c) { return String(c.id) === String(sale.customerId); }) || {};
+            var items = Array.isArray(sale.items) ? sale.items : [];
+
+            pdfAddText(doc, state, (appData.company && appData.company.name) ? appData.company.name : 'Ishwar Trading Company', { bold: true, fontSize: 12 });
+            pdfAddText(doc, state, 'Invoice: ' + (sale.invoice || '-') + '   Date: ' + formatDateForMessage(sale.date));
+            pdfAddText(doc, state, 'Customer: ' + (sale.customerName || '-') + (customer.mobile ? ('   Mobile: ' + customer.mobile) : ''));
+            pdfAddText(doc, state, 'Truck: ' + (sale.truck || '-') + '   LR: ' + (sale.lrNumber || '-'));
+            pdfAddGap(state, 2);
+            pdfAddText(doc, state, 'Items', { bold: true });
+
+            items.forEach(function(item, idx) {
+                var line = (idx + 1) + '. ' + (item.itemName || '-') +
+                    ' | Gross: ' + (parseFloat(item.grossWeight || 0).toFixed(2)) +
+                    ' | Net: ' + (parseFloat(item.netWeight || 0).toFixed(2)) +
+                    ' | Rate: ' + formatCurrency(item.rate || 0) +
+                    ' | Amt: ' + formatCurrency(item.total || 0);
+                pdfAddText(doc, state, line);
+            });
+
+            pdfAddGap(state, 3);
+            pdfAddText(doc, state, 'Items Total: ' + formatCurrency(sale.itemsTotal || sale.total || 0), { bold: true });
+            pdfAddText(doc, state, 'Hammali: ' + formatCurrency(sale.hammali || 0));
+            pdfAddText(doc, state, 'Advance: ' + formatCurrency(sale.advance || 0));
+            pdfAddText(doc, state, 'Truck Advance: ' + formatCurrency(sale.truckAdvance || 0));
+            if (Array.isArray(sale.othersEntries) && sale.othersEntries.length) {
+                sale.othersEntries.forEach(function(entry) {
+                    var sign = entry.operation === 'reduce' ? '-' : '+';
+                    pdfAddText(doc, state, 'Other ' + sign + ' ' + (entry.reason || 'Adjustment') + ': ' + formatCurrency(entry.amount || 0));
+                });
+            }
+            pdfAddText(doc, state, 'Grand Total: ' + formatCurrency(sale.grandTotal || sale.total || 0), { bold: true, fontSize: 11 });
+
+            var fileName = 'sales-invoice-' + String(sale.invoice || sale.id || Date.now()).replace(/[^\w-]/g, '_') + '.pdf';
+            doc.save(fileName);
+            return true;
+        }
+        function downloadLedgerPdf() {
+            var meta = window.currentLedgerData || {};
+            var entries = (typeof currentLedgerData !== 'undefined' && Array.isArray(currentLedgerData)) ? currentLedgerData : [];
+            if (!meta.type || !meta.entityId || !entries.length) {
+                alert('Please generate ledger first.');
+                return false;
+            }
+            var bundle = createPdfDocument('LEDGER STATEMENT');
+            if (!bundle) return false;
+            var doc = bundle.doc;
+            var state = bundle.state;
+            var fromDate = (document.getElementById('ledgerFromDate') || {}).value || '';
+            var toDate = (document.getElementById('ledgerToDate') || {}).value || '';
+
+            pdfAddText(doc, state, (appData.company && appData.company.name) ? appData.company.name : 'Ishwar Trading Company', { bold: true, fontSize: 12 });
+            pdfAddText(doc, state, 'Party: ' + (meta.entityName || '-'));
+            pdfAddText(doc, state, 'Ledger Type: ' + (meta.type || '-'));
+            pdfAddText(doc, state, 'Period: ' + (fromDate || 'Start') + ' to ' + (toDate || 'Today'));
+            pdfAddText(doc, state, 'Current Balance: ' + formatCurrency(meta.balance || 0), { bold: true });
+            pdfAddGap(state, 2);
+            pdfAddText(doc, state, 'Entries', { bold: true });
+
+            entries.forEach(function(e, idx) {
+                var line = (idx + 1) + '. ' + (e.date || '-') + ' | ' + (e.description || '-') +
+                    ' | Inv: ' + (e.invoice || '-') +
+                    ' | Dr: ' + formatCurrency(e.debit || 0) +
+                    ' | Cr: ' + formatCurrency(e.credit || 0) +
+                    ' | Bal: ' + formatCurrency(e.balance || 0);
+                pdfAddText(doc, state, line);
+            });
+
+            var fileName = 'ledger-' + String(meta.entityName || meta.entityId || Date.now()).replace(/[^\w-]/g, '_') + '.pdf';
+            doc.save(fileName);
+            return true;
+        }
         function buildPurchaseWhatsAppMessage(purchase) {
             if (!purchase) return '';
             var total = parseFloat(purchase.grandTotal || purchase.total || 0);
@@ -1082,9 +1244,13 @@ function deleteAllMasters() {
                 alert('Mobile not found for this supplier. Please update it in Masters first.');
                 return;
             }
+            var pdfOk = downloadPurchaseInvoicePdf(purchase);
+            if (!pdfOk) return;
             if (!openWhatsAppChat(supplier.mobile, buildPurchaseWhatsAppMessage(purchase))) {
                 alert('Invalid mobile number for this supplier. Please correct it in Masters.');
+                return;
             }
+            alert('Invoice PDF downloaded. Please attach it in WhatsApp chat and send.');
         }
         function sendSaleWhatsApp(saleId) {
             var sale = (appData.sales || []).find(function(s) { return s.id === saleId; });
@@ -1094,9 +1260,13 @@ function deleteAllMasters() {
                 alert('Mobile not found for this customer. Please update it in Masters first.');
                 return;
             }
+            var pdfOk = downloadSaleInvoicePdf(sale);
+            if (!pdfOk) return;
             if (!openWhatsAppChat(customer.mobile, buildSaleWhatsAppMessage(sale))) {
                 alert('Invalid mobile number for this customer. Please correct it in Masters.');
+                return;
             }
+            alert('Invoice PDF downloaded. Please attach it in WhatsApp chat and send.');
         }
         function sendLedgerWhatsApp() {
             var meta = window.currentLedgerData || {};
@@ -1115,9 +1285,13 @@ function deleteAllMasters() {
                 alert('Mobile not found for this party. Please update it in Masters first.');
                 return;
             }
+            var pdfOk = downloadLedgerPdf();
+            if (!pdfOk) return;
             if (!openWhatsAppChat(party.mobile, buildLedgerWhatsAppMessage())) {
                 alert('Invalid mobile number for this party. Please correct it in Masters.');
+                return;
             }
+            alert('Ledger PDF downloaded. Please attach it in WhatsApp chat and send.');
         }
         function addSupplier() {
             var rawName = document.getElementById('supplierName').value;
