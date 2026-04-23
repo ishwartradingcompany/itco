@@ -1374,7 +1374,7 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-2">Gross Weight (kg)</label>
-                            <input type="number" id="saleQuantity" placeholder="Gross Weight" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <input type="number" id="saleQuantity" placeholder="Gross Weight" oninput="calculateSaleItemTotal()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                             <small class="text-slate-500" id="availableStock">Available: 0</small>
                         </div>
                         <div>
@@ -1399,7 +1399,7 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-2">Rate per kg</label>
-                            <input type="number" id="saleRate" placeholder="Rate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <input type="number" id="saleRate" placeholder="Rate" oninput="calculateSaleItemTotal()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-2">Item Total</label>
