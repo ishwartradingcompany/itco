@@ -3303,6 +3303,34 @@ function deleteAllMasters() {
                 alert('Selected customer not found');
                 return;
             }
+            // Mandatory item-wise purchase linking for sale items.
+            linkedPurchases = normalizeLinkedPurchasesForItems(linkedPurchases, currentSaleItems);
+            if (!linkedPurchases.length) {
+                alert('Purchase linking is compulsory item-wise. Please click "Link Purchase" and link all sale item quantities.');
+                return;
+            }
+            const linkTolerance = 0.01;
+            const requiredByItemForSave = {};
+            currentSaleItems.forEach(function(item) {
+                const itemId = String(item.itemId);
+                requiredByItemForSave[itemId] = (requiredByItemForSave[itemId] || 0) + (parseFloat(item.grossWeight) || 0);
+            });
+            const linkedByItemForSave = {};
+            linkedPurchases.forEach(function(link) {
+                const itemId = String(link.itemId || '');
+                if (!itemId) return;
+                linkedByItemForSave[itemId] = (linkedByItemForSave[itemId] || 0) + getLinkedQtyValue(link);
+            });
+            for (const itemId in requiredByItemForSave) {
+                const req = requiredByItemForSave[itemId] || 0;
+                const lnk = linkedByItemForSave[itemId] || 0;
+                if (Math.abs(req - lnk) > linkTolerance) {
+                    const itemObj = (appData.items || []).find(function(i) { return String(i.id) === String(itemId); });
+                    const name = itemObj ? itemObj.name : itemId;
+                    alert('Purchase linking incomplete for item "' + name + '". Required ' + req.toFixed(2) + ' kg, linked ' + lnk.toFixed(2) + ' kg.');
+                    return;
+                }
+            }
             // Negative stock check: ensure no item goes below zero
             const requiredByItem = {};
             currentSaleItems.forEach(item => {
@@ -3489,191 +3517,249 @@ function deleteAllMasters() {
             updateLinkedPurchasesDisplay();
         }
 
-        // Purchase Linking Functions
-        function showPurchaseLinkingModal() {
-            // Reset temporary linked purchases to current state
-            tempLinkedPurchases = JSON.parse(JSON.stringify(linkedPurchases));
+        // Purchase Linking Functions (Item-wise mandatory linking)
+        function getLinkedQtyValue(link) {
+            if (!link) return 0;
+            return parseFloat(link.quantityUsed ?? link.quantity ?? link.qtyUsed ?? link.qty ?? 0) || 0;
+        }
 
-            // Backward-compatible quantity resolvers for old/new data formats.
-            function getPurchaseTotalQtyForLinking(purchase) {
-                if (!purchase) return 0;
-                if (purchase.items && purchase.items.length) {
-                    return purchase.items.reduce((sum, item) => {
-                        const qty = parseFloat(item.grossWeight ?? item.quantity ?? item.netWeight ?? 0) || 0;
-                        return sum + qty;
-                    }, 0);
+        function normalizeLinkedPurchasesForItems(rawLinks, saleItems) {
+            const safeLinks = Array.isArray(rawLinks) ? rawLinks : [];
+            const safeSaleItems = Array.isArray(saleItems) ? saleItems : [];
+            const requiredByItem = {};
+            let totalSaleQty = 0;
+            safeSaleItems.forEach(function(si) {
+                const itemId = si && si.itemId != null ? String(si.itemId) : '';
+                const qty = parseFloat(si.grossWeight ?? si.quantity ?? si.netWeight ?? 0) || 0;
+                if (!itemId || qty <= 0) return;
+                requiredByItem[itemId] = (requiredByItem[itemId] || 0) + qty;
+                totalSaleQty += qty;
+            });
+            const itemIds = Object.keys(requiredByItem);
+            const normalized = [];
+            safeLinks.forEach(function(link) {
+                const qty = getLinkedQtyValue(link);
+                if (qty <= 0) return;
+                const purchaseId = link.purchaseId;
+                if (link.itemId != null && link.itemId !== '') {
+                    normalized.push({ purchaseId: purchaseId, itemId: String(link.itemId), quantityUsed: qty });
+                    return;
                 }
-                // Legacy single-item purchase formats
-                return parseFloat(
-                    purchase.grossWeight ??
-                    purchase.quantity ??
-                    purchase.netWeight ??
-                    purchase.qty ??
-                    0
-                ) || 0;
-            }
+                if (itemIds.length === 0) return;
+                if (itemIds.length === 1 || totalSaleQty <= 0) {
+                    normalized.push({ purchaseId: purchaseId, itemId: itemIds[0], quantityUsed: qty });
+                    return;
+                }
+                itemIds.forEach(function(itemId) {
+                    const ratio = requiredByItem[itemId] / totalSaleQty;
+                    normalized.push({ purchaseId: purchaseId, itemId: itemId, quantityUsed: qty * ratio });
+                });
+            });
+            const map = {};
+            normalized.forEach(function(l) {
+                const key = String(l.purchaseId) + '|' + String(l.itemId);
+                if (!map[key]) map[key] = { purchaseId: l.purchaseId, itemId: String(l.itemId), quantityUsed: 0 };
+                map[key].quantityUsed += (parseFloat(l.quantityUsed) || 0);
+            });
+            return Object.keys(map).map(function(k) {
+                const v = map[k];
+                v.quantityUsed = +v.quantityUsed.toFixed(2);
+                return v;
+            });
+        }
 
-            function getLinkedQtyValue(link) {
-                if (!link) return 0;
-                return parseFloat(link.quantityUsed ?? link.quantity ?? link.qtyUsed ?? link.qty ?? 0) || 0;
-            }
-            
-            // Populate available purchases
+        function getPurchaseItemAvailableQty(purchaseId, itemId, currentEditingSaleId, currentTempLinks) {
+            const purchase = (appData.purchases || []).find(function(p) { return String(p.id) === String(purchaseId); });
+            const totalPurchased = purchase && purchase.items
+                ? purchase.items.reduce(function(sum, item) {
+                    if (String(item.itemId) !== String(itemId)) return sum;
+                    return sum + (parseFloat(item.grossWeight ?? item.quantity ?? item.netWeight ?? 0) || 0);
+                }, 0)
+                : 0;
+            const alreadyLinked = (appData.sales || []).reduce(function(sum, sale) {
+                const saleIdStr = (sale && sale.id !== undefined && sale.id !== null) ? String(sale.id) : null;
+                if (sale.linkedPurchases && (!currentEditingSaleId || saleIdStr !== currentEditingSaleId)) {
+                    const normalized = normalizeLinkedPurchasesForItems(sale.linkedPurchases, sale.items || []);
+                    const used = normalized.reduce(function(acc, lp) {
+                        if (String(lp.purchaseId) === String(purchaseId) && String(lp.itemId) === String(itemId)) {
+                            return acc + getLinkedQtyValue(lp);
+                        }
+                        return acc;
+                    }, 0);
+                    return sum + used;
+                }
+                return sum;
+            }, 0);
+            const currentTempQty = (currentTempLinks || []).reduce(function(sum, lp) {
+                if (String(lp.purchaseId) === String(purchaseId) && String(lp.itemId) === String(itemId)) {
+                    return sum + getLinkedQtyValue(lp);
+                }
+                return sum;
+            }, 0);
+            return Math.max(0, totalPurchased - alreadyLinked + currentTempQty);
+        }
+
+        function showPurchaseLinkingModal() {
             const container = document.getElementById('availablePurchasesList');
             container.innerHTML = '';
-            
-            if (appData.purchases.length === 0) {
-                container.innerHTML = '<p class="text-slate-500 text-center py-4">No purchase invoices available</p>';
-            } else {
-                const currentEditingSaleId = (editingSaleId !== null && editingSaleId !== undefined) ? String(editingSaleId) : null;
+            if (!currentSaleItems || currentSaleItems.length === 0) {
+                container.innerHTML = '<p class="text-slate-500 text-center py-4">Add sale items first, then link purchase items.</p>';
+                document.getElementById('purchaseLinkingModal').classList.remove('hidden');
+                return;
+            }
+            const currentEditingSaleId = (editingSaleId !== null && editingSaleId !== undefined) ? String(editingSaleId) : null;
+            tempLinkedPurchases = normalizeLinkedPurchasesForItems(linkedPurchases, currentSaleItems);
 
-                appData.purchases.forEach(purchase => {
-                    const isLinked = tempLinkedPurchases.some(lp => String(lp.purchaseId) === String(purchase.id));
-                    
-                    const div = document.createElement('div');
-                    div.className = 'border border-slate-300 rounded-lg p-4 ' + (isLinked ? 'bg-blue-50 border-blue-400' : 'bg-white');
-                    
-                    // Calculate available quantity for this purchase
-                    const totalPurchased = getPurchaseTotalQtyForLinking(purchase);
-                    const alreadyLinked = appData.sales ? appData.sales.reduce((sum, sale) => {
-                        const saleIdStr = (sale && sale.id !== undefined && sale.id !== null) ? String(sale.id) : null;
-                        // Exclude current sale while editing so user can re-link freely.
-                        if (sale.linkedPurchases && (!currentEditingSaleId || saleIdStr !== currentEditingSaleId)) {
-                            const saleGrossQty = (sale.items && sale.items.length)
-                                ? sale.items.reduce((q, it) => q + (parseFloat(it.grossWeight ?? it.quantity ?? it.netWeight ?? 0) || 0), 0)
-                                : (parseFloat(sale.grossWeight ?? sale.quantity ?? sale.netWeight ?? 0) || 0);
-                            const totalLinkedForSale = sale.linkedPurchases.reduce((q, lp) => q + getLinkedQtyValue(lp), 0);
-                            // Cap stale legacy links so one sale cannot consume more than its own quantity.
-                            const capRatio = (totalLinkedForSale > 0 && saleGrossQty > 0)
-                                ? Math.min(1, saleGrossQty / totalLinkedForSale)
-                                : 1;
-                            const usedInThisSale = sale.linkedPurchases.reduce((acc, lp) => {
-                                if (String(lp.purchaseId) === String(purchase.id)) {
-                                    return acc + (getLinkedQtyValue(lp) * capRatio);
-                                }
-                                return acc;
-                            }, 0);
-                            return sum + usedInThisSale;
+            currentSaleItems.forEach(function(saleItem, saleIdx) {
+                const saleItemId = String(saleItem.itemId);
+                const requiredQty = parseFloat(saleItem.grossWeight ?? saleItem.quantity ?? 0) || 0;
+                const linkedQtyForItem = tempLinkedPurchases.reduce(function(sum, lp) {
+                    return String(lp.itemId) === saleItemId ? sum + getLinkedQtyValue(lp) : sum;
+                }, 0);
+                const wrapper = document.createElement('div');
+                wrapper.className = 'border border-slate-300 rounded-lg p-4 bg-white';
+                const lines = [];
+                lines.push('<div class="mb-3 pb-2 border-b border-slate-200">');
+                lines.push('<div class="font-semibold text-slate-800">Sale Item: ' + escapeHtml(saleItem.itemName) + '</div>');
+                lines.push('<div class="text-sm text-slate-600">Required Gross Qty: ' + requiredQty.toFixed(2) + ' kg | Linked: ' + linkedQtyForItem.toFixed(2) + ' kg</div>');
+                lines.push('</div>');
+                let matchedRows = 0;
+                (appData.purchases || []).forEach(function(purchase) {
+                    const pItems = purchase.items || [];
+                    const hasMatch = pItems.some(function(pi) { return String(pi.itemId) === saleItemId; });
+                    if (!hasMatch) return;
+                    matchedRows++;
+                    const availableQty = getPurchaseItemAvailableQty(purchase.id, saleItemId, currentEditingSaleId, tempLinkedPurchases);
+                    const existingQty = tempLinkedPurchases.reduce(function(sum, lp) {
+                        if (String(lp.purchaseId) === String(purchase.id) && String(lp.itemId) === saleItemId) {
+                            return sum + getLinkedQtyValue(lp);
                         }
                         return sum;
-                    }, 0) : 0;
-                    const currentlyLinked = tempLinkedPurchases.find(lp => String(lp.purchaseId) === String(purchase.id));
-                    const currentLinkedQty = currentlyLinked ? getLinkedQtyValue(currentlyLinked) : 0;
-                    const availableQty = Math.max(0, totalPurchased - alreadyLinked + currentLinkedQty);
-                    
-                    div.innerHTML = `
-                        <div class="flex justify-between items-start mb-2">
-                            <div class="flex-1">
-                                <div class="font-semibold text-slate-800">Invoice: ${purchase.invoice}</div>
-                                <div class="text-sm text-slate-600">Date: ${purchase.date} | Supplier: ${purchase.supplierName}</div>
-                                <div class="text-sm text-slate-600">Total Amount: ${RU}${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</div>
-                                <div class="text-sm font-medium ${availableQty > 0 ? 'text-green-600' : 'text-red-600'}">
-                                    Available Quantity: ${availableQty.toFixed(2)} kg
-                                </div>
-                            </div>
-                            <label class="flex items-center space-x-2 cursor-pointer">
-                                <input type="checkbox" 
-                                       id="purchase_${purchase.id}" 
-                                       ${isLinked ? 'checked' : ''}
-                                       ${availableQty <= 0 && !isLinked ? 'disabled' : ''}
-                                       onchange="togglePurchaseLink(${purchase.id})"
-                                       class="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500">
-                                <span class="text-sm font-medium">Link</span>
-                            </label>
-                        </div>
-                        <div id="quantity_container_${purchase.id}" class="${isLinked ? '' : 'hidden'} mt-3 pt-3 border-t border-slate-200">
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Quantity to use from this purchase (kg):</label>
-                            <input type="number" 
-                                   id="quantity_${purchase.id}" 
-                                   value="${currentLinkedQty}"
-                                   max="${availableQty}"
-                                   step="0.01"
-                                   class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                   placeholder="Enter quantity">
-                        </div>
-                    `;
-                    container.appendChild(div);
+                    }, 0);
+                    const inputId = 'link_qty_' + saleIdx + '_' + purchase.id + '_' + saleItemId;
+                    lines.push('<div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end py-2 border-b border-slate-100">');
+                    lines.push('<div class="md:col-span-2">');
+                    lines.push('<div class="font-medium text-slate-800">Invoice: ' + escapeHtml(purchase.invoice) + ' | Supplier: ' + escapeHtml(purchase.supplierName) + '</div>');
+                    lines.push('<div class="text-sm ' + (availableQty > 0 ? 'text-green-600' : 'text-red-600') + '">Available for ' + escapeHtml(saleItem.itemName) + ': ' + availableQty.toFixed(2) + ' kg</div>');
+                    lines.push('</div>');
+                    lines.push('<div class="md:col-span-2">');
+                    lines.push('<label class="block text-xs text-slate-600 mb-1">Qty to use from this purchase item (kg)</label>');
+                    lines.push('<input type="number" id="' + inputId + '" data-purchase-id="' + purchase.id + '" data-item-id="' + saleItemId + '" value="' + (existingQty > 0 ? existingQty.toFixed(2) : '') + '" max="' + availableQty.toFixed(2) + '" step="0.01" class="link-item-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">');
+                    lines.push('</div>');
+                    lines.push('</div>');
                 });
-            }
-            
+                if (matchedRows === 0) lines.push('<div class="text-sm text-red-600">No purchase item found for this sale item.</div>');
+                wrapper.innerHTML = lines.join('');
+                container.appendChild(wrapper);
+            });
             document.getElementById('purchaseLinkingModal').classList.remove('hidden');
         }
 
-        function togglePurchaseLink(purchaseId) {
-            const checkbox = document.getElementById(`purchase_${purchaseId}`);
-            const quantityContainer = document.getElementById(`quantity_container_${purchaseId}`);
-            
-            if (checkbox.checked) {
-                quantityContainer.classList.remove('hidden');
-                // Add to temp linked purchases if not already there
-                if (!tempLinkedPurchases.some(lp => String(lp.purchaseId) === String(purchaseId))) {
-                    tempLinkedPurchases.push({
-                        purchaseId: purchaseId,
-                        quantityUsed: 0
-                    });
-                }
-            } else {
-                quantityContainer.classList.add('hidden');
-                // Remove from temp linked purchases
-                tempLinkedPurchases = tempLinkedPurchases.filter(lp => String(lp.purchaseId) !== String(purchaseId));
-            }
+        function applyLinkedQuantitiesToSaleItems(links) {
+            const groupedRows = {};
+            currentSaleItems.forEach(function(row, idx) {
+                const itemId = String(row.itemId);
+                if (!groupedRows[itemId]) groupedRows[itemId] = [];
+                groupedRows[itemId].push({ idx: idx, row: row });
+            });
+            Object.keys(groupedRows).forEach(function(itemId) {
+                const rows = groupedRows[itemId];
+                const linkedQty = (links || []).reduce(function(sum, lp) {
+                    return String(lp.itemId) === itemId ? sum + getLinkedQtyValue(lp) : sum;
+                }, 0);
+                if (linkedQty <= 0) return;
+                const oldTotal = rows.reduce(function(sum, r) { return sum + (parseFloat(r.row.grossWeight) || 0); }, 0);
+                let assigned = 0;
+                rows.forEach(function(r, i) {
+                    const oldGross = parseFloat(r.row.grossWeight) || 0;
+                    const oldNet = parseFloat(r.row.netWeight) || 0;
+                    const discountDelta = Math.max(0, oldGross - oldNet);
+                    let newGross = 0;
+                    if (i === rows.length - 1) newGross = linkedQty - assigned;
+                    else {
+                        const ratio = oldTotal > 0 ? (oldGross / oldTotal) : (1 / rows.length);
+                        newGross = +(linkedQty * ratio).toFixed(2);
+                        assigned += newGross;
+                    }
+                    r.row.grossWeight = +Math.max(0, newGross).toFixed(2);
+                    if (r.row.isCoconut) r.row.netWeight = +Math.max(0, r.row.grossWeight - (parseFloat(r.row.discountQty) || 0)).toFixed(2);
+                    else {
+                        r.row.netWeight = +Math.max(0, r.row.grossWeight - discountDelta).toFixed(2);
+                        r.row.bags = +discountDelta.toFixed(2);
+                    }
+                    r.row.total = +((parseFloat(r.row.netWeight) || 0) * (parseFloat(r.row.rate) || 0)).toFixed(2);
+                });
+            });
         }
 
         function confirmPurchaseLinking() {
-            // Validate and collect quantities
+            const inputs = Array.from(document.querySelectorAll('#availablePurchasesList .link-item-input'));
             const validatedLinks = [];
-            let hasError = false;
-            
-            for (const link of tempLinkedPurchases) {
-                const quantityInput = document.getElementById(`quantity_${link.purchaseId}`);
-                const quantity = parseFloat(quantityInput.value) || 0;
-                
-                if (quantity <= 0) {
-                    alert('Please enter a valid quantity for all linked purchases');
-                    hasError = true;
-                    break;
-                }
-                
+            inputs.forEach(function(input) {
+                const qty = parseFloat(input.value) || 0;
+                if (qty <= 0) return;
+                const max = parseFloat(input.max) || 0;
+                if (max > 0 && qty - max > 0.0001) return;
                 validatedLinks.push({
-                    purchaseId: link.purchaseId,
-                    quantityUsed: quantity
+                    purchaseId: input.getAttribute('data-purchase-id'),
+                    itemId: input.getAttribute('data-item-id'),
+                    quantityUsed: +qty.toFixed(2)
                 });
+            });
+            const tolerance = 0.01;
+            const requiredByItem = {};
+            currentSaleItems.forEach(function(row) {
+                const itemId = String(row.itemId);
+                requiredByItem[itemId] = (requiredByItem[itemId] || 0) + (parseFloat(row.grossWeight) || 0);
+            });
+            const linkedByItem = {};
+            validatedLinks.forEach(function(lp) {
+                const itemId = String(lp.itemId);
+                linkedByItem[itemId] = (linkedByItem[itemId] || 0) + getLinkedQtyValue(lp);
+            });
+            for (const itemId in requiredByItem) {
+                const req = requiredByItem[itemId] || 0;
+                const lnk = linkedByItem[itemId] || 0;
+                if (Math.abs(req - lnk) > tolerance) {
+                    const itemObj = (appData.items || []).find(function(i) { return String(i.id) === String(itemId); });
+                    const name = itemObj ? itemObj.name : itemId;
+                    alert('Purchase linking is compulsory item-wise. Item "' + name + '" requires ' + req.toFixed(2) + ' kg, but linked ' + lnk.toFixed(2) + ' kg.');
+                    return;
+                }
             }
-            
-            if (!hasError) {
-                linkedPurchases = validatedLinks;
-                updateLinkedPurchasesDisplay();
-                closePurchaseLinkingModal();
-            }
+            linkedPurchases = validatedLinks;
+            applyLinkedQuantitiesToSaleItems(validatedLinks);
+            updateCurrentSaleItemsDisplay();
+            calculateSaleTotals();
+            updateLinkedPurchasesDisplay();
+            closePurchaseLinkingModal();
         }
 
         function updateLinkedPurchasesDisplay() {
             const container = document.getElementById('linkedPurchasesList');
-            
             if (linkedPurchases.length === 0) {
-                container.innerHTML = '<p class="text-slate-500 text-sm italic">No purchases linked yet. Click "Link Purchase" to add.</p>';
-            } else {
-                container.innerHTML = '';
-                linkedPurchases.forEach(link => {
-                    const purchase = appData.purchases.find(p => String(p.id) === String(link.purchaseId));
-                    if (purchase) {
-                        const div = document.createElement('div');
-                        div.className = 'flex justify-between items-center p-3 bg-white border border-blue-300 rounded-lg';
-                        div.innerHTML = `
-                            <div class="flex-1">
-                                <div class="font-medium text-slate-800">ðŸ“„ Invoice: ${purchase.invoice} | Supplier: ${purchase.supplierName}</div>
-                                <div class="text-sm text-slate-600">Quantity: ${link.quantityUsed} kg | Amount: ${RU}${(purchase.grandTotal || purchase.total || 0).toFixed(2)}</div>
-                            </div>
-                            <button onclick="removePurchaseLink(${link.purchaseId})" class="text-red-600 hover:text-red-800 font-bold">\u2716</button>
-                        `;
-                        container.appendChild(div);
-                    }
-                });
+                container.innerHTML = '<p class="text-slate-500 text-sm italic">No item-wise purchase links yet. Click "Link Purchase" to add.</p>';
+                return;
             }
+            container.innerHTML = '';
+            linkedPurchases.forEach(function(link, idx) {
+                const purchase = (appData.purchases || []).find(function(p) { return String(p.id) === String(link.purchaseId); });
+                const item = (appData.items || []).find(function(i) { return String(i.id) === String(link.itemId); });
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center p-3 bg-white border border-blue-300 rounded-lg';
+                div.innerHTML = `
+                    <div class="flex-1">
+                        <div class="font-medium text-slate-800">Invoice: ${escapeHtml(purchase ? purchase.invoice : link.purchaseId)} | Supplier: ${escapeHtml(purchase ? purchase.supplierName : '-')}</div>
+                        <div class="text-sm text-slate-600">Item: ${escapeHtml(item ? item.name : (link.itemId || '-'))} | Qty: ${(getLinkedQtyValue(link)).toFixed(2)} kg</div>
+                    </div>
+                    <button onclick="removePurchaseLink(${idx})" class="text-red-600 hover:text-red-800 font-bold">✖</button>
+                `;
+                container.appendChild(div);
+            });
         }
 
-        function removePurchaseLink(purchaseId) {
-            linkedPurchases = linkedPurchases.filter(lp => String(lp.purchaseId) !== String(purchaseId));
+        function removePurchaseLink(index) {
+            linkedPurchases.splice(index, 1);
             updateLinkedPurchasesDisplay();
         }
 
@@ -7434,7 +7520,7 @@ function onPnLFilterChange() {
             calculateSaleTotals();
             
             // Load linked purchases
-            linkedPurchases = sale.linkedPurchases ? [...sale.linkedPurchases] : [];
+            linkedPurchases = normalizeLinkedPurchasesForItems(sale.linkedPurchases ? [...sale.linkedPurchases] : [], currentSaleItems);
             updateLinkedPurchasesDisplay();
             
             // Show the sales form
