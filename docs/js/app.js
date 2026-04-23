@@ -1,4 +1,4 @@
-\        // Indian Rupee, bullet, checkmark - from code points to avoid file encoding issues
+        // Indian Rupee, bullet, checkmark - from code points to avoid file encoding issues
         const RU = String.fromCharCode(0x20B9);
         const BULLET = String.fromCharCode(0x2022);
         const CHECK = String.fromCharCode(0x2713);
