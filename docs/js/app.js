@@ -2767,18 +2767,22 @@ function deleteAllMasters() {
             // Collect all stock movements from purchases and sales
             allStockMovements = [];
             let movementSeq = 1;
+            let totalInwardQty = 0;
+            let totalOutwardQty = 0;
             
             // Add purchase movements
             appData.purchases.forEach(purchase => {
                 if (purchase.items) {
                     purchase.items.forEach(item => {
+                        const inwardQty = parseFloat(item.grossWeight) || 0;
+                        totalInwardQty += inwardQty;
                         allStockMovements.push({
                             movementId: movementSeq++,
                             date: purchase.date,
                             itemName: item.itemName,
                             itemId: item.itemId,
                             type: 'Purchase',
-                            quantity: item.grossWeight,
+                            quantity: inwardQty,
                             invoice: purchase.invoice,
                             reference: purchase.supplierName,
                             unit: item.unit || 'kg'
@@ -2791,13 +2795,15 @@ function deleteAllMasters() {
             appData.sales.forEach(sale => {
                 if (sale.items) {
                     sale.items.forEach(item => {
+                        const outwardQty = parseFloat(item.grossWeight) || 0;
+                        totalOutwardQty += outwardQty;
                         allStockMovements.push({
                             movementId: movementSeq++,
                             date: sale.date,
                             itemName: item.itemName,
                             itemId: item.itemId,
                             type: 'Sale',
-                            quantity: -item.grossWeight,
+                            quantity: -outwardQty,
                             invoice: sale.invoice,
                             reference: sale.customerName,
                             unit: item.unit || 'kg'
@@ -2821,6 +2827,17 @@ function deleteAllMasters() {
             // Update total movements count
             const invTotalMovements = document.getElementById('invTotalMovements');
             if (invTotalMovements) invTotalMovements.textContent = allStockMovements.length;
+
+            // Dashboard style KPIs inspired by inventory cockpit layouts.
+            const invKpiReceived = document.getElementById('invKpiReceived');
+            const invKpiDispatched = document.getElementById('invKpiDispatched');
+            const invKpiAvailable = document.getElementById('invKpiAvailable');
+            if (invKpiReceived) invKpiReceived.textContent = totalInwardQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            if (invKpiDispatched) invKpiDispatched.textContent = totalOutwardQty.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            if (invKpiAvailable) {
+                const netAvailable = totalInwardQty - totalOutwardQty;
+                invKpiAvailable.textContent = netAvailable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
             
             // Apply filters
             filterStockMovement();
@@ -2928,21 +2945,24 @@ function deleteAllMasters() {
                     ? new Date(m.date + 'T00:00:00').toLocaleDateString('en-GB')
                     : (m.date || '-');
                 const tr = document.createElement('tr');
-                tr.className = 'border-b border-slate-100 hover:bg-blue-50/40 transition-colors';
+                tr.className = 'border-b border-slate-100 hover:bg-cyan-50/60 transition-colors';
                 if ((startIndex + paginatedMovements.indexOf(m)) % 2 === 0) {
                     tr.classList.add('bg-white');
                 } else {
                     tr.classList.add('bg-slate-50/40');
                 }
                 const movementPill = m.type === 'Purchase'
-                    ? '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">IN</span>'
-                    : '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 border border-rose-200">OUT</span>';
+                    ? '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-sm">IN</span>'
+                    : '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 border border-rose-200 shadow-sm">OUT</span>';
                 tr.innerHTML = `
                     <td class="px-4 py-3 align-top">
-                        <span class="text-sm font-medium text-slate-700">${dateText}</span>
+                        <span class="text-sm font-semibold text-slate-700">${dateText}</span>
                     </td>
                     <td class="px-4 py-3 align-top">
-                        <span class="font-semibold text-slate-800">${m.itemName}</span>
+                        <div class="flex flex-col">
+                            <span class="font-semibold text-slate-800">${m.itemName}</span>
+                            <span class="text-[11px] text-slate-500">${m.unit || 'kg'}</span>
+                        </div>
                     </td>
                     <td class="px-4 py-3 align-top">
                         <div class="flex items-center gap-2">
@@ -2955,7 +2975,7 @@ function deleteAllMasters() {
                         </div>
                     </td>
                     <td class="px-4 py-3 align-top">
-                        <div class="text-xs leading-5">
+                        <div class="text-xs leading-5 bg-slate-50 rounded-md px-2.5 py-1.5 border border-slate-200">
                             <span class="font-semibold text-slate-700">${m.invoice || '-'}</span>
                             <span class="text-slate-500 block">${m.reference || '-'}</span>
                         </div>
