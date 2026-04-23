@@ -1980,7 +1980,14 @@
                 </div>
             </div>
 
-            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-4 mb-4">
+                <div class="flex items-center gap-2">
+                    <button id="pnlTabDetailed" type="button" onclick="switchPnLTab('detailed')" class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium">Detailed P&L</button>
+                    <button id="pnlTabSummary" type="button" onclick="switchPnLTab('summary')" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-medium">Purchase-wise Summary</button>
+                </div>
+            </div>
+
+            <div id="pnlDetailedPanel" class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-xl font-semibold text-primary">Detailed P&L Statement</h3>
                     <div class="flex items-center gap-3">
@@ -2016,7 +2023,7 @@
                 <div id="pnlPagination" class="pagination-container"></div>
             </div>
 
-            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6 mt-6">
+            <div id="pnlSummaryPanel" class="bg-white rounded-lg shadow-medium border border-slate-200 p-6 mt-6 hidden">
                 <h3 class="text-xl font-semibold text-primary mb-4">Purchase-wise P&L Summary</h3>
                 <div class="overflow-x-auto">
                     <table class="w-full table-auto">
