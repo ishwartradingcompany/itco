@@ -5517,13 +5517,13 @@ function deleteAllMasters() {
             filteredSales.forEach(sale => {
                 if (sale.linkedPurchases) {
                     sale.linkedPurchases.forEach(link => {
-                        linkedPurchaseIds.add(link.purchaseId);
+                        linkedPurchaseIds.add(String(link.purchaseId));
                     });
                 }
             });
             
             filteredPurchases.forEach(purchase => {
-                if (!linkedPurchaseIds.has(purchase.id)) {
+                if (!linkedPurchaseIds.has(String(purchase.id))) {
                     const purchaseTotal = (purchase.grandTotal || purchase.total || 0) + (parseFloat(purchase.advance) || 0); // exclude invoice advance from P&L
                     const purchaseBrokerage = getBrokerageForPurchase(purchase);
                     pnlRows.push({
