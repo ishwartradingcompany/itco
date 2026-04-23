@@ -2928,7 +2928,15 @@ function deleteAllMasters() {
                     ? new Date(m.date + 'T00:00:00').toLocaleDateString('en-GB')
                     : (m.date || '-');
                 const tr = document.createElement('tr');
-                tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
+                tr.className = 'border-b border-slate-100 hover:bg-blue-50/40 transition-colors';
+                if ((startIndex + paginatedMovements.indexOf(m)) % 2 === 0) {
+                    tr.classList.add('bg-white');
+                } else {
+                    tr.classList.add('bg-slate-50/40');
+                }
+                const movementPill = m.type === 'Purchase'
+                    ? '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">IN</span>'
+                    : '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 border border-rose-200">OUT</span>';
                 tr.innerHTML = `
                     <td class="px-4 py-3 align-top">
                         <span class="text-sm font-medium text-slate-700">${dateText}</span>
@@ -2938,14 +2946,12 @@ function deleteAllMasters() {
                     </td>
                     <td class="px-4 py-3 align-top">
                         <div class="flex items-center gap-2">
-                            <span class="w-6 h-6 rounded-full flex items-center justify-center ${m.type === 'Purchase' ? 'bg-green-100' : 'bg-red-100'}">
-                                <svg class="w-3 h-3 ${m.type === 'Purchase' ? 'text-green-600' : 'text-red-600'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <span class="w-6 h-6 rounded-full flex items-center justify-center ${m.type === 'Purchase' ? 'bg-emerald-100' : 'bg-rose-100'}">
+                                <svg class="w-3 h-3 ${m.type === 'Purchase' ? 'text-emerald-600' : 'text-rose-600'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${m.type === 'Purchase' ? 'M7 11l5-5m0 0l5 5m-5-5v12' : 'M17 13l-5 5m0 0l-5-5m5 5V6'}"/>
                                 </svg>
                             </span>
-                            <span class="px-2 py-1 rounded-full text-xs font-semibold ${m.type === 'Purchase' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
-                                ${m.type === 'Purchase' ? 'IN' : 'OUT'}
-                            </span>
+                            ${movementPill}
                         </div>
                     </td>
                     <td class="px-4 py-3 align-top">
@@ -2960,7 +2966,7 @@ function deleteAllMasters() {
                         </span>
                     </td>
                     <td class="px-4 py-3 text-right align-top">
-                        <span class="font-semibold tabular-nums text-slate-800 bg-slate-100 px-2 py-1 rounded">
+                        <span class="inline-flex font-semibold tabular-nums text-slate-800 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
                             ${runningBalance.toLocaleString('en-IN', {minimumFractionDigits: 2})} ${m.unit}
                         </span>
                     </td>
