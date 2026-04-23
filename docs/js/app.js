@@ -3493,6 +3493,30 @@ function deleteAllMasters() {
         function showPurchaseLinkingModal() {
             // Reset temporary linked purchases to current state
             tempLinkedPurchases = JSON.parse(JSON.stringify(linkedPurchases));
+
+            // Backward-compatible quantity resolvers for old/new data formats.
+            function getPurchaseTotalQtyForLinking(purchase) {
+                if (!purchase) return 0;
+                if (purchase.items && purchase.items.length) {
+                    return purchase.items.reduce((sum, item) => {
+                        const qty = parseFloat(item.grossWeight ?? item.quantity ?? item.netWeight ?? 0) || 0;
+                        return sum + qty;
+                    }, 0);
+                }
+                // Legacy single-item purchase formats
+                return parseFloat(
+                    purchase.grossWeight ??
+                    purchase.quantity ??
+                    purchase.netWeight ??
+                    purchase.qty ??
+                    0
+                ) || 0;
+            }
+
+            function getLinkedQtyValue(link) {
+                if (!link) return 0;
+                return parseFloat(link.quantityUsed ?? link.quantity ?? link.qtyUsed ?? link.qty ?? 0) || 0;
+            }
             
             // Populate available purchases
             const container = document.getElementById('availablePurchasesList');
@@ -3510,16 +3534,22 @@ function deleteAllMasters() {
                     div.className = 'border border-slate-300 rounded-lg p-4 ' + (isLinked ? 'bg-blue-50 border-blue-400' : 'bg-white');
                     
                     // Calculate available quantity for this purchase
-                    const totalPurchased = purchase.items
-                        ? purchase.items.reduce((sum, item) => sum + (parseFloat(item.grossWeight) || 0), 0)
-                        : 0;
+                    const totalPurchased = getPurchaseTotalQtyForLinking(purchase);
                     const alreadyLinked = appData.sales ? appData.sales.reduce((sum, sale) => {
                         const saleIdStr = (sale && sale.id !== undefined && sale.id !== null) ? String(sale.id) : null;
                         // Exclude current sale while editing so user can re-link freely.
                         if (sale.linkedPurchases && (!currentEditingSaleId || saleIdStr !== currentEditingSaleId)) {
+                            const saleGrossQty = (sale.items && sale.items.length)
+                                ? sale.items.reduce((q, it) => q + (parseFloat(it.grossWeight ?? it.quantity ?? it.netWeight ?? 0) || 0), 0)
+                                : (parseFloat(sale.grossWeight ?? sale.quantity ?? sale.netWeight ?? 0) || 0);
+                            const totalLinkedForSale = sale.linkedPurchases.reduce((q, lp) => q + getLinkedQtyValue(lp), 0);
+                            // Cap stale legacy links so one sale cannot consume more than its own quantity.
+                            const capRatio = (totalLinkedForSale > 0 && saleGrossQty > 0)
+                                ? Math.min(1, saleGrossQty / totalLinkedForSale)
+                                : 1;
                             const usedInThisSale = sale.linkedPurchases.reduce((acc, lp) => {
                                 if (String(lp.purchaseId) === String(purchase.id)) {
-                                    return acc + (parseFloat(lp.quantityUsed) || 0);
+                                    return acc + (getLinkedQtyValue(lp) * capRatio);
                                 }
                                 return acc;
                             }, 0);
@@ -3528,7 +3558,7 @@ function deleteAllMasters() {
                         return sum;
                     }, 0) : 0;
                     const currentlyLinked = tempLinkedPurchases.find(lp => String(lp.purchaseId) === String(purchase.id));
-                    const currentLinkedQty = currentlyLinked ? (parseFloat(currentlyLinked.quantityUsed) || 0) : 0;
+                    const currentLinkedQty = currentlyLinked ? getLinkedQtyValue(currentlyLinked) : 0;
                     const availableQty = Math.max(0, totalPurchased - alreadyLinked + currentLinkedQty);
                     
                     div.innerHTML = `
