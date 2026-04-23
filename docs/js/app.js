@@ -3045,19 +3045,22 @@ function deleteAllMasters() {
             editingSaleItemIndex = index;
             
             document.getElementById('saleItem').value = item.itemId;
-            document.getElementById('saleQuantity').value = item.grossWeight || '';
-            document.getElementById('saleBags').value = item.bags || '';
-            document.getElementById('saleDiscount').value = (item.grossWeight - item.netWeight).toFixed(2);
-            document.getElementById('saleNetWeight').value = item.netWeight || '';
-            document.getElementById('saleDiscountQty').value = item.discountQty || 0;
-            document.getElementById('saleRate').value = item.rate || '';
-            document.getElementById('saleItemTotal').value = (item.total || 0).toFixed(2);
-            
-            // Refresh available stock display for this item
+            // Refresh available stock display (this switches coconut/non-coconut UI too).
             if (typeof updateAvailableStock === 'function') {
                 updateAvailableStock();
             }
             document.getElementById('saleDiscountQtyContainer').style.display = item.isCoconut ? '' : 'none';
+
+            // Populate input values (same order as the "new item" flow).
+            document.getElementById('saleQuantity').value = item.grossWeight || '';
+            document.getElementById('saleBags').value = item.bags || 0;
+            // Discount typically flows from bags (non-coconut); default to bags value.
+            document.getElementById('saleDiscount').value = item.isCoconut ? 0 : (item.bags || 0);
+            document.getElementById('saleDiscountQty').value = item.discountQty || 0;
+            document.getElementById('saleRate').value = item.rate || '';
+
+            // Let the shared auto-calc compute Net Weight & Item Total (same as new entry).
+            calculateSaleItemTotal();
             
             // Change the "Add Item" button to "Update Item" visually.
             const btn = document.querySelector('button[onclick="addItemToSale()"]');
