@@ -255,6 +255,30 @@ function renderPnLWithCurrentData() {
     renderPnLPurchaseSummary(currentPnLPurchaseSummary);
 }
 
+function switchPnLTab(tabName) {
+    var detailedPanel = document.getElementById('pnlDetailedPanel');
+    var summaryPanel = document.getElementById('pnlSummaryPanel');
+    var detailedTab = document.getElementById('pnlTabDetailed');
+    var summaryTab = document.getElementById('pnlTabSummary');
+    if (!detailedPanel || !summaryPanel || !detailedTab || !summaryTab) return;
+
+    if (tabName === 'summary') {
+        detailedPanel.classList.add('hidden');
+        summaryPanel.classList.remove('hidden');
+        detailedTab.classList.remove('bg-primary', 'text-white');
+        detailedTab.classList.add('bg-slate-100', 'text-slate-700');
+        summaryTab.classList.remove('bg-slate-100', 'text-slate-700');
+        summaryTab.classList.add('bg-primary', 'text-white');
+    } else {
+        summaryPanel.classList.add('hidden');
+        detailedPanel.classList.remove('hidden');
+        summaryTab.classList.remove('bg-primary', 'text-white');
+        summaryTab.classList.add('bg-slate-100', 'text-slate-700');
+        detailedTab.classList.remove('bg-slate-100', 'text-slate-700');
+        detailedTab.classList.add('bg-primary', 'text-white');
+    }
+}
+
 function renderLedgerWithCurrentData() {
     renderLedgerTable(currentLedgerData);
 }
@@ -5636,6 +5660,7 @@ function deleteAllMasters() {
             // Render the table with pagination
             renderPnLTable(pnlRows);
             renderPnLPurchaseSummary(currentPnLPurchaseSummary);
+            switchPnLTab('detailed');
             
             // Show export button after generating report
             document.getElementById('exportPnLBtn').style.display = 'block';
