@@ -2464,7 +2464,11 @@ function deleteAllMasters() {
                 const paid = purchase.paid || 0;
                 const currentBalance = grandTotal - paid;
                 purchase.balance = currentBalance;
-                var linkedSales = (appData.sales || []).filter(function(s) { return s.linkedPurchases && s.linkedPurchases.some(function(lp) { return lp.purchaseId === purchase.id; }); });
+                var linkedSales = (appData.sales || []).filter(function(s) {
+                    return s.linkedPurchases && s.linkedPurchases.some(function(lp) {
+                        return String(lp.purchaseId) === String(purchase.id);
+                    });
+                });
                 var linkedBadge = linkedSales.length > 0 ? ' <span class="inline-block ml-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Linked to sale(s): ' + escapeHtml(linkedSales.map(function(s){ return s.invoice || s.id; }).join(', ')) + '">Linked</span>' : '';
                 
                 const row = document.createElement('tr');
@@ -3498,7 +3502,7 @@ function deleteAllMasters() {
                 container.innerHTML = '<p class="text-slate-500 text-center py-4">No purchase invoices available</p>';
             } else {
                 appData.purchases.forEach(purchase => {
-                    const isLinked = tempLinkedPurchases.some(lp => lp.purchaseId === purchase.id);
+                    const isLinked = tempLinkedPurchases.some(lp => String(lp.purchaseId) === String(purchase.id));
                     
                     const div = document.createElement('div');
                     div.className = 'border border-slate-300 rounded-lg p-4 ' + (isLinked ? 'bg-blue-50 border-blue-400' : 'bg-white');
@@ -3507,12 +3511,12 @@ function deleteAllMasters() {
                     const totalPurchased = purchase.items ? purchase.items.reduce((sum, item) => sum + item.grossWeight, 0) : 0;
                     const alreadyLinked = appData.sales ? appData.sales.reduce((sum, sale) => {
                         if (sale.linkedPurchases && sale.id !== editingSaleId) {
-                            const linked = sale.linkedPurchases.find(lp => lp.purchaseId === purchase.id);
+                            const linked = sale.linkedPurchases.find(lp => String(lp.purchaseId) === String(purchase.id));
                             return sum + (linked ? linked.quantityUsed : 0);
                         }
                         return sum;
                     }, 0) : 0;
-                    const currentlyLinked = tempLinkedPurchases.find(lp => lp.purchaseId === purchase.id);
+                    const currentlyLinked = tempLinkedPurchases.find(lp => String(lp.purchaseId) === String(purchase.id));
                     const currentLinkedQty = currentlyLinked ? currentlyLinked.quantityUsed : 0;
                     const availableQty = totalPurchased - alreadyLinked + currentLinkedQty;
                     
@@ -3561,7 +3565,7 @@ function deleteAllMasters() {
             if (checkbox.checked) {
                 quantityContainer.classList.remove('hidden');
                 // Add to temp linked purchases if not already there
-                if (!tempLinkedPurchases.some(lp => lp.purchaseId === purchaseId)) {
+                if (!tempLinkedPurchases.some(lp => String(lp.purchaseId) === String(purchaseId))) {
                     tempLinkedPurchases.push({
                         purchaseId: purchaseId,
                         quantityUsed: 0
@@ -3570,7 +3574,7 @@ function deleteAllMasters() {
             } else {
                 quantityContainer.classList.add('hidden');
                 // Remove from temp linked purchases
-                tempLinkedPurchases = tempLinkedPurchases.filter(lp => lp.purchaseId !== purchaseId);
+                tempLinkedPurchases = tempLinkedPurchases.filter(lp => String(lp.purchaseId) !== String(purchaseId));
             }
         }
 
@@ -3610,7 +3614,7 @@ function deleteAllMasters() {
             } else {
                 container.innerHTML = '';
                 linkedPurchases.forEach(link => {
-                    const purchase = appData.purchases.find(p => p.id === link.purchaseId);
+                    const purchase = appData.purchases.find(p => String(p.id) === String(link.purchaseId));
                     if (purchase) {
                         const div = document.createElement('div');
                         div.className = 'flex justify-between items-center p-3 bg-white border border-blue-300 rounded-lg';
@@ -3628,7 +3632,7 @@ function deleteAllMasters() {
         }
 
         function removePurchaseLink(purchaseId) {
-            linkedPurchases = linkedPurchases.filter(lp => lp.purchaseId !== purchaseId);
+            linkedPurchases = linkedPurchases.filter(lp => String(lp.purchaseId) !== String(purchaseId));
             updateLinkedPurchasesDisplay();
         }
 
@@ -5226,7 +5230,7 @@ function deleteAllMasters() {
                     const totalSaleQty = sale.items ? sale.items.reduce((sum, item) => sum + item.grossWeight, 0) : 1;
                     // Sale has linked purchases - show each linked purchase
                     sale.linkedPurchases.forEach(link => {
-                        const purchase = appData.purchases.find(p => p.id === link.purchaseId);
+                        const purchase = appData.purchases.find(p => String(p.id) === String(link.purchaseId));
                         if (purchase && filteredPurchases.some(fp => fp.id === purchase.id)) {
                             // Calculate proportional amounts based on quantity used
                             const totalPurchaseQty = purchase.items ? purchase.items.reduce((sum, item) => sum + item.grossWeight, 0) : 1;
@@ -7705,7 +7709,7 @@ function onPnLFilterChange() {
             
             // Step 1: Block if any sale is explicitly linked to this purchase (process: Purchase first -> Sale of that purchase)
             const salesLinkedToThisPurchase = (appData.sales || []).filter(function(sale) {
-                return sale.linkedPurchases && sale.linkedPurchases.some(function(lp) { return lp.purchaseId === purchaseId; });
+                return sale.linkedPurchases && sale.linkedPurchases.some(function(lp) { return String(lp.purchaseId) === String(purchaseId); });
             });
             if (salesLinkedToThisPurchase.length > 0) {
                 var invoiceList = salesLinkedToThisPurchase.map(function(s) { return s.invoice || ('Sale #' + s.id); }).join(', ');
