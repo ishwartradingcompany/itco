@@ -257,6 +257,47 @@ function renderLedgerWithCurrentData() {
     renderLedgerTable(currentLedgerData);
 }
 
+function rebuildInventoryFromTransactions() {
+    const rebuilt = {};
+    (appData.purchases || []).forEach(function(purchase) {
+        (purchase.items || []).forEach(function(item) {
+            const itemId = item.itemId;
+            if (itemId == null) return;
+            const qty = parseFloat(item.grossWeight ?? item.quantity ?? 0) || 0;
+            const val = parseFloat(item.total ?? 0) || 0;
+            if (!rebuilt[itemId]) rebuilt[itemId] = { quantity: 0, totalCost: 0 };
+            rebuilt[itemId].quantity += qty;
+            rebuilt[itemId].totalCost += val;
+        });
+    });
+
+    (appData.sales || []).forEach(function(sale) {
+        (sale.items || []).forEach(function(item) {
+            const itemId = item.itemId;
+            if (itemId == null) return;
+            const qty = parseFloat(item.grossWeight ?? item.quantity ?? 0) || 0;
+            if (!rebuilt[itemId]) rebuilt[itemId] = { quantity: 0, totalCost: 0 };
+            rebuilt[itemId].quantity -= qty;
+            const totalQtyBeforeDeduct = rebuilt[itemId].quantity + qty;
+            const avgCost = totalQtyBeforeDeduct > 0 ? (rebuilt[itemId].totalCost / totalQtyBeforeDeduct) : 0;
+            rebuilt[itemId].totalCost -= (avgCost * qty);
+        });
+    });
+
+    // Cleanup tiny floating dust / invalid negatives from historic data.
+    Object.keys(rebuilt).forEach(function(itemId) {
+        const q = rebuilt[itemId].quantity || 0;
+        const c = rebuilt[itemId].totalCost || 0;
+        if (Math.abs(q) < 0.0001) rebuilt[itemId].quantity = 0;
+        if (Math.abs(c) < 0.0001) rebuilt[itemId].totalCost = 0;
+        if (rebuilt[itemId].quantity <= 0 && rebuilt[itemId].totalCost <= 0) {
+            delete rebuilt[itemId];
+        }
+    });
+
+    appData.inventory = rebuilt;
+}
+
 // Load data from Firestore on page load
 function loadData() {
     console.log("ðŸ“¡ Loading data from Firestore...");
@@ -275,6 +316,7 @@ function loadData() {
                 appData.payments = appData.payments || [];
                 appData.openingBalances = appData.openingBalances || [];
                 appData.settings = appData.settings || {};
+                rebuildInventoryFromTransactions();
 
                 // Refresh ALL UI sections now that data is loaded
                 updateDashboard();
@@ -425,6 +467,7 @@ function restoreFromJSON() {
                 appData.payments = appData.payments || [];
                 appData.settings = appData.settings || {};
                 appData.inventory = appData.inventory || {};
+                rebuildInventoryFromTransactions();
                 (appData.items || []).forEach(function(i){ if (i.active === undefined) i.active = true; });
                 (appData.suppliers || []).forEach(function(s){ if (s.active === undefined) s.active = true; });
                 (appData.customers || []).forEach(function(c){ if (c.active === undefined) c.active = true; });
@@ -2603,6 +2646,15 @@ function deleteAllMasters() {
         // Stock movement filtered data
         let filteredStockMovements = [];
         let allStockMovements = [];
+
+        function recalculateInventory() {
+            rebuildInventoryFromTransactions();
+            saveData();
+            refreshInventory();
+            updateDashboard();
+            populateDropdowns();
+            alert('Inventory recalculated successfully.');
+        }
         
         function refreshInventory() {
             const grid = document.getElementById('inventoryGrid');
@@ -7646,6 +7698,10 @@ function onPnLFilterChange() {
         }
 
         function clearSaleForm() {
+            // If an edit session had restored stock temporarily, roll it back first.
+            if (saleEditInventoryReversed && saleEditOriginalItems) {
+                adjustInventoryForSaleItems(saleEditOriginalItems, -1);
+            }
             document.getElementById('saleDate').value = '';
             document.getElementById('saleInvoice').value = '';
             document.getElementById('saleCustomer').value = '';
