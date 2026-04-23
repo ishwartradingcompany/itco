@@ -1036,61 +1036,74 @@
 
     <!-- Page 4: Inventory -->
     <div id="inventory" class="page-content hidden">
-        <div class="max-w-7xl mx-auto px-4 py-6">
-            <div class="mb-6 border-l-4 border-blue-600 pl-4"><h2 class="text-3xl font-bold text-slate-900">Inventory Management</h2></div>
-            
-            <!-- Inventory Summary Cards -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white shadow-lg">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Total Items</span>
-                        <svg class="w-5 h-5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+        <div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+            <div class="relative overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 shadow-sm p-6">
+                <div class="absolute -top-10 -right-10 w-36 h-36 rounded-full bg-emerald-200/40 blur-2xl"></div>
+                <div class="absolute -bottom-12 left-1/3 w-40 h-40 rounded-full bg-cyan-200/40 blur-2xl"></div>
+                <div class="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+                    <div>
+                        <p class="text-xs tracking-[0.25em] font-semibold text-emerald-700 uppercase mb-2">Inventory Intelligence</p>
+                        <h2 class="text-3xl md:text-4xl font-extrabold text-slate-800">Inventory Management Dashboard</h2>
+                        <p class="text-sm text-slate-600 mt-2">Live stock health, inward and outward movement, and running balances in one view.</p>
                     </div>
-                    <p id="invTotalItems" class="text-2xl font-bold">0</p>
-                    <p class="text-xs opacity-75">Unique products</p>
+                    <button onclick="recalculateInventory()" class="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-700 transition-colors text-sm font-semibold shadow">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        Recalculate Inventory
+                    </button>
                 </div>
-                <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-4 text-white shadow-lg">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Total Quantity</span>
-                        <svg class="w-5 h-5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
-                    </div>
-                    <p id="invTotalQty" class="text-2xl font-bold">0</p>
-                    <p class="text-xs opacity-75">Units in stock</p>
+            </div>
+
+            <!-- Primary KPI Strip -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Total Items</p>
+                    <p id="invTotalItems" class="text-2xl font-bold text-slate-800 mt-1">0</p>
+                    <p class="text-xs text-slate-500 mt-1">Unique products in stock</p>
                 </div>
-                <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-4 text-white shadow-lg">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Stock Value</span>
-                        <svg class="w-5 h-5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8h6m-6 4h6m-5 4l4-8M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    </div>
-                    <p id="invTotalValue" class="text-2xl font-bold">&#8377;0</p>
-                    <p class="text-xs opacity-75">Current value</p>
+                <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-wider text-emerald-700 font-semibold">Received</p>
+                    <p id="invKpiReceived" class="text-2xl font-bold text-emerald-700 mt-1">0.00</p>
+                    <p class="text-xs text-emerald-700/80 mt-1">Total purchase inward</p>
                 </div>
-                <div class="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl p-4 text-white shadow-lg">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-medium uppercase tracking-wider opacity-90">Movements</span>
-                        <svg class="w-5 h-5 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
-                    </div>
-                    <p id="invTotalMovements" class="text-2xl font-bold">0</p>
-                    <p class="text-xs opacity-75">Total transactions</p>
+                <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-wider text-rose-700 font-semibold">Dispatched</p>
+                    <p id="invKpiDispatched" class="text-2xl font-bold text-rose-700 mt-1">0.00</p>
+                    <p class="text-xs text-rose-700/80 mt-1">Total sales outward</p>
+                </div>
+                <div class="rounded-xl border border-cyan-200 bg-cyan-50 p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-wider text-cyan-700 font-semibold">Available Qty</p>
+                    <p id="invKpiAvailable" class="text-2xl font-bold text-cyan-700 mt-1">0.00</p>
+                    <p class="text-xs text-cyan-700/80 mt-1">Current net stock</p>
+                </div>
+            </div>
+
+            <!-- Secondary Summary -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-wider text-amber-700 font-semibold">Stock Value</p>
+                    <p id="invTotalValue" class="text-2xl font-bold text-amber-700 mt-1">&#8377;0</p>
+                    <p class="text-xs text-amber-700/80 mt-1">Inventory carrying value</p>
+                </div>
+                <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-wider text-indigo-700 font-semibold">Total Movements</p>
+                    <p id="invTotalMovements" class="text-2xl font-bold text-indigo-700 mt-1">0</p>
+                    <p id="stockMovementFilterCount" class="text-xs text-indigo-700/80 mt-1">Showing all movements</p>
                 </div>
             </div>
             
             <!-- Current Stock Section -->
-            <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-6 mb-6">
-                <div class="flex justify-between items-center mb-4">
+            <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                             <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
                         </div>
                         <div>
-                            <h3 class="text-lg font-bold text-slate-800">Current Stock</h3>
-                            <p class="text-xs text-slate-500">Real-time inventory levels</p>
+                            <h3 class="text-lg font-bold text-slate-800">Current Stock Snapshot</h3>
+                            <p class="text-xs text-slate-500">Card-wise product quantity, average cost, and value</p>
                         </div>
                     </div>
-                    <button onclick="recalculateInventory()" class="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                        Recalculate
-                    </button>
+                    <p class="text-xs font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">Auto-updated from purchase and sales invoices</p>
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="inventoryGrid">
@@ -1103,46 +1116,49 @@
             </div>
 
             <!-- Stock Movement Section -->
-            <div class="bg-white rounded-xl shadow-lg border border-slate-200 p-6">
-                <div class="flex items-center gap-3 mb-4">
-                    <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+            <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-800">Stock Movement Register</h3>
+                            <p class="text-xs text-slate-500">Professional movement audit trail with running balance</p>
+                        </div>
                     </div>
-                    <div>
-                        <h3 class="text-lg font-bold text-slate-800">Stock Movement</h3>
-                        <p class="text-xs text-slate-500">Track all inventory transactions</p>
-                    </div>
+                    <button onclick="clearStockMovementFilters()" class="text-sm text-purple-700 hover:text-purple-900 font-semibold bg-purple-50 border border-purple-200 px-3 py-1.5 rounded-lg">Clear Filters</button>
                 </div>
                 
                 <!-- Filter Controls -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-4 p-4 bg-gradient-to-r from-slate-50 to-purple-50 rounded-xl border border-slate-200">
                     <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Search</label>
-                        <input type="text" id="stockMovementSearch" placeholder="Search items..." 
-                            class="w-full p-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Search</label>
+                        <input type="text" id="stockMovementSearch" placeholder="Item / party..." 
+                            class="w-full p-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white"
                             onkeyup="filterStockMovement()">
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Item</label>
-                        <select id="stockMovementFilterItem" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterStockMovement()">
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Item</label>
+                        <select id="stockMovementFilterItem" class="w-full p-2.5 text-sm border border-slate-300 rounded-lg bg-white" onchange="filterStockMovement()">
                             <option value="">All Items</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Type</label>
-                        <select id="stockMovementFilterType" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterStockMovement()">
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Type</label>
+                        <select id="stockMovementFilterType" class="w-full p-2.5 text-sm border border-slate-300 rounded-lg bg-white" onchange="filterStockMovement()">
                             <option value="">All Types</option>
                             <option value="Purchase">Purchases (IN)</option>
                             <option value="Sale">Sales (OUT)</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Date From</label>
-                        <input type="date" id="stockMovementDateFrom" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterStockMovement()">
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Date From</label>
+                        <input type="date" id="stockMovementDateFrom" class="w-full p-2.5 text-sm border border-slate-300 rounded-lg bg-white" onchange="filterStockMovement()">
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Sort By</label>
-                        <select id="stockMovementSort" class="w-full p-2 text-sm border border-slate-300 rounded-lg" onchange="filterStockMovement()">
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Sort By</label>
+                        <select id="stockMovementSort" class="w-full p-2.5 text-sm border border-slate-300 rounded-lg bg-white" onchange="filterStockMovement()">
                             <option value="date-desc">Date (Newest)</option>
                             <option value="date-asc">Date (Oldest)</option>
                             <option value="qty-desc">Quantity (High-Low)</option>
@@ -1151,32 +1167,30 @@
                         </select>
                     </div>
                 </div>
-                <div class="flex justify-between items-center mb-4">
-                    <span id="stockMovementFilterCount" class="text-sm text-slate-500">Showing all movements</span>
-                    <button onclick="clearStockMovementFilters()" class="text-sm text-purple-600 hover:text-purple-800 font-medium">Clear Filters</button>
-                </div>
                 
                 <div class="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
-                    <table class="w-full table-auto text-sm">
-                        <thead>
-                            <tr class="bg-slate-100/95 backdrop-blur sticky top-0 z-10 border-b border-slate-200">
-                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Date</th>
-                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Item</th>
-                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Movement</th>
-                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Reference</th>
-                                <th class="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Quantity</th>
-                                <th class="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Running Balance</th>
-                            </tr>
-                        </thead>
-                        <tbody id="stockMovement">
-                            <tr>
-                                <td colspan="6" class="px-4 py-12 text-center text-slate-500">
-                                    <svg class="w-10 h-10 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                                    No stock movements recorded yet
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div class="max-h-[460px] overflow-auto">
+                        <table class="w-full table-auto text-sm">
+                            <thead>
+                                <tr class="bg-slate-100/95 backdrop-blur sticky top-0 z-10 border-b border-slate-200">
+                                    <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Date</th>
+                                    <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Item</th>
+                                    <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Movement</th>
+                                    <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Reference</th>
+                                    <th class="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Quantity</th>
+                                    <th class="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Running Balance</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stockMovement">
+                                <tr>
+                                    <td colspan="6" class="px-4 py-12 text-center text-slate-500">
+                                        <svg class="w-10 h-10 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                                        No stock movements recorded yet
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 <div id="stockMovementPagination" class="pagination-container"></div>
             </div>
