@@ -704,8 +704,10 @@ function deleteAllMasters() {
             document.getElementById('purchaseHistoryView').classList.add('hidden');
             document.getElementById('purchaseEntryView').classList.remove('hidden');
             document.getElementById('addPurchaseBtn').classList.add('hidden');
-            // Auto-generate invoice number
-            document.getElementById('purchaseInvoice').value = generatePurchaseInvoiceNumber();
+            // Auto-generate only for NEW entry, never while editing.
+            if (editingPurchaseId === null) {
+                document.getElementById('purchaseInvoice').value = generatePurchaseInvoiceNumber();
+            }
             onPurchaseChargeModeChange();
         }
 
@@ -721,8 +723,14 @@ function deleteAllMasters() {
             document.getElementById('salesHistoryView').classList.add('hidden');
             document.getElementById('salesEntryView').classList.remove('hidden');
             document.getElementById('addSalesBtn').classList.add('hidden');
-            // Auto-generate invoice number
-            document.getElementById('saleInvoice').value = generateSaleInvoiceNumber();
+            // Auto-generate only for NEW entry, never while editing.
+            if (editingSaleId === null) {
+                // Always start a fresh linking state for a new sale.
+                linkedPurchases = [];
+                tempLinkedPurchases = [];
+                updateLinkedPurchasesDisplay();
+                document.getElementById('saleInvoice').value = generateSaleInvoiceNumber();
+            }
         }
 
         function hideSalesForm() {
@@ -7597,6 +7605,10 @@ function onPnLFilterChange() {
             editingSaleItemIndex = -1;
             resetSaleItemFormMode();
             resetSaleEditSessionState();
+            // Clear item-wise purchase links for fresh sale form.
+            linkedPurchases = [];
+            tempLinkedPurchases = [];
+            updateLinkedPurchasesDisplay();
         }
 
         let currentPaymentData = null;
