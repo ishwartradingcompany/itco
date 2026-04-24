@@ -1016,167 +1016,60 @@ function deleteAllMasters() {
             window.open('https://wa.me/' + mobile + '?text=' + text, '_blank');
             return true;
         }
-        function createPdfDocument(title) {
-            if (!(window.jspdf && window.jspdf.jsPDF)) {
+        function downloadStyledPdfFromHtml(htmlContent, fileName) {
+            if (typeof window.html2pdf === 'undefined') {
                 alert('PDF engine not loaded. Please refresh and try again.');
-                return null;
+                return Promise.resolve(false);
             }
-            var jsPDF = window.jspdf.jsPDF;
-            var doc = new jsPDF({ unit: 'mm', format: 'a4' });
-            var state = {
-                x: 12,
-                y: 14,
-                maxWidth: 186,
-                lineHeight: 6,
-                bottom: 286
-            };
-            if (title) {
-                doc.setFont('helvetica', 'bold');
-                doc.setFontSize(14);
-                doc.text(String(title), state.x, state.y);
-                state.y += 8;
-            }
-            return { doc: doc, state: state };
-        }
-        function pdfAddText(doc, state, text, options) {
-            var opts = options || {};
-            var fontSize = opts.fontSize || 10;
-            var fontStyle = opts.bold ? 'bold' : 'normal';
-            var lines = Array.isArray(text) ? text : doc.splitTextToSize(String(text || ''), state.maxWidth);
-            doc.setFont('helvetica', fontStyle);
-            doc.setFontSize(fontSize);
-            lines.forEach(function(line) {
-                if (state.y > state.bottom) {
-                    doc.addPage();
-                    state.y = 14;
-                }
-                doc.text(String(line), state.x, state.y);
-                state.y += opts.lineHeight || state.lineHeight;
+            var parser = new DOMParser();
+            var parsedDoc = parser.parseFromString(String(htmlContent || ''), 'text/html');
+            var styleText = Array.from(parsedDoc.querySelectorAll('style')).map(function(s) { return s.textContent || ''; }).join('\n');
+            var bodyHtml = (parsedDoc.body && parsedDoc.body.innerHTML) ? parsedDoc.body.innerHTML : String(htmlContent || '');
+
+            var wrapper = document.createElement('div');
+            wrapper.style.position = 'fixed';
+            wrapper.style.left = '-100000px';
+            wrapper.style.top = '0';
+            wrapper.style.width = '794px';
+            wrapper.style.background = '#ffffff';
+            wrapper.innerHTML = '<style>' + styleText + '</style>' + bodyHtml;
+            document.body.appendChild(wrapper);
+
+            return window.html2pdf().set({
+                margin: [0, 0, 0, 0],
+                filename: fileName,
+                pagebreak: { mode: ['css', 'legacy'] },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(wrapper).save().then(function() {
+                document.body.removeChild(wrapper);
+                return true;
+            }).catch(function(err) {
+                if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+                console.error('PDF generation failed:', err);
+                alert('Failed to generate PDF. Please try again.');
+                return false;
             });
-        }
-        function pdfAddGap(state, amount) {
-            state.y += amount || 2;
-        }
-        function formatCurrency(value) {
-            return RU + (parseFloat(value || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
         function downloadPurchaseInvoicePdf(purchase) {
-            if (!purchase) return false;
-            var bundle = createPdfDocument('PURCHASE INVOICE');
-            if (!bundle) return false;
-            var doc = bundle.doc;
-            var state = bundle.state;
-            var supplier = (appData.suppliers || []).find(function(s) { return String(s.id) === String(purchase.supplierId); }) || {};
-            var items = Array.isArray(purchase.items) ? purchase.items : [];
-
-            pdfAddText(doc, state, (appData.company && appData.company.name) ? appData.company.name : 'Ishwar Trading Company', { bold: true, fontSize: 12 });
-            pdfAddText(doc, state, 'Invoice: ' + (purchase.invoice || '-') + '   Date: ' + formatDateForMessage(purchase.date));
-            pdfAddText(doc, state, 'Supplier: ' + (purchase.supplierName || '-') + (supplier.mobile ? ('   Mobile: ' + supplier.mobile) : ''));
-            pdfAddText(doc, state, 'Truck: ' + (purchase.truck || '-') + '   LR: ' + (purchase.lrNumber || '-'));
-            pdfAddGap(state, 2);
-            pdfAddText(doc, state, 'Items', { bold: true });
-
-            items.forEach(function(item, idx) {
-                var line = (idx + 1) + '. ' + (item.itemName || '-') +
-                    ' | Gross: ' + (parseFloat(item.grossWeight || 0).toFixed(2)) +
-                    ' | Net: ' + (parseFloat(item.netWeight || 0).toFixed(2)) +
-                    ' | Rate: ' + formatCurrency(item.rate || 0) +
-                    ' | Amt: ' + formatCurrency(item.total || 0);
-                pdfAddText(doc, state, line);
-            });
-
-            pdfAddGap(state, 3);
-            pdfAddText(doc, state, 'Items Total: ' + formatCurrency(purchase.itemsTotal || purchase.total || 0), { bold: true });
-            pdfAddText(doc, state, 'Hammali: ' + formatCurrency(purchase.hammali || 0));
-            pdfAddText(doc, state, 'Advance: ' + formatCurrency(purchase.advance || 0));
-            if (Array.isArray(purchase.othersEntries) && purchase.othersEntries.length) {
-                purchase.othersEntries.forEach(function(entry) {
-                    var sign = entry.operation === 'reduce' ? '-' : '+';
-                    pdfAddText(doc, state, 'Other ' + sign + ' ' + (entry.reason || 'Adjustment') + ': ' + formatCurrency(entry.amount || 0));
-                });
-            }
-            pdfAddText(doc, state, 'Grand Total: ' + formatCurrency(purchase.grandTotal || purchase.total || 0), { bold: true, fontSize: 11 });
-
+            if (!purchase) return Promise.resolve(false);
             var fileName = 'purchase-invoice-' + String(purchase.invoice || purchase.id || Date.now()).replace(/[^\w-]/g, '_') + '.pdf';
-            doc.save(fileName);
-            return true;
+            return downloadStyledPdfFromHtml(buildPurchaseInvoiceHtml(purchase), fileName);
         }
         function downloadSaleInvoicePdf(sale) {
-            if (!sale) return false;
-            var bundle = createPdfDocument('SALES INVOICE');
-            if (!bundle) return false;
-            var doc = bundle.doc;
-            var state = bundle.state;
-            var customer = (appData.customers || []).find(function(c) { return String(c.id) === String(sale.customerId); }) || {};
-            var items = Array.isArray(sale.items) ? sale.items : [];
-
-            pdfAddText(doc, state, (appData.company && appData.company.name) ? appData.company.name : 'Ishwar Trading Company', { bold: true, fontSize: 12 });
-            pdfAddText(doc, state, 'Invoice: ' + (sale.invoice || '-') + '   Date: ' + formatDateForMessage(sale.date));
-            pdfAddText(doc, state, 'Customer: ' + (sale.customerName || '-') + (customer.mobile ? ('   Mobile: ' + customer.mobile) : ''));
-            pdfAddText(doc, state, 'Truck: ' + (sale.truck || '-') + '   LR: ' + (sale.lrNumber || '-'));
-            pdfAddGap(state, 2);
-            pdfAddText(doc, state, 'Items', { bold: true });
-
-            items.forEach(function(item, idx) {
-                var line = (idx + 1) + '. ' + (item.itemName || '-') +
-                    ' | Gross: ' + (parseFloat(item.grossWeight || 0).toFixed(2)) +
-                    ' | Net: ' + (parseFloat(item.netWeight || 0).toFixed(2)) +
-                    ' | Rate: ' + formatCurrency(item.rate || 0) +
-                    ' | Amt: ' + formatCurrency(item.total || 0);
-                pdfAddText(doc, state, line);
-            });
-
-            pdfAddGap(state, 3);
-            pdfAddText(doc, state, 'Items Total: ' + formatCurrency(sale.itemsTotal || sale.total || 0), { bold: true });
-            pdfAddText(doc, state, 'Hammali: ' + formatCurrency(sale.hammali || 0));
-            pdfAddText(doc, state, 'Advance: ' + formatCurrency(sale.advance || 0));
-            pdfAddText(doc, state, 'Truck Advance: ' + formatCurrency(sale.truckAdvance || 0));
-            if (Array.isArray(sale.othersEntries) && sale.othersEntries.length) {
-                sale.othersEntries.forEach(function(entry) {
-                    var sign = entry.operation === 'reduce' ? '-' : '+';
-                    pdfAddText(doc, state, 'Other ' + sign + ' ' + (entry.reason || 'Adjustment') + ': ' + formatCurrency(entry.amount || 0));
-                });
-            }
-            pdfAddText(doc, state, 'Grand Total: ' + formatCurrency(sale.grandTotal || sale.total || 0), { bold: true, fontSize: 11 });
-
+            if (!sale) return Promise.resolve(false);
             var fileName = 'sales-invoice-' + String(sale.invoice || sale.id || Date.now()).replace(/[^\w-]/g, '_') + '.pdf';
-            doc.save(fileName);
-            return true;
+            return downloadStyledPdfFromHtml(buildSaleInvoiceHtml(sale), fileName);
         }
         function downloadLedgerPdf() {
-            var meta = window.currentLedgerData || {};
             var entries = (typeof currentLedgerData !== 'undefined' && Array.isArray(currentLedgerData)) ? currentLedgerData : [];
+            var meta = window.currentLedgerData || {};
             if (!meta.type || !meta.entityId || !entries.length) {
                 alert('Please generate ledger first.');
-                return false;
+                return Promise.resolve(false);
             }
-            var bundle = createPdfDocument('LEDGER STATEMENT');
-            if (!bundle) return false;
-            var doc = bundle.doc;
-            var state = bundle.state;
-            var fromDate = (document.getElementById('ledgerFromDate') || {}).value || '';
-            var toDate = (document.getElementById('ledgerToDate') || {}).value || '';
-
-            pdfAddText(doc, state, (appData.company && appData.company.name) ? appData.company.name : 'Ishwar Trading Company', { bold: true, fontSize: 12 });
-            pdfAddText(doc, state, 'Party: ' + (meta.entityName || '-'));
-            pdfAddText(doc, state, 'Ledger Type: ' + (meta.type || '-'));
-            pdfAddText(doc, state, 'Period: ' + (fromDate || 'Start') + ' to ' + (toDate || 'Today'));
-            pdfAddText(doc, state, 'Current Balance: ' + formatCurrency(meta.balance || 0), { bold: true });
-            pdfAddGap(state, 2);
-            pdfAddText(doc, state, 'Entries', { bold: true });
-
-            entries.forEach(function(e, idx) {
-                var line = (idx + 1) + '. ' + (e.date || '-') + ' | ' + (e.description || '-') +
-                    ' | Inv: ' + (e.invoice || '-') +
-                    ' | Dr: ' + formatCurrency(e.debit || 0) +
-                    ' | Cr: ' + formatCurrency(e.credit || 0) +
-                    ' | Bal: ' + formatCurrency(e.balance || 0);
-                pdfAddText(doc, state, line);
-            });
-
             var fileName = 'ledger-' + String(meta.entityName || meta.entityId || Date.now()).replace(/[^\w-]/g, '_') + '.pdf';
-            doc.save(fileName);
-            return true;
+            return downloadStyledPdfFromHtml(buildLedgerStatementHtml(entries, meta), fileName);
         }
         function buildPurchaseWhatsAppMessage(purchase) {
             if (!purchase) return '';
@@ -1236,7 +1129,7 @@ function deleteAllMasters() {
                 'Please confirm the ledger balance.'
             ].join('\n');
         }
-        function sendPurchaseWhatsApp(purchaseId) {
+        async function sendPurchaseWhatsApp(purchaseId) {
             var purchase = (appData.purchases || []).find(function(p) { return p.id === purchaseId; });
             if (!purchase) return;
             var supplier = (appData.suppliers || []).find(function(s) { return String(s.id) === String(purchase.supplierId); });
@@ -1244,7 +1137,7 @@ function deleteAllMasters() {
                 alert('Mobile not found for this supplier. Please update it in Masters first.');
                 return;
             }
-            var pdfOk = downloadPurchaseInvoicePdf(purchase);
+            var pdfOk = await downloadPurchaseInvoicePdf(purchase);
             if (!pdfOk) return;
             if (!openWhatsAppChat(supplier.mobile, buildPurchaseWhatsAppMessage(purchase))) {
                 alert('Invalid mobile number for this supplier. Please correct it in Masters.');
@@ -1252,7 +1145,7 @@ function deleteAllMasters() {
             }
             alert('Invoice PDF downloaded. Please attach it in WhatsApp chat and send.');
         }
-        function sendSaleWhatsApp(saleId) {
+        async function sendSaleWhatsApp(saleId) {
             var sale = (appData.sales || []).find(function(s) { return s.id === saleId; });
             if (!sale) return;
             var customer = (appData.customers || []).find(function(c) { return String(c.id) === String(sale.customerId); });
@@ -1260,7 +1153,7 @@ function deleteAllMasters() {
                 alert('Mobile not found for this customer. Please update it in Masters first.');
                 return;
             }
-            var pdfOk = downloadSaleInvoicePdf(sale);
+            var pdfOk = await downloadSaleInvoicePdf(sale);
             if (!pdfOk) return;
             if (!openWhatsAppChat(customer.mobile, buildSaleWhatsAppMessage(sale))) {
                 alert('Invalid mobile number for this customer. Please correct it in Masters.');
@@ -1268,7 +1161,7 @@ function deleteAllMasters() {
             }
             alert('Invoice PDF downloaded. Please attach it in WhatsApp chat and send.');
         }
-        function sendLedgerWhatsApp() {
+        async function sendLedgerWhatsApp() {
             var meta = window.currentLedgerData || {};
             if (!meta.type || !meta.entityId) {
                 alert('Please generate a supplier or customer ledger first.');
@@ -1285,7 +1178,7 @@ function deleteAllMasters() {
                 alert('Mobile not found for this party. Please update it in Masters first.');
                 return;
             }
-            var pdfOk = downloadLedgerPdf();
+            var pdfOk = await downloadLedgerPdf();
             if (!pdfOk) return;
             if (!openWhatsAppChat(party.mobile, buildLedgerWhatsAppMessage())) {
                 alert('Invalid mobile number for this party. Please correct it in Masters.');
@@ -6657,9 +6550,8 @@ function onPnLFilterChange() {
             }
         }
         
-        function printLedgerStatement() {
-            const entries = typeof currentLedgerData !== 'undefined' && Array.isArray(currentLedgerData) ? currentLedgerData : [];
-            const meta = window.currentLedgerData || {};
+        function buildLedgerStatementHtml(entries, meta) {
+            entries = Array.isArray(entries) ? entries : ((typeof currentLedgerData !== 'undefined' && Array.isArray(currentLedgerData)) ? currentLedgerData : []);
             const company = appData.company || {};
             const entityName = meta.entityName || document.getElementById('ledgerEntityName').textContent || 'Ledger';
             const balance = meta.balance != null ? meta.balance : 0;
@@ -6673,8 +6565,7 @@ function onPnLFilterChange() {
             let rowsHtml = entries.map(e => 
                 '<tr><td class="inv-td">' + e.date + '</td><td class="inv-td">' + escapeHtml(e.description) + '</td><td class="inv-td">' + escapeHtml(e.invoice || '') + '</td><td class="inv-td text-right">' + (e.debit ? RU + e.debit.toFixed(2) : '-') + '</td><td class="inv-td text-right">' + (e.credit ? RU + e.credit.toFixed(2) : '-') + '</td><td class="inv-td text-right">' + RU + (e.balance || 0).toFixed(2) + '</td></tr>'
             ).join('');
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write(`
+            return `
                 <html><head><title>Ledger - ${escapeHtml(entityName)}</title>
                 <style>
                     body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
@@ -6702,7 +6593,15 @@ function onPnLFilterChange() {
                 </table>
                 <div class="ledger-balance">Closing Balance: ${RU}${balance.toFixed(2)}</div>
                 </body></html>
-            `);
+            `;
+        }
+
+        function printLedgerStatement() {
+            const entries = typeof currentLedgerData !== 'undefined' && Array.isArray(currentLedgerData) ? currentLedgerData : [];
+            const meta = window.currentLedgerData || {};
+            const html = buildLedgerStatementHtml(entries, meta);
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(html);
             printWindow.document.close();
             printWindow.print();
         }
@@ -7304,11 +7203,8 @@ function onPnLFilterChange() {
             return balance;
         }
 
-        function printPurchaseInvoice(purchaseId) {
-            const purchase = appData.purchases.find(p => p.id === purchaseId);
-            if (!purchase) return;
-            
-            const printWindow = window.open('', '_blank');
+        function buildPurchaseInvoiceHtml(purchase) {
+            if (!purchase) return '';
             const company = appData.company;
             
             let itemsHtml = '';
@@ -7370,7 +7266,7 @@ function onPnLFilterChange() {
             
             const amountInWords = numberToWords(purchase.grandTotal || purchase.total || 0);
             
-            printWindow.document.write(`
+            return `
                 <html>
                 <head>
                     <title>Purchase Invoice - ${purchase.invoice}</title>
@@ -7472,17 +7368,20 @@ function onPnLFilterChange() {
                     </div>
                 </body>
                 </html>
-            `);
-            
+            `;
+        }
+
+        function printPurchaseInvoice(purchaseId) {
+            const purchase = appData.purchases.find(p => p.id === purchaseId);
+            if (!purchase) return;
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(buildPurchaseInvoiceHtml(purchase));
             printWindow.document.close();
             printWindow.print();
         }
 
-        function printSaleInvoice(saleId) {
-            const sale = appData.sales.find(s => s.id === saleId);
-            if (!sale) return;
-            
-            const printWindow = window.open('', '_blank');
+        function buildSaleInvoiceHtml(sale) {
+            if (!sale) return '';
             const company = appData.company;
             
             let itemsHtml = '';
@@ -7570,7 +7469,7 @@ function onPnLFilterChange() {
             
             const amountInWords = numberToWords(sale.grandTotal || sale.total || 0);
             
-            printWindow.document.write(`
+            return `
                 <html>
                 <head>
                     <title>Sale Invoice - ${sale.invoice}</title>
@@ -7686,8 +7585,14 @@ function onPnLFilterChange() {
                     </div>
                 </body>
                 </html>
-            `);
-            
+            `;
+        }
+
+        function printSaleInvoice(saleId) {
+            const sale = appData.sales.find(s => s.id === saleId);
+            if (!sale) return;
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(buildSaleInvoiceHtml(sale));
             printWindow.document.close();
             printWindow.print();
         }
