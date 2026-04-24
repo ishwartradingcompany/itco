@@ -1393,6 +1393,7 @@ function deleteAllMasters() {
         function editSupplier(id) {
             const supplier = appData.suppliers.find(s => s.id === id);
             if (supplier) {
+                showSupplierForm();
                 editingSupplierId = id;
                 document.getElementById('supplierName').value = supplier.name;
                 document.getElementById('supplierMobile').value = supplier.mobile || '';
@@ -1513,6 +1514,7 @@ function deleteAllMasters() {
         function editCustomer(id) {
             const customer = appData.customers.find(c => c.id === id);
             if (customer) {
+                showCustomerForm();
                 editingCustomerId = id;
                 document.getElementById('customerName').value = customer.name;
                 document.getElementById('customerMobile').value = customer.mobile || '';
@@ -1624,6 +1626,7 @@ function deleteAllMasters() {
         function editBroker(id) {
             const broker = appData.brokers.find(b => b.id === id);
             if (broker) {
+                showBrokerForm();
                 editingBrokerId = id;
                 document.getElementById('brokerName').value = broker.name;
                 document.getElementById('brokerMobile').value = broker.mobile || '';
