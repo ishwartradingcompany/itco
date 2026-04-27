@@ -1319,6 +1319,30 @@ function deleteAllMasters() {
             document.body.removeChild(link);
             return true;
         }
+        function extractHtmlParts(fullHtml) {
+            var parser = new DOMParser();
+            var parsed = parser.parseFromString(String(fullHtml || ''), 'text/html');
+            var styleText = Array.from(parsed.querySelectorAll('style')).map(function(s) { return s.textContent || ''; }).join('\n');
+            var bodyHtml = (parsed.body && parsed.body.innerHTML) ? parsed.body.innerHTML : '';
+            return { styles: styleText, body: bodyHtml };
+        }
+        function buildCombinedInvoiceLedgerHtml(invoiceHtml, ledgerHtml, titleText) {
+            var inv = extractHtmlParts(invoiceHtml);
+            var led = extractHtmlParts(ledgerHtml);
+            var mergedStyles =
+                (inv.styles || '') + '\n' +
+                (led.styles || '') + '\n' +
+                '.combined-divider{height:14px;border-top:2px dashed #cbd5e1;margin:12px 0;}' +
+                '.combined-title{font-family:Segoe UI,Arial,sans-serif;font-weight:700;font-size:14px;margin:0 0 8px 0;color:#1e293b;}';
+            return '<html><head><meta charset="UTF-8"><title>' + escapeHtml(titleText || 'Invoice + Ledger') + '</title><style>' +
+                mergedStyles +
+                '</style></head><body>' +
+                '<p class="combined-title">' + escapeHtml(titleText || 'Invoice + Ledger') + '</p>' +
+                '<div class="combined-section invoice-section">' + (inv.body || '') + '</div>' +
+                '<div class="combined-divider"></div>' +
+                '<div class="combined-section ledger-section">' + (led.body || '') + '</div>' +
+                '</body></html>';
+        }
         async function downloadPurchaseInvoiceWithLedgerJpg(purchaseId) {
             var purchase = (appData.purchases || []).find(function(p) { return p.id === purchaseId; });
             if (!purchase) return;
@@ -1327,17 +1351,23 @@ function deleteAllMasters() {
                 alert('No ledger entries found for this supplier.');
                 return;
             }
-            var invoiceCanvas = await renderHtmlToCanvas(buildPurchaseInvoiceHtml(purchase));
-            var ledgerCanvas = await renderHtmlToCanvas(buildLedgerStatementHtml(ledgerSnap.entries, {
+            var invoiceHtml = buildPurchaseInvoiceHtml(purchase);
+            var ledgerHtml = buildLedgerStatementHtml(ledgerSnap.entries, {
                 type: ledgerSnap.type,
                 entityId: ledgerSnap.entityId,
                 entityName: ledgerSnap.entityName,
                 balance: ledgerSnap.balance,
                 fromDate: '',
                 toDate: ''
-            }));
+            });
+            var base = 'purchase-invoice-ledger-' + String(purchase.invoice || purchase.id || Date.now()).replace(/[^\w-]/g, '_');
+            var combinedHtml = buildCombinedInvoiceLedgerHtml(invoiceHtml, ledgerHtml, 'Purchase Invoice + Ledger');
+            await downloadStyledAttachmentFromHtml(combinedHtml, base, 'pdf');
+
+            var invoiceCanvas = await renderHtmlToCanvas(invoiceHtml);
+            var ledgerCanvas = await renderHtmlToCanvas(ledgerHtml);
             if (!invoiceCanvas || !ledgerCanvas) {
-                alert('Could not generate combined image. Please try again.');
+                alert('PDF downloaded. Could not generate combined JPG. Please try again.');
                 return;
             }
             var gap = 24;
@@ -1349,7 +1379,6 @@ function deleteAllMasters() {
             ctx.fillRect(0, 0, outCanvas.width, outCanvas.height);
             ctx.drawImage(invoiceCanvas, 0, 0);
             ctx.drawImage(ledgerCanvas, 0, invoiceCanvas.height + gap);
-            var base = 'purchase-invoice-ledger-' + String(purchase.invoice || purchase.id || Date.now()).replace(/[^\w-]/g, '_');
             downloadCanvasAsJpg(outCanvas, base);
         }
         async function downloadSaleInvoiceWithLedgerJpg(saleId) {
@@ -1360,17 +1389,23 @@ function deleteAllMasters() {
                 alert('No ledger entries found for this customer.');
                 return;
             }
-            var invoiceCanvas = await renderHtmlToCanvas(buildSaleInvoiceHtml(sale));
-            var ledgerCanvas = await renderHtmlToCanvas(buildLedgerStatementHtml(ledgerSnap.entries, {
+            var invoiceHtml = buildSaleInvoiceHtml(sale);
+            var ledgerHtml = buildLedgerStatementHtml(ledgerSnap.entries, {
                 type: ledgerSnap.type,
                 entityId: ledgerSnap.entityId,
                 entityName: ledgerSnap.entityName,
                 balance: ledgerSnap.balance,
                 fromDate: '',
                 toDate: ''
-            }));
+            });
+            var base = 'sale-invoice-ledger-' + String(sale.invoice || sale.id || Date.now()).replace(/[^\w-]/g, '_');
+            var combinedHtml = buildCombinedInvoiceLedgerHtml(invoiceHtml, ledgerHtml, 'Sale Invoice + Ledger');
+            await downloadStyledAttachmentFromHtml(combinedHtml, base, 'pdf');
+
+            var invoiceCanvas = await renderHtmlToCanvas(invoiceHtml);
+            var ledgerCanvas = await renderHtmlToCanvas(ledgerHtml);
             if (!invoiceCanvas || !ledgerCanvas) {
-                alert('Could not generate combined image. Please try again.');
+                alert('PDF downloaded. Could not generate combined JPG. Please try again.');
                 return;
             }
             var gap = 24;
@@ -1382,7 +1417,6 @@ function deleteAllMasters() {
             ctx.fillRect(0, 0, outCanvas.width, outCanvas.height);
             ctx.drawImage(invoiceCanvas, 0, 0);
             ctx.drawImage(ledgerCanvas, 0, invoiceCanvas.height + gap);
-            var base = 'sale-invoice-ledger-' + String(sale.invoice || sale.id || Date.now()).replace(/[^\w-]/g, '_');
             downloadCanvasAsJpg(outCanvas, base);
         }
         function buildPurchaseWhatsAppMessage(purchase) {
