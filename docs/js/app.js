@@ -1016,11 +1016,7 @@ function deleteAllMasters() {
             window.open('https://wa.me/' + mobile + '?text=' + text, '_blank');
             return true;
         }
-        function downloadStyledPdfFromHtml(htmlContent, fileName) {
-            if (typeof window.html2pdf === 'undefined') {
-                alert('PDF engine not loaded. Please refresh and try again.');
-                return Promise.resolve(false);
-            }
+        function createRenderableHtmlWrapper(htmlContent) {
             var parser = new DOMParser();
             var parsedDoc = parser.parseFromString(String(htmlContent || ''), 'text/html');
             var styleText = Array.from(parsedDoc.querySelectorAll('style')).map(function(s) { return s.textContent || ''; }).join('\n');
@@ -1028,48 +1024,105 @@ function deleteAllMasters() {
 
             var wrapper = document.createElement('div');
             wrapper.style.position = 'fixed';
-            wrapper.style.left = '-100000px';
+            wrapper.style.left = '0';
             wrapper.style.top = '0';
+            wrapper.style.opacity = '0';
+            wrapper.style.pointerEvents = 'none';
+            wrapper.style.zIndex = '-1';
             wrapper.style.width = '794px';
             wrapper.style.background = '#ffffff';
             wrapper.innerHTML = '<style>' + styleText + '</style>' + bodyHtml;
             document.body.appendChild(wrapper);
+            return wrapper;
+        }
 
-            return window.html2pdf().set({
-                margin: [0, 0, 0, 0],
-                filename: fileName,
-                pagebreak: { mode: ['css', 'legacy'] },
-                html2canvas: { scale: 2, useCORS: true },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            }).from(wrapper).save().then(function() {
-                document.body.removeChild(wrapper);
-                return true;
-            }).catch(function(err) {
+        function downloadStyledAttachmentFromHtml(htmlContent, fileBaseName, format) {
+            var ext = String(format || 'pdf').toLowerCase();
+            var cleanBase = String(fileBaseName || ('invoice-' + Date.now())).replace(/\.(pdf|jpg|jpeg)$/i, '');
+            var wrapper = createRenderableHtmlWrapper(htmlContent);
+            var pause = new Promise(function(resolve) { setTimeout(resolve, 100); });
+
+            if (ext === 'jpg' || ext === 'jpeg') {
+                if (typeof window.html2canvas === 'undefined') {
+                    if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+                    alert('Image engine not loaded. Please refresh and try again.');
+                    return Promise.resolve(false);
+                }
+                return pause.then(function() {
+                    return window.html2canvas(wrapper, {
+                        scale: 2,
+                        useCORS: true,
+                        backgroundColor: '#ffffff',
+                        windowWidth: wrapper.scrollWidth,
+                        windowHeight: wrapper.scrollHeight
+                    }).then(function(canvas) {
+                        var imageExt = (ext === 'jpeg') ? 'jpeg' : 'jpg';
+                        var mime = imageExt === 'jpeg' ? 'image/jpeg' : 'image/jpeg';
+                        var quality = 0.95;
+                        var link = document.createElement('a');
+                        link.href = canvas.toDataURL(mime, quality);
+                        link.download = cleanBase + '.' + imageExt;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+                        return true;
+                    }).catch(function(err) {
+                        if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+                        console.error('Image generation failed:', err);
+                        alert('Failed to generate image. Please try again.');
+                        return false;
+                    });
+                });
+            }
+
+            if (typeof window.html2pdf === 'undefined') {
                 if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-                console.error('PDF generation failed:', err);
-                alert('Failed to generate PDF. Please try again.');
-                return false;
+                alert('PDF engine not loaded. Please refresh and try again.');
+                return Promise.resolve(false);
+            }
+            return pause.then(function() {
+                return window.html2pdf().set({
+                    margin: [0, 0, 0, 0],
+                    filename: cleanBase + '.pdf',
+                    pagebreak: { mode: ['css', 'legacy'] },
+                    html2canvas: { scale: 2, useCORS: true },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                }).from(wrapper).save().then(function() {
+                    if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+                    return true;
+                }).catch(function(err) {
+                    if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+                    console.error('PDF generation failed:', err);
+                    alert('Failed to generate PDF. Please try again.');
+                    return false;
+                });
             });
         }
-        function downloadPurchaseInvoicePdf(purchase) {
+
+        function chooseWhatsAppAttachmentFormat() {
+            var useJpg = confirm('For WhatsApp attachment: Click OK for JPG image, Cancel for PDF.');
+            return useJpg ? 'jpg' : 'pdf';
+        }
+        function downloadPurchaseInvoicePdf(purchase, format) {
             if (!purchase) return Promise.resolve(false);
-            var fileName = 'purchase-invoice-' + String(purchase.invoice || purchase.id || Date.now()).replace(/[^\w-]/g, '_') + '.pdf';
-            return downloadStyledPdfFromHtml(buildPurchaseInvoiceHtml(purchase), fileName);
+            var fileBase = 'purchase-invoice-' + String(purchase.invoice || purchase.id || Date.now()).replace(/[^\w-]/g, '_');
+            return downloadStyledAttachmentFromHtml(buildPurchaseInvoiceHtml(purchase), fileBase, format || 'pdf');
         }
-        function downloadSaleInvoicePdf(sale) {
+        function downloadSaleInvoicePdf(sale, format) {
             if (!sale) return Promise.resolve(false);
-            var fileName = 'sales-invoice-' + String(sale.invoice || sale.id || Date.now()).replace(/[^\w-]/g, '_') + '.pdf';
-            return downloadStyledPdfFromHtml(buildSaleInvoiceHtml(sale), fileName);
+            var fileBase = 'sales-invoice-' + String(sale.invoice || sale.id || Date.now()).replace(/[^\w-]/g, '_');
+            return downloadStyledAttachmentFromHtml(buildSaleInvoiceHtml(sale), fileBase, format || 'pdf');
         }
-        function downloadLedgerPdf() {
+        function downloadLedgerPdf(format) {
             var entries = (typeof currentLedgerData !== 'undefined' && Array.isArray(currentLedgerData)) ? currentLedgerData : [];
             var meta = window.currentLedgerData || {};
             if (!meta.type || !meta.entityId || !entries.length) {
                 alert('Please generate ledger first.');
                 return Promise.resolve(false);
             }
-            var fileName = 'ledger-' + String(meta.entityName || meta.entityId || Date.now()).replace(/[^\w-]/g, '_') + '.pdf';
-            return downloadStyledPdfFromHtml(buildLedgerStatementHtml(entries, meta), fileName);
+            var fileBase = 'ledger-' + String(meta.entityName || meta.entityId || Date.now()).replace(/[^\w-]/g, '_');
+            return downloadStyledAttachmentFromHtml(buildLedgerStatementHtml(entries, meta), fileBase, format || 'pdf');
         }
         function buildPurchaseWhatsAppMessage(purchase) {
             if (!purchase) return '';
@@ -1137,13 +1190,14 @@ function deleteAllMasters() {
                 alert('Mobile not found for this supplier. Please update it in Masters first.');
                 return;
             }
-            var pdfOk = await downloadPurchaseInvoicePdf(purchase);
+            var format = chooseWhatsAppAttachmentFormat();
+            var pdfOk = await downloadPurchaseInvoicePdf(purchase, format);
             if (!pdfOk) return;
             if (!openWhatsAppChat(supplier.mobile, buildPurchaseWhatsAppMessage(purchase))) {
                 alert('Invalid mobile number for this supplier. Please correct it in Masters.');
                 return;
             }
-            alert('Invoice PDF downloaded. Please attach it in WhatsApp chat and send.');
+            alert('Invoice file downloaded. Please attach it in WhatsApp chat and send.');
         }
         async function sendSaleWhatsApp(saleId) {
             var sale = (appData.sales || []).find(function(s) { return s.id === saleId; });
@@ -1153,13 +1207,14 @@ function deleteAllMasters() {
                 alert('Mobile not found for this customer. Please update it in Masters first.');
                 return;
             }
-            var pdfOk = await downloadSaleInvoicePdf(sale);
+            var format = chooseWhatsAppAttachmentFormat();
+            var pdfOk = await downloadSaleInvoicePdf(sale, format);
             if (!pdfOk) return;
             if (!openWhatsAppChat(customer.mobile, buildSaleWhatsAppMessage(sale))) {
                 alert('Invalid mobile number for this customer. Please correct it in Masters.');
                 return;
             }
-            alert('Invoice PDF downloaded. Please attach it in WhatsApp chat and send.');
+            alert('Invoice file downloaded. Please attach it in WhatsApp chat and send.');
         }
         async function sendLedgerWhatsApp() {
             var meta = window.currentLedgerData || {};
@@ -1178,13 +1233,14 @@ function deleteAllMasters() {
                 alert('Mobile not found for this party. Please update it in Masters first.');
                 return;
             }
-            var pdfOk = await downloadLedgerPdf();
+            var format = chooseWhatsAppAttachmentFormat();
+            var pdfOk = await downloadLedgerPdf(format);
             if (!pdfOk) return;
             if (!openWhatsAppChat(party.mobile, buildLedgerWhatsAppMessage())) {
                 alert('Invalid mobile number for this party. Please correct it in Masters.');
                 return;
             }
-            alert('Ledger PDF downloaded. Please attach it in WhatsApp chat and send.');
+            alert('Ledger file downloaded. Please attach it in WhatsApp chat and send.');
         }
         function addSupplier() {
             var rawName = document.getElementById('supplierName').value;
@@ -4092,9 +4148,24 @@ function deleteAllMasters() {
                     ? purchase.items.find(function(pi) { return String(pi.itemId) === itemId; })
                     : null;
                 const rate = parseFloat((pItem && pItem.rate) || 0) || 0;
-                if (!byItem[itemId]) byItem[itemId] = { qty: 0, weightedValue: 0 };
+                const grossBase = parseFloat((pItem && pItem.grossWeight) || 0) || qty;
+                const isCoconutFromPurchase = !!(pItem && pItem.isCoconut);
+                const pDiscountQty = parseFloat((pItem && pItem.discountQty) || 0) || 0;
+                const pGross = parseFloat((pItem && pItem.grossWeight) || 0) || 0;
+                const pNet = parseFloat((pItem && pItem.netWeight) || 0) || 0;
+                const pGrossMinusNet = Math.max(0, pGross - pNet);
+                const pBags = parseFloat((pItem && pItem.bags) || 0) || 0;
+                const nonCoconutDiscount = pBags > 0 ? pBags : pGrossMinusNet;
+                const coconutDiscount = pDiscountQty > 0 ? pDiscountQty : pGrossMinusNet;
+                const nonCoconutRatio = grossBase > 0 ? (nonCoconutDiscount / grossBase) : 0;
+                const coconutRatio = grossBase > 0 ? (coconutDiscount / grossBase) : 0;
+
+                if (!byItem[itemId]) byItem[itemId] = { qty: 0, weightedValue: 0, bags: 0, discountQty: 0, isCoconut: false };
                 byItem[itemId].qty += qty;
                 byItem[itemId].weightedValue += (qty * rate);
+                byItem[itemId].bags += (qty * nonCoconutRatio);
+                byItem[itemId].discountQty += (qty * coconutRatio);
+                byItem[itemId].isCoconut = byItem[itemId].isCoconut || isCoconutFromPurchase;
             });
 
             const generated = [];
@@ -4103,17 +4174,22 @@ function deleteAllMasters() {
                 const gross = +(byItem[itemId].qty || 0).toFixed(2);
                 if (gross <= 0) return;
                 const rate = gross > 0 ? +(byItem[itemId].weightedValue / gross).toFixed(2) : 0;
-                const isCoconut = !!(itemMaster && itemMaster.name && itemMaster.name.toLowerCase().includes('coconut'));
+                const isCoconut = byItem[itemId].isCoconut || !!(itemMaster && itemMaster.name && itemMaster.name.toLowerCase().includes('coconut'));
+                const bagsVal = +Math.max(0, byItem[itemId].bags || 0).toFixed(2);
+                const discountQtyVal = +Math.max(0, byItem[itemId].discountQty || 0).toFixed(2);
+                const net = isCoconut
+                    ? +Math.max(0, gross - discountQtyVal).toFixed(2)
+                    : +Math.max(0, gross - bagsVal).toFixed(2);
                 generated.push({
                     id: Date.now() + idx,
                     itemId: itemId,
                     itemName: itemMaster ? itemMaster.name : ('Item ' + itemId),
                     grossWeight: gross,
-                    bags: 0,
-                    netWeight: gross,
-                    discountQty: 0,
+                    bags: isCoconut ? 0 : bagsVal,
+                    netWeight: net,
+                    discountQty: isCoconut ? discountQtyVal : 0,
                     rate: rate,
-                    total: +(gross * rate).toFixed(2),
+                    total: +(net * rate).toFixed(2),
                     isCoconut: isCoconut
                 });
             });
@@ -5964,7 +6040,10 @@ function deleteAllMasters() {
                     purchaseTotal: +g.purchaseTotal.toFixed(2),
                     saleTotal: +g.saleTotal.toFixed(2),
                     profitLoss: +g.profitLoss.toFixed(2),
-                    linkedSalesCount: g.linkedSales.size
+                    linkedSalesCount: g.linkedSales.size,
+                    linkedSalesInvoices: Array.from(g.linkedSales).sort(function(a, b) {
+                        return String(a).localeCompare(String(b));
+                    }).join(', ')
                 };
             }).sort(function(a, b) {
                 return String(a.purchaseInvoice).localeCompare(String(b.purchaseInvoice));
@@ -5983,7 +6062,7 @@ function deleteAllMasters() {
                 return '<tr class="border-b border-slate-200 hover:bg-slate-50">' +
                     '<td class="px-4 py-3 font-medium text-slate-800">' + escapeHtml(r.purchaseInvoice) + '</td>' +
                     '<td class="px-4 py-3 text-slate-700">' + escapeHtml(r.purchaseSupplier) + '</td>' +
-                    '<td class="px-4 py-3 text-slate-700">' + r.linkedSalesCount + '</td>' +
+                    '<td class="px-4 py-3 text-slate-700">' + escapeHtml(r.linkedSalesInvoices || '-') + '</td>' +
                     '<td class="px-4 py-3 text-right text-slate-700">' + RU + r.purchaseTotal.toFixed(2) + '</td>' +
                     '<td class="px-4 py-3 text-right text-slate-700">' + RU + r.saleTotal.toFixed(2) + '</td>' +
                     '<td class="px-4 py-3 text-right ' + (r.profitLoss >= 0 ? 'text-green-600' : 'text-red-600') + ' font-semibold">' +
@@ -6018,7 +6097,7 @@ function deleteAllMasters() {
                         purchaseSupplier: g.purchaseSupplier,
                         purchaseTotal: g.purchaseTotal,
                         saleDate: '-',
-                        saleInvoice: 'Linked Sales: ' + g.linkedSalesCount,
+                        saleInvoice: g.linkedSalesInvoices || '-',
                         saleCustomer: '-',
                         saleTotal: g.saleTotal,
                         profitLoss: g.profitLoss,
@@ -6140,10 +6219,10 @@ function deleteAllMasters() {
 
             var summaryRows = (typeof currentPnLPurchaseSummary !== 'undefined' && currentPnLPurchaseSummary) ? currentPnLPurchaseSummary : [];
             csv += '\nPURCHASE-WISE P&L SUMMARY\n';
-            csv += 'Purchase Invoice,Supplier,Linked Sales Count,Purchase Total,Sale Total,Net Profit/Loss\n';
+            csv += 'Purchase Invoice,Supplier,Sales Invoices,Purchase Total,Sale Total,Net Profit/Loss\n';
             summaryRows.forEach(function(r) {
                 csv += '"' + (r.purchaseInvoice || '-') + '","' + (r.purchaseSupplier || '-') + '",' +
-                    (r.linkedSalesCount || 0) + ',' +
+                    '"' + ((r.linkedSalesInvoices || '-').replace(/"/g, '""')) + '",' +
                     (r.purchaseTotal != null ? r.purchaseTotal.toFixed(2) : '0.00') + ',' +
                     (r.saleTotal != null ? r.saleTotal.toFixed(2) : '0.00') + ',' +
                     (r.profitLoss != null ? r.profitLoss.toFixed(2) : '0.00') + '\n';
