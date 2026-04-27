@@ -1124,6 +1124,244 @@ function deleteAllMasters() {
             var fileBase = 'ledger-' + String(meta.entityName || meta.entityId || Date.now()).replace(/[^\w-]/g, '_');
             return downloadStyledAttachmentFromHtml(buildLedgerStatementHtml(entries, meta), fileBase, format || 'pdf');
         }
+        function buildLedgerSnapshotForEntity(entityType, entityId) {
+            var entries = [];
+            var entityName = '';
+            var type = String(entityType || '');
+            var idStr = String(entityId || '');
+
+            if (type === 'supplier') {
+                var supplier = (appData.suppliers || []).find(function(s) { return String(s.id) === idStr; });
+                entityName = supplier ? supplier.name : 'Unknown Supplier';
+
+                (appData.openingBalances || [])
+                    .filter(function(ob) { return ob.entityType === 'supplier' && String(ob.entityId) === idStr; })
+                    .forEach(function(opening) {
+                        entries.push({
+                            date: opening.date,
+                            description: 'Opening Balance - ' + (opening.description || 'Old Purchases Pending'),
+                            invoice: opening.reference || 'Opening',
+                            debit: parseFloat(opening.amount) || 0,
+                            credit: 0
+                        });
+                    });
+
+                (appData.purchases || [])
+                    .filter(function(p) { return String(p.supplierId) === idStr; })
+                    .forEach(function(purchase) {
+                        entries.push({
+                            date: purchase.date,
+                            description: 'Purchase - ' + (purchase.itemName || 'Multiple Items'),
+                            invoice: purchase.invoice || '',
+                            debit: parseFloat(purchase.grandTotal || purchase.total) || 0,
+                            credit: 0
+                        });
+                    });
+
+                (appData.adjustments || [])
+                    .filter(function(adj) { return adj.type === 'supplier_adjustment' && String(adj.entityId) === idStr; })
+                    .forEach(function(adjustment) {
+                        entries.push({
+                            date: adjustment.date,
+                            description: 'Adjustment - ' + (adjustment.reference || ''),
+                            invoice: '',
+                            debit: 0,
+                            credit: parseFloat(adjustment.amount) || 0
+                        });
+                    });
+
+                (appData.payments || [])
+                    .filter(function(p) {
+                        var purchaseMatch = p.type === 'purchase' && (appData.purchases || []).find(function(pur) {
+                            return pur.id === p.invoiceId && String(pur.supplierId) === idStr;
+                        });
+                        var ledgerMatch = p.type === 'ledger_payment' && p.entityType === 'supplier' && String(p.entityId) === idStr;
+                        return purchaseMatch || ledgerMatch;
+                    })
+                    .forEach(function(payment) {
+                        entries.push({
+                            date: payment.date,
+                            description: 'Payment - ' + (payment.mode || '') + (payment.bankAccountName ? (' (' + payment.bankAccountName + ')') : ''),
+                            invoice: payment.invoice || '',
+                            debit: 0,
+                            credit: parseFloat(payment.amount) || 0
+                        });
+                    });
+            } else if (type === 'customer') {
+                var customer = (appData.customers || []).find(function(c) { return String(c.id) === idStr; });
+                entityName = customer ? customer.name : 'Unknown Customer';
+
+                (appData.openingBalances || [])
+                    .filter(function(ob) { return ob.entityType === 'customer' && String(ob.entityId) === idStr; })
+                    .forEach(function(opening) {
+                        entries.push({
+                            date: opening.date,
+                            description: 'Opening Balance - ' + (opening.description || 'Old Sales Pending'),
+                            invoice: opening.reference || 'Opening',
+                            debit: parseFloat(opening.amount) || 0,
+                            credit: 0
+                        });
+                    });
+
+                (appData.sales || [])
+                    .filter(function(s) { return String(s.customerId) === idStr; })
+                    .forEach(function(sale) {
+                        entries.push({
+                            date: sale.date,
+                            description: 'Sale - ' + (sale.itemName || 'Multiple Items'),
+                            invoice: sale.invoice || '',
+                            debit: parseFloat(sale.grandTotal || sale.total) || 0,
+                            credit: 0
+                        });
+                    });
+
+                (appData.deductions || [])
+                    .filter(function(d) { return String(d.customerId) === idStr; })
+                    .forEach(function(deduction) {
+                        entries.push({
+                            date: deduction.date,
+                            description: 'Deduction - ' + (deduction.reason || ''),
+                            invoice: deduction.invoice || '',
+                            debit: 0,
+                            credit: parseFloat(deduction.amount) || 0
+                        });
+                    });
+
+                (appData.payments || [])
+                    .filter(function(p) {
+                        var saleMatch = p.type === 'sale' && (appData.sales || []).find(function(sale) {
+                            return sale.id === p.invoiceId && String(sale.customerId) === idStr;
+                        });
+                        var ledgerMatch = p.type === 'ledger_receipt' && p.entityType === 'customer' && String(p.entityId) === idStr;
+                        return saleMatch || ledgerMatch;
+                    })
+                    .forEach(function(payment) {
+                        entries.push({
+                            date: payment.date,
+                            description: 'Receipt - ' + (payment.mode || '') + (payment.bankAccountName ? (' (' + payment.bankAccountName + ')') : ''),
+                            invoice: payment.invoice || '',
+                            debit: 0,
+                            credit: parseFloat(payment.amount) || 0
+                        });
+                    });
+            }
+
+            entries.sort(function(a, b) {
+                return String(a.date || '').localeCompare(String(b.date || ''));
+            });
+            var running = 0;
+            entries.forEach(function(e) {
+                running += (parseFloat(e.debit) || 0) - (parseFloat(e.credit) || 0);
+                e.balance = running;
+            });
+
+            return {
+                type: type,
+                entityId: idStr,
+                entityName: entityName,
+                balance: running,
+                entries: entries
+            };
+        }
+        function renderHtmlToCanvas(htmlContent) {
+            if (typeof window.html2canvas === 'undefined') {
+                alert('Image engine not loaded. Please refresh and try again.');
+                return Promise.resolve(null);
+            }
+            var wrapper = createRenderableHtmlWrapper(htmlContent);
+            return new Promise(function(resolve) { setTimeout(resolve, 120); }).then(function() {
+                return window.html2canvas(wrapper, {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    windowWidth: wrapper.scrollWidth,
+                    windowHeight: wrapper.scrollHeight
+                }).then(function(canvas) {
+                    if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+                    return canvas;
+                }).catch(function(err) {
+                    if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+                    console.error('Canvas render failed:', err);
+                    return null;
+                });
+            });
+        }
+        function downloadCanvasAsJpg(canvas, fileBaseName) {
+            if (!canvas) return false;
+            var link = document.createElement('a');
+            link.href = canvas.toDataURL('image/jpeg', 0.95);
+            link.download = String(fileBaseName || ('invoice-ledger-' + Date.now())) + '.jpg';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            return true;
+        }
+        async function downloadPurchaseInvoiceWithLedgerJpg(purchaseId) {
+            var purchase = (appData.purchases || []).find(function(p) { return p.id === purchaseId; });
+            if (!purchase) return;
+            var ledgerSnap = buildLedgerSnapshotForEntity('supplier', purchase.supplierId);
+            if (!ledgerSnap.entries.length) {
+                alert('No ledger entries found for this supplier.');
+                return;
+            }
+            var invoiceCanvas = await renderHtmlToCanvas(buildPurchaseInvoiceHtml(purchase));
+            var ledgerCanvas = await renderHtmlToCanvas(buildLedgerStatementHtml(ledgerSnap.entries, {
+                type: ledgerSnap.type,
+                entityId: ledgerSnap.entityId,
+                entityName: ledgerSnap.entityName,
+                balance: ledgerSnap.balance,
+                fromDate: '',
+                toDate: ''
+            }));
+            if (!invoiceCanvas || !ledgerCanvas) {
+                alert('Could not generate combined image. Please try again.');
+                return;
+            }
+            var gap = 24;
+            var outCanvas = document.createElement('canvas');
+            outCanvas.width = Math.max(invoiceCanvas.width, ledgerCanvas.width);
+            outCanvas.height = invoiceCanvas.height + gap + ledgerCanvas.height;
+            var ctx = outCanvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, outCanvas.width, outCanvas.height);
+            ctx.drawImage(invoiceCanvas, 0, 0);
+            ctx.drawImage(ledgerCanvas, 0, invoiceCanvas.height + gap);
+            var base = 'purchase-invoice-ledger-' + String(purchase.invoice || purchase.id || Date.now()).replace(/[^\w-]/g, '_');
+            downloadCanvasAsJpg(outCanvas, base);
+        }
+        async function downloadSaleInvoiceWithLedgerJpg(saleId) {
+            var sale = (appData.sales || []).find(function(s) { return s.id === saleId; });
+            if (!sale) return;
+            var ledgerSnap = buildLedgerSnapshotForEntity('customer', sale.customerId);
+            if (!ledgerSnap.entries.length) {
+                alert('No ledger entries found for this customer.');
+                return;
+            }
+            var invoiceCanvas = await renderHtmlToCanvas(buildSaleInvoiceHtml(sale));
+            var ledgerCanvas = await renderHtmlToCanvas(buildLedgerStatementHtml(ledgerSnap.entries, {
+                type: ledgerSnap.type,
+                entityId: ledgerSnap.entityId,
+                entityName: ledgerSnap.entityName,
+                balance: ledgerSnap.balance,
+                fromDate: '',
+                toDate: ''
+            }));
+            if (!invoiceCanvas || !ledgerCanvas) {
+                alert('Could not generate combined image. Please try again.');
+                return;
+            }
+            var gap = 24;
+            var outCanvas = document.createElement('canvas');
+            outCanvas.width = Math.max(invoiceCanvas.width, ledgerCanvas.width);
+            outCanvas.height = invoiceCanvas.height + gap + ledgerCanvas.height;
+            var ctx = outCanvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, outCanvas.width, outCanvas.height);
+            ctx.drawImage(invoiceCanvas, 0, 0);
+            ctx.drawImage(ledgerCanvas, 0, invoiceCanvas.height + gap);
+            var base = 'sale-invoice-ledger-' + String(sale.invoice || sale.id || Date.now()).replace(/[^\w-]/g, '_');
+            downloadCanvasAsJpg(outCanvas, base);
+        }
         function buildPurchaseWhatsAppMessage(purchase) {
             if (!purchase) return '';
             var total = parseFloat(purchase.grandTotal || purchase.total || 0);
@@ -2843,6 +3081,7 @@ function deleteAllMasters() {
                         <div class="flex items-center justify-center gap-1">
                             <button onclick="viewPurchase(${purchase.id})" class="action-btn action-view" title="View"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg></button>
                             <button onclick="printPurchaseInvoice(${purchase.id})" class="action-btn action-print" title="Print"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
+                            <button onclick="downloadPurchaseInvoiceWithLedgerJpg(${purchase.id})" class="action-btn" title="Download Invoice + Ledger JPG"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 14a1 1 0 011-1h3a1 1 0 110 2H5v1h10v-1h-2a1 1 0 110-2h3a1 1 0 011 1v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2zm7-12a1 1 0 011 1v6.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 9.586V3a1 1 0 011-1z" clip-rule="evenodd"/></svg></button>
                             <button onclick="sendPurchaseWhatsApp(${purchase.id})" class="action-btn" title="Send WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="currentColor"><path d="M19.11 17.43c-.28-.14-1.63-.81-1.88-.9-.25-.09-.43-.14-.61.14-.18.28-.7.9-.86 1.09-.16.19-.32.21-.6.07-.28-.14-1.17-.43-2.24-1.37-.83-.74-1.39-1.65-1.55-1.93-.16-.28-.02-.44.12-.58.13-.13.28-.32.42-.49.14-.16.19-.28.28-.46.09-.19.05-.35-.02-.49-.07-.14-.61-1.47-.84-2.02-.22-.52-.44-.45-.61-.46-.16-.01-.35-.01-.53-.01-.19 0-.49.07-.75.35-.25.28-.96.94-.96 2.3 0 1.35.98 2.66 1.11 2.85.14.19 1.93 2.95 4.68 4.13.65.28 1.16.45 1.56.58.66.21 1.27.18 1.74.11.53-.08 1.63-.67 1.86-1.32.23-.65.23-1.21.16-1.32-.07-.12-.25-.19-.53-.33z"/><path d="M16.01 3.2c-7.05 0-12.78 5.73-12.78 12.78 0 2.24.58 4.42 1.68 6.34l-1.79 6.53 6.7-1.76c1.84 1 3.91 1.53 6.02 1.53h.01c7.05 0 12.78-5.73 12.78-12.78 0-3.42-1.33-6.63-3.75-9.05-2.42-2.42-5.63-3.75-9.06-3.75zm-.16 22.99h-.01c-1.89 0-3.75-.51-5.37-1.48l-.39-.23-3.97 1.04 1.06-3.87-.25-.4c-1.05-1.66-1.6-3.58-1.6-5.54 0-5.72 4.66-10.38 10.39-10.38 2.77 0 5.38 1.08 7.33 3.03 1.96 1.96 3.03 4.56 3.03 7.33 0 5.73-4.66 10.39-10.38 10.39z"/></svg></button>
                             <button onclick="editPurchase(${purchase.id})" class="action-btn action-edit" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg></button>
                             <button onclick="payPurchase(${purchase.id})" class="action-btn action-pay" title="Pay"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12v2H6V3zm0 4h12v2h-4.5c-.83 2.07-2.6 3.56-4.74 3.94L14 21h-2.5l-5.24-8H6v-2h4.5c1.38 0 2.56-.8 3.12-1.94L6 9V7z"/></svg></button>
@@ -4634,6 +4873,7 @@ function deleteAllMasters() {
                         <div class="flex items-center justify-center gap-1">
                             <button onclick="viewSale(${sale.id})" class="action-btn action-view" title="View"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg></button>
                             <button onclick="printSaleInvoice(${sale.id})" class="action-btn action-print" title="Print Invoice"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
+                            <button onclick="downloadSaleInvoiceWithLedgerJpg(${sale.id})" class="action-btn" title="Download Invoice + Ledger JPG"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 14a1 1 0 011-1h3a1 1 0 110 2H5v1h10v-1h-2a1 1 0 110-2h3a1 1 0 011 1v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2zm7-12a1 1 0 011 1v6.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 9.586V3a1 1 0 011-1z" clip-rule="evenodd"/></svg></button>
                             <button onclick="sendSaleWhatsApp(${sale.id})" class="action-btn" title="Send WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="currentColor"><path d="M19.11 17.43c-.28-.14-1.63-.81-1.88-.9-.25-.09-.43-.14-.61.14-.18.28-.7.9-.86 1.09-.16.19-.32.21-.6.07-.28-.14-1.17-.43-2.24-1.37-.83-.74-1.39-1.65-1.55-1.93-.16-.28-.02-.44.12-.58.13-.13.28-.32.42-.49.14-.16.19-.28.28-.46.09-.19.05-.35-.02-.49-.07-.14-.61-1.47-.84-2.02-.22-.52-.44-.45-.61-.46-.16-.01-.35-.01-.53-.01-.19 0-.49.07-.75.35-.25.28-.96.94-.96 2.3 0 1.35.98 2.66 1.11 2.85.14.19 1.93 2.95 4.68 4.13.65.28 1.16.45 1.56.58.66.21 1.27.18 1.74.11.53-.08 1.63-.67 1.86-1.32.23-.65.23-1.21.16-1.32-.07-.12-.25-.19-.53-.33z"/><path d="M16.01 3.2c-7.05 0-12.78 5.73-12.78 12.78 0 2.24.58 4.42 1.68 6.34l-1.79 6.53 6.7-1.76c1.84 1 3.91 1.53 6.02 1.53h.01c7.05 0 12.78-5.73 12.78-12.78 0-3.42-1.33-6.63-3.75-9.05-2.42-2.42-5.63-3.75-9.06-3.75zm-.16 22.99h-.01c-1.89 0-3.75-.51-5.37-1.48l-.39-.23-3.97 1.04 1.06-3.87-.25-.4c-1.05-1.66-1.6-3.58-1.6-5.54 0-5.72 4.66-10.38 10.39-10.38 2.77 0 5.38 1.08 7.33 3.03 1.96 1.96 3.03 4.56 3.03 7.33 0 5.73-4.66 10.39-10.38 10.39z"/></svg></button>
                             <button onclick="printDeliveryChallan(${sale.id})" class="action-btn" title="Delivery Challan"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/><path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z"/></svg></button>
                             <button onclick="editSale(${sale.id})" class="action-btn action-edit" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg></button>
