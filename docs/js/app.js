@@ -4218,6 +4218,16 @@ function deleteAllMasters() {
                     return;
                 }
             }
+            // Sale rate is independent from purchase. Ensure each sale item has its own valid rate.
+            for (let i = 0; i < currentSaleItems.length; i++) {
+                const row = currentSaleItems[i];
+                const saleRate = parseFloat(row.rate) || 0;
+                if (saleRate <= 0) {
+                    const itemName = row.itemName || ('Item ' + (row.itemId || ''));
+                    alert('Please enter sale rate for "' + itemName + '" before saving.');
+                    return;
+                }
+            }
             // Negative stock check: ensure no item goes below zero
             const requiredByItem = {};
             currentSaleItems.forEach(item => {
@@ -4632,7 +4642,6 @@ function deleteAllMasters() {
                 const pItem = purchase && purchase.items
                     ? purchase.items.find(function(pi) { return String(pi.itemId) === itemId; })
                     : null;
-                const rate = parseFloat((pItem && pItem.rate) || 0) || 0;
                 const grossBase = parseFloat((pItem && pItem.grossWeight) || 0) || qty;
                 const isCoconutFromPurchase = !!(pItem && pItem.isCoconut);
                 const pDiscountQty = parseFloat((pItem && pItem.discountQty) || 0) || 0;
@@ -4645,9 +4654,8 @@ function deleteAllMasters() {
                 const nonCoconutRatio = grossBase > 0 ? (nonCoconutDiscount / grossBase) : 0;
                 const coconutRatio = grossBase > 0 ? (coconutDiscount / grossBase) : 0;
 
-                if (!byItem[itemId]) byItem[itemId] = { qty: 0, weightedValue: 0, bags: 0, discountQty: 0, isCoconut: false };
+                if (!byItem[itemId]) byItem[itemId] = { qty: 0, bags: 0, discountQty: 0, isCoconut: false };
                 byItem[itemId].qty += qty;
-                byItem[itemId].weightedValue += (qty * rate);
                 byItem[itemId].bags += (qty * nonCoconutRatio);
                 byItem[itemId].discountQty += (qty * coconutRatio);
                 byItem[itemId].isCoconut = byItem[itemId].isCoconut || isCoconutFromPurchase;
@@ -4658,7 +4666,8 @@ function deleteAllMasters() {
                 const itemMaster = (appData.items || []).find(function(i) { return String(i.id) === itemId; });
                 const gross = +(byItem[itemId].qty || 0).toFixed(2);
                 if (gross <= 0) return;
-                const rate = gross > 0 ? +(byItem[itemId].weightedValue / gross).toFixed(2) : 0;
+                const existingSaleRow = (currentSaleItems || []).find(function(r) { return String(r.itemId) === String(itemId); });
+                const rate = +((existingSaleRow && existingSaleRow.rate) || 0);
                 const isCoconut = byItem[itemId].isCoconut || !!(itemMaster && itemMaster.name && itemMaster.name.toLowerCase().includes('coconut'));
                 const bagsVal = +Math.max(0, byItem[itemId].bags || 0).toFixed(2);
                 const discountQtyVal = +Math.max(0, byItem[itemId].discountQty || 0).toFixed(2);
