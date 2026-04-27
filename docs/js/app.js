@@ -2517,10 +2517,10 @@ function deleteAllMasters() {
                 const bagsDisplay = item.isCoconut ? (item.discountQty || 0) : (item.bags ?? '');
                 const discountDisplay = discountVal(item.grossWeight, item.netWeight);
                 const actionCell = isEditing
-                    ? `<button onclick="cancelEditPurchaseItem()" class="text-slate-600 hover:text-slate-800 font-medium mr-3">Cancel</button>
-                       <button onclick="removeItemFromPurchase(${index})" class="text-red-500 hover:text-red-700 font-medium">Remove</button>`
-                    : `<button onclick="editItemInPurchase(${index})" class="text-blue-600 hover:text-blue-800 font-medium mr-3">Edit</button>
-                       <button onclick="removeItemFromPurchase(${index})" class="text-red-500 hover:text-red-700 font-medium">Remove</button>`;
+                    ? `<button type="button" class="js-cancel-edit-purchase text-slate-600 hover:text-slate-800 font-medium mr-3">Cancel</button>
+                       <button type="button" class="js-remove-purchase-item text-red-500 hover:text-red-700 font-medium">Remove</button>`
+                    : `<button type="button" class="js-edit-purchase-item text-blue-600 hover:text-blue-800 font-medium mr-3">Edit</button>
+                       <button type="button" class="js-remove-purchase-item text-red-500 hover:text-red-700 font-medium">Remove</button>`;
                 
                 row.innerHTML = `
                     <td class="px-4 py-3">${item.supplierName || '-'}</td>
@@ -2533,6 +2533,24 @@ function deleteAllMasters() {
                     <td class="px-4 py-3">${RU}${item.total.toFixed(2)}</td>
                     <td class="px-4 py-3">${actionCell}</td>
                 `;
+                const editBtn = row.querySelector('.js-edit-purchase-item');
+                if (editBtn) {
+                    editBtn.addEventListener('click', function() {
+                        editItemInPurchase(index);
+                    });
+                }
+                const cancelBtn = row.querySelector('.js-cancel-edit-purchase');
+                if (cancelBtn) {
+                    cancelBtn.addEventListener('click', function() {
+                        cancelEditPurchaseItem();
+                    });
+                }
+                const removeBtn = row.querySelector('.js-remove-purchase-item');
+                if (removeBtn) {
+                    removeBtn.addEventListener('click', function() {
+                        removeItemFromPurchase(index);
+                    });
+                }
                 tbody.appendChild(row);
             });
             renderPurchaseSupplierChargeRows();
