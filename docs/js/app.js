@@ -1263,10 +1263,33 @@ function deleteAllMasters() {
                 entries: entries
             };
         }
-        function renderHtmlToCanvas(htmlContent) {
-            if (typeof window.html2canvas === 'undefined') {
+        async function ensureImageEngineLoaded() {
+            if (typeof window.html2canvas !== 'undefined') return true;
+            var existing = document.getElementById('html2canvas-cdn-loader');
+            if (existing && existing.getAttribute('data-ready') === '1') return true;
+
+            return new Promise(function(resolve) {
+                var script = existing || document.createElement('script');
+                if (!existing) {
+                    script.id = 'html2canvas-cdn-loader';
+                    script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+                    script.async = true;
+                    document.head.appendChild(script);
+                }
+                script.onload = function() {
+                    script.setAttribute('data-ready', '1');
+                    resolve(typeof window.html2canvas !== 'undefined');
+                };
+                script.onerror = function() {
+                    resolve(false);
+                };
+            });
+        }
+        async function renderHtmlToCanvas(htmlContent) {
+            var ready = await ensureImageEngineLoaded();
+            if (!ready) {
                 alert('Image engine not loaded. Please refresh and try again.');
-                return Promise.resolve(null);
+                return null;
             }
             var wrapper = createRenderableHtmlWrapper(htmlContent);
             return new Promise(function(resolve) { setTimeout(resolve, 120); }).then(function() {
