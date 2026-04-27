@@ -2337,6 +2337,8 @@ function deleteAllMasters() {
             }
         }
 
+        let editingPurchaseItemIndex = -1;
+
         function addItemToPurchase() {
             const itemId = document.getElementById('purchaseItem').value;
             const supplierId = document.getElementById('purchaseSupplier').value;
@@ -2393,7 +2395,9 @@ function deleteAllMasters() {
             }
             
             const purchaseItem = {
-                id: Date.now(),
+                id: (editingPurchaseItemIndex >= 0 && currentPurchaseItems[editingPurchaseItemIndex])
+                    ? currentPurchaseItems[editingPurchaseItemIndex].id
+                    : Date.now(),
                 supplierId: supplierId,
                 supplierName: supplier.name,
                 itemId: itemId,
@@ -2407,7 +2411,13 @@ function deleteAllMasters() {
                 isCoconut: item.name.toLowerCase().includes('coconut') // Flag for special handling
             };
             
-            currentPurchaseItems.push(purchaseItem);
+            if (editingPurchaseItemIndex >= 0) {
+                currentPurchaseItems[editingPurchaseItemIndex] = purchaseItem;
+                editingPurchaseItemIndex = -1;
+                resetPurchaseItemFormMode();
+            } else {
+                currentPurchaseItems.push(purchaseItem);
+            }
             updateCurrentPurchaseItemsDisplay();
             calculatePurchaseTotals();
             
@@ -2425,6 +2435,70 @@ function deleteAllMasters() {
             document.getElementById('purchaseBagsContainer').style.display = 'block';
         }
 
+        function editItemInPurchase(index) {
+            const item = currentPurchaseItems[index];
+            if (!item) return;
+            editingPurchaseItemIndex = index;
+
+            const supplierEl = document.getElementById('purchaseSupplier');
+            if (supplierEl) supplierEl.value = item.supplierId || '';
+            if (typeof syncPurchaseSupplierDisplay === 'function') syncPurchaseSupplierDisplay();
+
+            const purchaseItemEl = document.getElementById('purchaseItem');
+            if (purchaseItemEl) purchaseItemEl.value = item.itemId || '';
+            if (typeof updatePurchaseInputs === 'function') updatePurchaseInputs();
+
+            document.getElementById('purchaseQuantity').value = item.grossWeight || '';
+            document.getElementById('purchaseBags').value = item.bags || 0;
+            const discountVal = Math.max(0, (parseFloat(item.grossWeight) || 0) - (parseFloat(item.netWeight) || 0));
+            document.getElementById('purchaseDiscount').value = item.isCoconut ? 0 : (item.bags || discountVal || 0);
+            document.getElementById('purchaseDiscountQty').value = item.discountQty || 0;
+            document.getElementById('purchaseRate').value = item.rate || '';
+            document.getElementById('purchaseAmount').value = item.total || '';
+
+            calculatePurchaseTotal();
+            document.getElementById('purchaseNetWeight').value = item.netWeight || '';
+            document.getElementById('purchaseItemTotal').value = (item.total != null) ? Number(item.total).toFixed(2) : '';
+
+            const btn = document.querySelector('button[onclick="addItemToPurchase()"]');
+            if (btn) {
+                btn.textContent = 'Update Item';
+                btn.classList.remove('bg-secondary');
+                btn.classList.add('bg-amber-600');
+            }
+
+            updateCurrentPurchaseItemsDisplay();
+            const target = document.getElementById('purchaseItem');
+            if (target && typeof target.scrollIntoView === 'function') {
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        function cancelEditPurchaseItem() {
+            editingPurchaseItemIndex = -1;
+            resetPurchaseItemFormMode();
+            document.getElementById('purchaseItem').value = '';
+            document.getElementById('purchaseQuantity').value = '';
+            document.getElementById('purchaseBags').value = '';
+            document.getElementById('purchaseDiscount').value = '0';
+            document.getElementById('purchaseNetWeight').value = '';
+            document.getElementById('purchaseDiscountQty').value = '0';
+            document.getElementById('purchaseRate').value = '';
+            document.getElementById('purchaseAmount').value = '';
+            document.getElementById('purchaseItemTotal').value = '';
+            if (typeof updatePurchaseInputs === 'function') updatePurchaseInputs();
+            updateCurrentPurchaseItemsDisplay();
+        }
+
+        function resetPurchaseItemFormMode() {
+            const btn = document.querySelector('button[onclick="addItemToPurchase()"]');
+            if (btn) {
+                btn.textContent = 'Add Item to Invoice';
+                btn.classList.remove('bg-amber-600');
+                btn.classList.add('bg-secondary');
+            }
+        }
+
         function updateCurrentPurchaseItemsDisplay() {
             const tbody = document.getElementById('currentPurchaseItems');
             tbody.innerHTML = '';
@@ -2438,9 +2512,15 @@ function deleteAllMasters() {
             
             currentPurchaseItems.forEach((item, index) => {
                 const row = document.createElement('tr');
-                row.className = 'border-b border-slate-200';
+                const isEditing = (index === editingPurchaseItemIndex);
+                row.className = 'border-b border-slate-200' + (isEditing ? ' bg-amber-50' : '');
                 const bagsDisplay = item.isCoconut ? (item.discountQty || 0) : (item.bags ?? '');
                 const discountDisplay = discountVal(item.grossWeight, item.netWeight);
+                const actionCell = isEditing
+                    ? `<button onclick="cancelEditPurchaseItem()" class="text-slate-600 hover:text-slate-800 font-medium mr-3">Cancel</button>
+                       <button onclick="removeItemFromPurchase(${index})" class="text-red-500 hover:text-red-700 font-medium">Remove</button>`
+                    : `<button onclick="editItemInPurchase(${index})" class="text-blue-600 hover:text-blue-800 font-medium mr-3">Edit</button>
+                       <button onclick="removeItemFromPurchase(${index})" class="text-red-500 hover:text-red-700 font-medium">Remove</button>`;
                 
                 row.innerHTML = `
                     <td class="px-4 py-3">${item.supplierName || '-'}</td>
@@ -2451,9 +2531,7 @@ function deleteAllMasters() {
                     <td class="px-4 py-3">${item.netWeight}</td>
                     <td class="px-4 py-3">${RU}${item.rate}</td>
                     <td class="px-4 py-3">${RU}${item.total.toFixed(2)}</td>
-                    <td class="px-4 py-3">
-                        <button onclick="removeItemFromPurchase(${index})" class="text-red-500 hover:text-red-700 font-medium">Remove</button>
-                    </td>
+                    <td class="px-4 py-3">${actionCell}</td>
                 `;
                 tbody.appendChild(row);
             });
@@ -2461,6 +2539,12 @@ function deleteAllMasters() {
         }
 
         function removeItemFromPurchase(index) {
+            if (editingPurchaseItemIndex === index) {
+                editingPurchaseItemIndex = -1;
+                resetPurchaseItemFormMode();
+            } else if (editingPurchaseItemIndex > index) {
+                editingPurchaseItemIndex -= 1;
+            }
             currentPurchaseItems.splice(index, 1);
             updateCurrentPurchaseItemsDisplay();
             calculatePurchaseTotals();
@@ -2945,6 +3029,8 @@ function deleteAllMasters() {
             purchaseOthersIndex = 1;
             
             currentPurchaseItems = [];
+            editingPurchaseItemIndex = -1;
+            resetPurchaseItemFormMode();
             editingPurchaseId = null;
             updateCurrentPurchaseItemsDisplay();
             calculatePurchaseTotals();
@@ -8288,6 +8374,8 @@ function onPnLFilterChange() {
             
             // Load items into current items array
             currentPurchaseItems = purchase.items ? [...purchase.items] : [];
+            editingPurchaseItemIndex = -1;
+            resetPurchaseItemFormMode();
             updateCurrentPurchaseItemsDisplay();
             onPurchaseChargeModeChange();
             calculatePurchaseTotals();
@@ -8365,6 +8453,8 @@ function onPnLFilterChange() {
             
             // Clear current items
             currentPurchaseItems = [];
+            editingPurchaseItemIndex = -1;
+            resetPurchaseItemFormMode();
             updateCurrentPurchaseItemsDisplay();
             const totalModeRadio = document.getElementById('purchaseChargeModeTotal');
             if (totalModeRadio) totalModeRadio.checked = true;
