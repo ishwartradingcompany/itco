@@ -1319,6 +1319,56 @@ function deleteAllMasters() {
             document.body.removeChild(link);
             return true;
         }
+        function mergeInvoiceLedgerCanvases(invoiceCanvas, ledgerCanvas) {
+            if (!invoiceCanvas || !ledgerCanvas) return null;
+            var gap = 24;
+            var outCanvas = document.createElement('canvas');
+            outCanvas.width = Math.max(invoiceCanvas.width, ledgerCanvas.width);
+            outCanvas.height = invoiceCanvas.height + gap + ledgerCanvas.height;
+            var ctx = outCanvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, outCanvas.width, outCanvas.height);
+            ctx.drawImage(invoiceCanvas, 0, 0);
+            ctx.drawImage(ledgerCanvas, 0, invoiceCanvas.height + gap);
+            return outCanvas;
+        }
+        function downloadCanvasAsPdf(canvas, fileBaseName) {
+            if (!canvas) return false;
+            if (!(window.jspdf && window.jspdf.jsPDF)) {
+                alert('PDF engine not loaded. Please refresh and try again.');
+                return false;
+            }
+            var jsPDF = window.jspdf.jsPDF;
+            var pdf = new jsPDF('p', 'mm', 'a4');
+            var pageWidth = 210;
+            var pageHeight = 297;
+            var mmPerPx = pageWidth / canvas.width;
+            var maxSliceHeightPx = Math.max(200, Math.floor(pageHeight / mmPerPx));
+            var yOffset = 0;
+            var pageIndex = 0;
+
+            while (yOffset < canvas.height) {
+                var sliceHeight = Math.min(maxSliceHeightPx, canvas.height - yOffset);
+                var sliceCanvas = document.createElement('canvas');
+                sliceCanvas.width = canvas.width;
+                sliceCanvas.height = sliceHeight;
+                var sctx = sliceCanvas.getContext('2d');
+                sctx.fillStyle = '#ffffff';
+                sctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+                sctx.drawImage(
+                    canvas,
+                    0, yOffset, canvas.width, sliceHeight,
+                    0, 0, sliceCanvas.width, sliceCanvas.height
+                );
+                var imgData = sliceCanvas.toDataURL('image/jpeg', 0.95);
+                if (pageIndex > 0) pdf.addPage();
+                pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, sliceHeight * mmPerPx);
+                yOffset += sliceHeight;
+                pageIndex += 1;
+            }
+            pdf.save(String(fileBaseName || ('invoice-ledger-' + Date.now())) + '.pdf');
+            return true;
+        }
         function extractHtmlParts(fullHtml) {
             var parser = new DOMParser();
             var parsed = parser.parseFromString(String(fullHtml || ''), 'text/html');
@@ -1361,24 +1411,18 @@ function deleteAllMasters() {
                 toDate: ''
             });
             var base = 'purchase-invoice-ledger-' + String(purchase.invoice || purchase.id || Date.now()).replace(/[^\w-]/g, '_');
-            var combinedHtml = buildCombinedInvoiceLedgerHtml(invoiceHtml, ledgerHtml, 'Purchase Invoice + Ledger');
-            await downloadStyledAttachmentFromHtml(combinedHtml, base, 'pdf');
-
             var invoiceCanvas = await renderHtmlToCanvas(invoiceHtml);
             var ledgerCanvas = await renderHtmlToCanvas(ledgerHtml);
             if (!invoiceCanvas || !ledgerCanvas) {
-                alert('PDF downloaded. Could not generate combined JPG. Please try again.');
+                alert('Could not generate combined file. Please try again.');
                 return;
             }
-            var gap = 24;
-            var outCanvas = document.createElement('canvas');
-            outCanvas.width = Math.max(invoiceCanvas.width, ledgerCanvas.width);
-            outCanvas.height = invoiceCanvas.height + gap + ledgerCanvas.height;
-            var ctx = outCanvas.getContext('2d');
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, outCanvas.width, outCanvas.height);
-            ctx.drawImage(invoiceCanvas, 0, 0);
-            ctx.drawImage(ledgerCanvas, 0, invoiceCanvas.height + gap);
+            var outCanvas = mergeInvoiceLedgerCanvases(invoiceCanvas, ledgerCanvas);
+            if (!outCanvas) {
+                alert('Could not generate combined file. Please try again.');
+                return;
+            }
+            downloadCanvasAsPdf(outCanvas, base);
             downloadCanvasAsJpg(outCanvas, base);
         }
         async function downloadSaleInvoiceWithLedgerJpg(saleId) {
@@ -1399,24 +1443,18 @@ function deleteAllMasters() {
                 toDate: ''
             });
             var base = 'sale-invoice-ledger-' + String(sale.invoice || sale.id || Date.now()).replace(/[^\w-]/g, '_');
-            var combinedHtml = buildCombinedInvoiceLedgerHtml(invoiceHtml, ledgerHtml, 'Sale Invoice + Ledger');
-            await downloadStyledAttachmentFromHtml(combinedHtml, base, 'pdf');
-
             var invoiceCanvas = await renderHtmlToCanvas(invoiceHtml);
             var ledgerCanvas = await renderHtmlToCanvas(ledgerHtml);
             if (!invoiceCanvas || !ledgerCanvas) {
-                alert('PDF downloaded. Could not generate combined JPG. Please try again.');
+                alert('Could not generate combined file. Please try again.');
                 return;
             }
-            var gap = 24;
-            var outCanvas = document.createElement('canvas');
-            outCanvas.width = Math.max(invoiceCanvas.width, ledgerCanvas.width);
-            outCanvas.height = invoiceCanvas.height + gap + ledgerCanvas.height;
-            var ctx = outCanvas.getContext('2d');
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, outCanvas.width, outCanvas.height);
-            ctx.drawImage(invoiceCanvas, 0, 0);
-            ctx.drawImage(ledgerCanvas, 0, invoiceCanvas.height + gap);
+            var outCanvas = mergeInvoiceLedgerCanvases(invoiceCanvas, ledgerCanvas);
+            if (!outCanvas) {
+                alert('Could not generate combined file. Please try again.');
+                return;
+            }
+            downloadCanvasAsPdf(outCanvas, base);
             downloadCanvasAsJpg(outCanvas, base);
         }
         function buildPurchaseWhatsAppMessage(purchase) {
