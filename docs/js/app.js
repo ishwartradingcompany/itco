@@ -1369,6 +1369,53 @@ function deleteAllMasters() {
             pdf.save(String(fileBaseName || ('invoice-ledger-' + Date.now())) + '.pdf');
             return true;
         }
+        function appendCanvasToPdfPages(pdf, canvas, useCurrentPageForFirstSlice) {
+            if (!pdf || !canvas) return;
+            var pageWidth = 210;
+            var pageHeight = 297;
+            var mmPerPx = pageWidth / canvas.width;
+            var maxSliceHeightPx = Math.max(200, Math.floor(pageHeight / mmPerPx));
+            var yOffset = 0;
+            var isFirstSlice = true;
+
+            while (yOffset < canvas.height) {
+                var sliceHeight = Math.min(maxSliceHeightPx, canvas.height - yOffset);
+                var sliceCanvas = document.createElement('canvas');
+                sliceCanvas.width = canvas.width;
+                sliceCanvas.height = sliceHeight;
+                var sctx = sliceCanvas.getContext('2d');
+                sctx.fillStyle = '#ffffff';
+                sctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+                sctx.drawImage(
+                    canvas,
+                    0, yOffset, canvas.width, sliceHeight,
+                    0, 0, sliceCanvas.width, sliceCanvas.height
+                );
+
+                if (!isFirstSlice || !useCurrentPageForFirstSlice) {
+                    pdf.addPage();
+                }
+                var imgData = sliceCanvas.toDataURL('image/jpeg', 0.95);
+                pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, sliceHeight * mmPerPx);
+
+                yOffset += sliceHeight;
+                isFirstSlice = false;
+                useCurrentPageForFirstSlice = true;
+            }
+        }
+        function downloadInvoiceAndLedgerPdf(invoiceCanvas, ledgerCanvas, fileBaseName) {
+            if (!invoiceCanvas || !ledgerCanvas) return false;
+            if (!(window.jspdf && window.jspdf.jsPDF)) {
+                alert('PDF engine not loaded. Please refresh and try again.');
+                return false;
+            }
+            var jsPDF = window.jspdf.jsPDF;
+            var pdf = new jsPDF('p', 'mm', 'a4');
+            appendCanvasToPdfPages(pdf, invoiceCanvas, true);   // First section starts on page 1
+            appendCanvasToPdfPages(pdf, ledgerCanvas, false);   // Ledger starts on a new page
+            pdf.save(String(fileBaseName || ('invoice-ledger-' + Date.now())) + '.pdf');
+            return true;
+        }
         function extractHtmlParts(fullHtml) {
             var parser = new DOMParser();
             var parsed = parser.parseFromString(String(fullHtml || ''), 'text/html');
@@ -1422,7 +1469,7 @@ function deleteAllMasters() {
                 alert('Could not generate combined file. Please try again.');
                 return;
             }
-            downloadCanvasAsPdf(outCanvas, base);
+            downloadInvoiceAndLedgerPdf(invoiceCanvas, ledgerCanvas, base);
             downloadCanvasAsJpg(outCanvas, base);
         }
         async function downloadSaleInvoiceWithLedgerJpg(saleId) {
@@ -1454,7 +1501,7 @@ function deleteAllMasters() {
                 alert('Could not generate combined file. Please try again.');
                 return;
             }
-            downloadCanvasAsPdf(outCanvas, base);
+            downloadInvoiceAndLedgerPdf(invoiceCanvas, ledgerCanvas, base);
             downloadCanvasAsJpg(outCanvas, base);
         }
         function buildPurchaseWhatsAppMessage(purchase) {
