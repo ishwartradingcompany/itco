@@ -1026,11 +1026,11 @@ function deleteAllMasters() {
             wrapper.style.position = 'fixed';
             wrapper.style.left = '0';
             wrapper.style.top = '0';
-            wrapper.style.opacity = '0';
             wrapper.style.pointerEvents = 'none';
-            wrapper.style.zIndex = '-1';
+            wrapper.style.zIndex = '2147483647';
             wrapper.style.width = '794px';
             wrapper.style.background = '#ffffff';
+            wrapper.style.overflow = 'visible';
             wrapper.innerHTML = '<style>' + styleText + '</style>' + bodyHtml;
             document.body.appendChild(wrapper);
             return wrapper;
