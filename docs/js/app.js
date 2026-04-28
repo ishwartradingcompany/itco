@@ -2786,11 +2786,29 @@ function deleteAllMasters() {
             editingPurchaseItemIndex = index;
 
             const supplierEl = document.getElementById('purchaseSupplier');
-            if (supplierEl) supplierEl.value = item.supplierId || '';
+            if (supplierEl) {
+                let supplierOpt = supplierEl.querySelector('option[value="' + item.supplierId + '"]');
+                if (!supplierOpt && item.supplierId != null) {
+                    supplierOpt = document.createElement('option');
+                    supplierOpt.value = item.supplierId;
+                    supplierOpt.textContent = (item.supplierName || 'Supplier') + ' (Editing)';
+                    supplierEl.appendChild(supplierOpt);
+                }
+                supplierEl.value = item.supplierId || '';
+            }
             if (typeof syncPurchaseSupplierDisplay === 'function') syncPurchaseSupplierDisplay();
 
             const purchaseItemEl = document.getElementById('purchaseItem');
-            if (purchaseItemEl) purchaseItemEl.value = item.itemId || '';
+            if (purchaseItemEl) {
+                let itemOpt = purchaseItemEl.querySelector('option[value="' + item.itemId + '"]');
+                if (!itemOpt && item.itemId != null) {
+                    itemOpt = document.createElement('option');
+                    itemOpt.value = item.itemId;
+                    itemOpt.textContent = (item.itemName || 'Item') + ' (Editing)';
+                    purchaseItemEl.appendChild(itemOpt);
+                }
+                purchaseItemEl.value = item.itemId || '';
+            }
             if (typeof updatePurchaseInputs === 'function') updatePurchaseInputs();
 
             document.getElementById('purchaseQuantity').value = item.grossWeight || '';
@@ -2807,7 +2825,7 @@ function deleteAllMasters() {
             var plrEdit = document.getElementById('purchaseLRNumber');
             if (plrEdit) plrEdit.value = item.lrNumber || '';
 
-            calculatePurchaseTotal();
+            calculatePurchaseItemTotal();
             document.getElementById('purchaseNetWeight').value = item.netWeight || '';
             document.getElementById('purchaseItemTotal').value = (item.total != null) ? Number(item.total).toFixed(2) : '';
 
@@ -3790,9 +3808,12 @@ function deleteAllMasters() {
         function calculatePurchaseTotal() {
             const itemId = document.getElementById('purchaseItem').value;
             const quantity = parseFloat(document.getElementById('purchaseQuantity').value) || 0;
+            const purchaseTotalEl = document.getElementById('purchaseTotal');
+            const purchaseItemTotalEl = document.getElementById('purchaseItemTotal');
             
             if (!itemId || !quantity) {
-                document.getElementById('purchaseTotal').textContent = '0';
+                if (purchaseTotalEl) purchaseTotalEl.textContent = '0';
+                if (purchaseItemTotalEl) purchaseItemTotalEl.value = '0';
                 return;
             }
             
@@ -3809,7 +3830,8 @@ function deleteAllMasters() {
                 total = quantity * rate;
             }
             
-            document.getElementById('purchaseTotal').textContent = total.toFixed(2);
+            if (purchaseTotalEl) purchaseTotalEl.textContent = total.toFixed(2);
+            if (purchaseItemTotalEl) purchaseItemTotalEl.value = total.toFixed(2);
         }
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -4395,8 +4417,8 @@ function deleteAllMasters() {
             // Populate input values (same order as the "new item" flow).
             document.getElementById('saleQuantity').value = item.grossWeight || '';
             document.getElementById('saleBags').value = item.bags || 0;
-            // Discount typically flows from bags (non-coconut); default to bags value.
-            document.getElementById('saleDiscount').value = item.isCoconut ? 0 : (item.bags || 0);
+            const saleDiscountVal = Math.max(0, (parseFloat(item.grossWeight) || 0) - (parseFloat(item.netWeight) || 0));
+            document.getElementById('saleDiscount').value = item.isCoconut ? 0 : (item.bags || saleDiscountVal || 0);
             document.getElementById('saleDiscountQty').value = item.discountQty || 0;
             document.getElementById('saleRate').value = item.rate || '';
             var skp = document.getElementById('saleKaantaParchi');
@@ -4407,6 +4429,8 @@ function deleteAllMasters() {
 
             // Let the shared auto-calc compute Net Weight & Item Total (same as new entry).
             calculateSaleItemTotal();
+            document.getElementById('saleNetWeight').value = item.netWeight || '';
+            document.getElementById('saleItemTotal').value = (item.total != null) ? Number(item.total).toFixed(2) : '';
             
             // Change the "Add Item" button to "Update Item" visually.
             const btn = document.querySelector('button[onclick="addItemToSale()"]');
