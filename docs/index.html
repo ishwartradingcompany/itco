@@ -884,6 +884,11 @@
                             <input type="number" id="purchaseItemTotal" placeholder="Item Total" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-gray-100">
                             <small class="text-slate-500">Auto-calculated</small>
                         </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Kaanta Parchi</label>
+                            <input type="text" id="purchaseKaantaParchi" placeholder="Kaanta Parchi Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Optional weighbridge slip reference</small>
+                        </div>
                     </div>
                     <div class="mt-4">
                         <button onclick="addItemToPurchase()" class="bg-secondary text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">Add Item to Invoice</button>
@@ -905,12 +910,13 @@
                                     <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Net Weight</th>
                                     <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Rate</th>
                                     <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Amount</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Kaanta Parchi</th>
                                     <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="currentPurchaseItems">
                                 <tr>
-                                    <td colspan="9" class="px-4 py-8 text-center text-slate-500">No items added yet</td>
+                                    <td colspan="10" class="px-4 py-8 text-center text-slate-500">No items added yet</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1420,6 +1426,11 @@
                             <input type="number" id="saleItemTotal" placeholder="Item Total" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-gray-100">
                             <small class="text-slate-500">Auto-calculated</small>
                         </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Kaanta Parchi</label>
+                            <input type="text" id="saleKaantaParchi" placeholder="Kaanta Parchi Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Optional weighbridge slip reference</small>
+                        </div>
                     </div>
                     <div class="mt-4">
                         <button onclick="addItemToSale()" class="bg-secondary text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">Add Item to Invoice</button>
@@ -1439,12 +1450,13 @@
                                     <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Net Weight</th>
                                     <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Rate</th>
                                     <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Amount</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Kaanta Parchi</th>
                                     <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="currentSaleItems">
                                 <tr>
-                                    <td colspan="7" class="px-4 py-8 text-center text-slate-500">No items added yet</td>
+                                    <td colspan="8" class="px-4 py-8 text-center text-slate-500">No items added yet</td>
                                 </tr>
                             </tbody>
                         </table>
