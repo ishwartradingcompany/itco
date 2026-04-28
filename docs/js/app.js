@@ -2549,6 +2549,8 @@ function deleteAllMasters() {
             const grossLabel = document.querySelector('label[for="purchaseQuantity"]');
             const netLabel = document.querySelector('label[for="purchaseNetWeight"]');
             const netHelp = document.querySelector('#purchaseNetWeight').nextElementSibling;
+            const purchaseQuantityEl = document.getElementById('purchaseQuantity');
+            const purchaseNetWeightEl = document.getElementById('purchaseNetWeight');
             
             if (itemId) {
                 const item = appData.items.find(i => i.id == itemId);
@@ -2564,11 +2566,11 @@ function deleteAllMasters() {
                         amountContainer.style.display = 'none';
                         
                         // Update labels for coconut
-                        grossLabel.textContent = 'Gross Quantity';
-                        document.getElementById('purchaseQuantity').placeholder = 'Gross Quantity';
-                        netLabel.textContent = 'Net Quantity';
-                        document.getElementById('purchaseNetWeight').placeholder = 'Net Quantity';
-                        netHelp.textContent = 'Auto-calculated (Gross - Discount)';
+                        if (grossLabel) grossLabel.textContent = 'Gross Quantity';
+                        if (purchaseQuantityEl) purchaseQuantityEl.placeholder = 'Gross Quantity';
+                        if (netLabel) netLabel.textContent = 'Net Quantity';
+                        if (purchaseNetWeightEl) purchaseNetWeightEl.placeholder = 'Net Quantity';
+                        if (netHelp) netHelp.textContent = 'Auto-calculated (Gross - Discount)';
                         rateLabel.textContent = `Rate per ${item.unit}`;
                         rateHelp.textContent = `Enter rate per ${item.unit}`;
                         
@@ -2583,11 +2585,11 @@ function deleteAllMasters() {
                         discountQtyContainer.style.display = 'none';
                         document.getElementById('purchaseDiscountQty').value = '0';
                         
-                        grossLabel.textContent = 'Gross Weight (kg)';
-                        document.getElementById('purchaseQuantity').placeholder = 'Gross Weight';
-                        netLabel.textContent = 'Net Weight';
-                        document.getElementById('purchaseNetWeight').placeholder = 'Net Weight';
-                        netHelp.textContent = 'Auto-calculated (Gross - Discount); you can edit';
+                        if (grossLabel) grossLabel.textContent = 'Gross Weight (kg)';
+                        if (purchaseQuantityEl) purchaseQuantityEl.placeholder = 'Gross Weight';
+                        if (netLabel) netLabel.textContent = 'Net Weight';
+                        if (purchaseNetWeightEl) purchaseNetWeightEl.placeholder = 'Net Weight';
+                        if (netHelp) netHelp.textContent = 'Auto-calculated (Gross - Discount); you can edit';
                     } else {
                         rateContainer.style.display = 'block';
                         amountContainer.style.display = 'none';
@@ -2596,11 +2598,11 @@ function deleteAllMasters() {
                         discountQtyContainer.style.display = 'none';
                         document.getElementById('purchaseDiscountQty').value = '0';
                         
-                        grossLabel.textContent = 'Gross Weight (kg)';
-                        document.getElementById('purchaseQuantity').placeholder = 'Gross Weight';
-                        netLabel.textContent = 'Net Weight';
-                        document.getElementById('purchaseNetWeight').placeholder = 'Net Weight';
-                        netHelp.textContent = 'Auto-calculated (Gross - Discount); you can edit';
+                        if (grossLabel) grossLabel.textContent = 'Gross Weight (kg)';
+                        if (purchaseQuantityEl) purchaseQuantityEl.placeholder = 'Gross Weight';
+                        if (netLabel) netLabel.textContent = 'Net Weight';
+                        if (purchaseNetWeightEl) purchaseNetWeightEl.placeholder = 'Net Weight';
+                        if (netHelp) netHelp.textContent = 'Auto-calculated (Gross - Discount); you can edit';
                         rateLabel.textContent = `Rate per ${item.unit}`;
                         rateHelp.textContent = `Enter rate per ${item.unit}`;
                     }
@@ -2614,11 +2616,11 @@ function deleteAllMasters() {
                 discountQtyContainer.style.display = 'none';
                 rateLabel.textContent = 'Rate per Unit';
                 rateHelp.textContent = 'Enter rate per unit';
-                grossLabel.textContent = 'Gross Weight (kg)';
-                document.getElementById('purchaseQuantity').placeholder = 'Gross Weight';
-                netLabel.textContent = 'Net Weight';
-                document.getElementById('purchaseNetWeight').placeholder = 'Net Weight';
-                netHelp.textContent = 'Auto-calculated (Gross - Discount); you can edit';
+                if (grossLabel) grossLabel.textContent = 'Gross Weight (kg)';
+                if (purchaseQuantityEl) purchaseQuantityEl.placeholder = 'Gross Weight';
+                if (netLabel) netLabel.textContent = 'Net Weight';
+                if (purchaseNetWeightEl) purchaseNetWeightEl.placeholder = 'Net Weight';
+                if (netHelp) netHelp.textContent = 'Auto-calculated (Gross - Discount); you can edit';
             }
             
             calculatePurchaseItemTotal();
@@ -4200,6 +4202,8 @@ function deleteAllMasters() {
             const grossLabel = document.querySelector('label[for="saleQuantity"]');
             const netLabel = document.querySelector('label[for="saleNetWeight"]');
             const netHelp = document.querySelector('#saleNetWeight').nextElementSibling;
+            const saleQuantityEl = document.getElementById('saleQuantity');
+            const saleNetWeightEl = document.getElementById('saleNetWeight');
             
             if (itemId && appData.inventory[itemId]) {
                 const item = appData.items.find(i => i.id == itemId);
@@ -4211,11 +4215,11 @@ function deleteAllMasters() {
                     discountQtyContainer.style.display = 'block';
                     
                     // Update labels for coconut
-                    grossLabel.textContent = 'Gross Quantity (kg)';
-                    document.getElementById('saleQuantity').placeholder = 'Gross Quantity';
-                    netLabel.textContent = 'Net Quantity';
-                    document.getElementById('saleNetWeight').placeholder = 'Net Quantity';
-                    netHelp.textContent = 'Auto-calculated (Gross - Discount)';
+                    if (grossLabel) grossLabel.textContent = 'Gross Quantity (kg)';
+                    if (saleQuantityEl) saleQuantityEl.placeholder = 'Gross Quantity';
+                    if (netLabel) netLabel.textContent = 'Net Quantity';
+                    if (saleNetWeightEl) saleNetWeightEl.placeholder = 'Net Quantity';
+                    if (netHelp) netHelp.textContent = 'Auto-calculated (Gross - Discount)';
                     
                     // Clear bags value for coconut
                     document.getElementById('saleBags').value = '0';
@@ -4225,11 +4229,11 @@ function deleteAllMasters() {
                     document.getElementById('saleDiscountQty').value = '0';
                     
                     // Reset labels
-                    grossLabel.textContent = 'Gross Weight (kg)';
-                    document.getElementById('saleQuantity').placeholder = 'Gross Weight';
-                    netLabel.textContent = 'Net Weight';
-                    document.getElementById('saleNetWeight').placeholder = 'Net Weight';
-                    netHelp.textContent = 'Auto-calculated (Gross - Bags)';
+                    if (grossLabel) grossLabel.textContent = 'Gross Weight (kg)';
+                    if (saleQuantityEl) saleQuantityEl.placeholder = 'Gross Weight';
+                    if (netLabel) netLabel.textContent = 'Net Weight';
+                    if (saleNetWeightEl) saleNetWeightEl.placeholder = 'Net Weight';
+                    if (netHelp) netHelp.textContent = 'Auto-calculated (Gross - Bags)';
                 }
             } else {
                 availableStockElement.textContent = 'Available: 0';
@@ -4237,13 +4241,11 @@ function deleteAllMasters() {
                 discountQtyContainer.style.display = 'none';
                 
                 // Reset labels
-                if (grossLabel) {
-                    grossLabel.textContent = 'Gross Weight (kg)';
-                    document.getElementById('saleQuantity').placeholder = 'Gross Weight';
-                    netLabel.textContent = 'Net Weight';
-                    document.getElementById('saleNetWeight').placeholder = 'Net Weight';
-                    netHelp.textContent = 'Auto-calculated (Gross - Bags)';
-                }
+                if (grossLabel) grossLabel.textContent = 'Gross Weight (kg)';
+                if (saleQuantityEl) saleQuantityEl.placeholder = 'Gross Weight';
+                if (netLabel) netLabel.textContent = 'Net Weight';
+                if (saleNetWeightEl) saleNetWeightEl.placeholder = 'Net Weight';
+                if (netHelp) netHelp.textContent = 'Auto-calculated (Gross - Bags)';
             }
             calculateSaleItemTotal();
         }
