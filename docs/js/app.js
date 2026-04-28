@@ -31,6 +31,319 @@
             return 'Multiple (' + list.length + ')';
         }
 
+        let purchaseInlineBrokerageRowIndex = 0;
+        let saleInlineBrokerageRowIndex = 0;
+
+        function getActiveBrokerList() {
+            return (appData.brokers || []).filter(function(broker) { return broker.active !== false; });
+        }
+
+        function getInlineBrokerOptionsHtml(selectedId) {
+            const selected = selectedId == null ? '' : String(selectedId);
+            let html = '<option value="">Select Broker</option>';
+            getActiveBrokerList().forEach(function(broker) {
+                const idText = String(broker.id);
+                const selectedAttr = idText === selected ? ' selected' : '';
+                html += '<option value="' + escapeHtml(idText) + '"' + selectedAttr + '>' + escapeHtml(broker.name || idText) + '</option>';
+            });
+            return html;
+        }
+
+        function renderPurchaseInlineBrokerageRow(index, entry, canRemove) {
+            const brokerId = entry && entry.brokerId != null ? String(entry.brokerId) : '';
+            const amount = entry && entry.amount != null ? Number(entry.amount) : '';
+            return `
+                <div class="purchase-inline-brokerage-row grid grid-cols-1 md:grid-cols-3 gap-3 items-end" data-index="${index}">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Broker</label>
+                        <select class="purchase-inline-brokerage-broker w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent">
+                            ${getInlineBrokerOptionsHtml(brokerId)}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
+                        <input type="number" class="purchase-inline-brokerage-amount w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent" placeholder="Brokerage Amount" value="${amount !== '' ? amount : ''}" min="0" step="0.01">
+                    </div>
+                    <div>
+                        ${canRemove ? `<button type="button" onclick="removePurchaseBrokerageRow(${index})" class="w-full p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">Remove</button>` : '<div class="text-xs text-slate-500 px-1">At least one row required when posting brokerage</div>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderSaleInlineBrokerageRow(index, entry, canRemove) {
+            const brokerId = entry && entry.brokerId != null ? String(entry.brokerId) : '';
+            const amount = entry && entry.amount != null ? Number(entry.amount) : '';
+            return `
+                <div class="sale-inline-brokerage-row grid grid-cols-1 md:grid-cols-3 gap-3 items-end" data-index="${index}">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Broker</label>
+                        <select class="sale-inline-brokerage-broker w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent">
+                            ${getInlineBrokerOptionsHtml(brokerId)}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
+                        <input type="number" class="sale-inline-brokerage-amount w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent" placeholder="Brokerage Amount" value="${amount !== '' ? amount : ''}" min="0" step="0.01">
+                    </div>
+                    <div>
+                        ${canRemove ? `<button type="button" onclick="removeSaleBrokerageRow(${index})" class="w-full p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">Remove</button>` : '<div class="text-xs text-slate-500 px-1">At least one row required when posting brokerage</div>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        function setPurchaseBrokerageRows(entries) {
+            const container = document.getElementById('purchaseBrokerageRows');
+            if (!container) return;
+            const list = (entries && entries.length) ? entries : [];
+            purchaseInlineBrokerageRowIndex = 0;
+            container.innerHTML = '';
+            if (list.length === 0) return;
+            list.forEach(function(entry, idx) {
+                const rowIndex = ++purchaseInlineBrokerageRowIndex;
+                container.insertAdjacentHTML('beforeend', renderPurchaseInlineBrokerageRow(rowIndex, entry, idx > 0));
+            });
+        }
+
+        function setSaleBrokerageRows(entries) {
+            const container = document.getElementById('saleBrokerageRows');
+            if (!container) return;
+            const list = (entries && entries.length) ? entries : [];
+            saleInlineBrokerageRowIndex = 0;
+            container.innerHTML = '';
+            if (list.length === 0) return;
+            list.forEach(function(entry, idx) {
+                const rowIndex = ++saleInlineBrokerageRowIndex;
+                container.insertAdjacentHTML('beforeend', renderSaleInlineBrokerageRow(rowIndex, entry, idx > 0));
+            });
+        }
+
+        function addPurchaseBrokerageRow(entry) {
+            const container = document.getElementById('purchaseBrokerageRows');
+            if (!container) return;
+            const rowIndex = ++purchaseInlineBrokerageRowIndex;
+            const existingRows = container.querySelectorAll('.purchase-inline-brokerage-row').length;
+            container.insertAdjacentHTML('beforeend', renderPurchaseInlineBrokerageRow(rowIndex, entry || {}, existingRows > 0));
+            const firstRow = container.querySelector('.purchase-inline-brokerage-row');
+            if (firstRow) {
+                const firstIndex = Number(firstRow.getAttribute('data-index'));
+                const firstBtnWrap = firstRow.querySelector('div:last-child');
+                if (firstBtnWrap) {
+                    const hasMultiple = container.querySelectorAll('.purchase-inline-brokerage-row').length > 1;
+                    firstBtnWrap.innerHTML = hasMultiple
+                        ? `<button type="button" onclick="removePurchaseBrokerageRow(${firstIndex})" class="w-full p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">Remove</button>`
+                        : '<div class="text-xs text-slate-500 px-1">At least one row required when posting brokerage</div>';
+                }
+            }
+        }
+
+        function addSaleBrokerageRow(entry) {
+            const container = document.getElementById('saleBrokerageRows');
+            if (!container) return;
+            const rowIndex = ++saleInlineBrokerageRowIndex;
+            const existingRows = container.querySelectorAll('.sale-inline-brokerage-row').length;
+            container.insertAdjacentHTML('beforeend', renderSaleInlineBrokerageRow(rowIndex, entry || {}, existingRows > 0));
+            const firstRow = container.querySelector('.sale-inline-brokerage-row');
+            if (firstRow) {
+                const firstIndex = Number(firstRow.getAttribute('data-index'));
+                const firstBtnWrap = firstRow.querySelector('div:last-child');
+                if (firstBtnWrap) {
+                    const hasMultiple = container.querySelectorAll('.sale-inline-brokerage-row').length > 1;
+                    firstBtnWrap.innerHTML = hasMultiple
+                        ? `<button type="button" onclick="removeSaleBrokerageRow(${firstIndex})" class="w-full p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">Remove</button>`
+                        : '<div class="text-xs text-slate-500 px-1">At least one row required when posting brokerage</div>';
+                }
+            }
+        }
+
+        function removePurchaseBrokerageRow(index) {
+            const row = document.querySelector('.purchase-inline-brokerage-row[data-index="' + String(index) + '"]');
+            if (!row) return;
+            row.remove();
+            const container = document.getElementById('purchaseBrokerageRows');
+            if (!container) return;
+            const rows = container.querySelectorAll('.purchase-inline-brokerage-row');
+            if (rows.length === 1) {
+                const onlyRow = rows[0];
+                const wrap = onlyRow.querySelector('div:last-child');
+                if (wrap) wrap.innerHTML = '<div class="text-xs text-slate-500 px-1">At least one row required when posting brokerage</div>';
+            }
+        }
+
+        function removeSaleBrokerageRow(index) {
+            const row = document.querySelector('.sale-inline-brokerage-row[data-index="' + String(index) + '"]');
+            if (!row) return;
+            row.remove();
+            const container = document.getElementById('saleBrokerageRows');
+            if (!container) return;
+            const rows = container.querySelectorAll('.sale-inline-brokerage-row');
+            if (rows.length === 1) {
+                const onlyRow = rows[0];
+                const wrap = onlyRow.querySelector('div:last-child');
+                if (wrap) wrap.innerHTML = '<div class="text-xs text-slate-500 px-1">At least one row required when posting brokerage</div>';
+            }
+        }
+
+        function togglePurchaseBrokerageSection() {
+            const toggle = document.getElementById('purchasePostBrokerageToggle');
+            const container = document.getElementById('purchaseInlineBrokerageContainer');
+            if (!toggle || !container) return;
+            container.classList.toggle('hidden', !toggle.checked);
+            if (toggle.checked) {
+                const hasRows = container.querySelectorAll('.purchase-inline-brokerage-row').length > 0;
+                if (!hasRows) addPurchaseBrokerageRow();
+            }
+        }
+
+        function toggleSaleBrokerageSection() {
+            const toggle = document.getElementById('salePostBrokerageToggle');
+            const container = document.getElementById('saleInlineBrokerageContainer');
+            if (!toggle || !container) return;
+            container.classList.toggle('hidden', !toggle.checked);
+            if (toggle.checked) {
+                const hasRows = container.querySelectorAll('.sale-inline-brokerage-row').length > 0;
+                if (!hasRows) addSaleBrokerageRow();
+            }
+        }
+
+        function getPurchaseBrokerageEntries() {
+            const rows = document.querySelectorAll('.purchase-inline-brokerage-row');
+            const entries = [];
+            rows.forEach(function(row) {
+                const brokerEl = row.querySelector('.purchase-inline-brokerage-broker');
+                const amountEl = row.querySelector('.purchase-inline-brokerage-amount');
+                if (!brokerEl || !amountEl) return;
+                const brokerId = (brokerEl.value || '').trim();
+                const amount = parseFloat(amountEl.value) || 0;
+                if (!brokerId || amount <= 0) return;
+                const broker = (appData.brokers || []).find(function(b) { return String(b.id) === String(brokerId); });
+                entries.push({
+                    brokerId: brokerId,
+                    brokerName: broker ? broker.name : (brokerEl.options[brokerEl.selectedIndex] ? brokerEl.options[brokerEl.selectedIndex].text : ''),
+                    amount: +amount.toFixed(2)
+                });
+            });
+            return entries;
+        }
+
+        function getSaleBrokerageEntries() {
+            const rows = document.querySelectorAll('.sale-inline-brokerage-row');
+            const entries = [];
+            rows.forEach(function(row) {
+                const brokerEl = row.querySelector('.sale-inline-brokerage-broker');
+                const amountEl = row.querySelector('.sale-inline-brokerage-amount');
+                if (!brokerEl || !amountEl) return;
+                const brokerId = (brokerEl.value || '').trim();
+                const amount = parseFloat(amountEl.value) || 0;
+                if (!brokerId || amount <= 0) return;
+                const broker = (appData.brokers || []).find(function(b) { return String(b.id) === String(brokerId); });
+                entries.push({
+                    brokerId: brokerId,
+                    brokerName: broker ? broker.name : (brokerEl.options[brokerEl.selectedIndex] ? brokerEl.options[brokerEl.selectedIndex].text : ''),
+                    amount: +amount.toFixed(2)
+                });
+            });
+            return entries;
+        }
+
+        function refreshInlineBrokerageBrokerOptions() {
+            const purchaseSelects = document.querySelectorAll('.purchase-inline-brokerage-broker');
+            purchaseSelects.forEach(function(select) {
+                const value = select.value || '';
+                select.innerHTML = getInlineBrokerOptionsHtml(value);
+                select.value = value;
+            });
+            const saleSelects = document.querySelectorAll('.sale-inline-brokerage-broker');
+            saleSelects.forEach(function(select) {
+                const value = select.value || '';
+                select.innerHTML = getInlineBrokerOptionsHtml(value);
+                select.value = value;
+            });
+        }
+
+        function summarizeItemForBrokerage(items) {
+            const safeItems = Array.isArray(items) ? items : [];
+            const itemIds = collectUniqueNonEmpty(safeItems.map(function(item) { return item.itemId; }));
+            if (itemIds.length === 1) {
+                const match = (appData.items || []).find(function(item) { return String(item.id) === String(itemIds[0]); });
+                return {
+                    itemId: itemIds[0],
+                    itemName: match ? match.name : (safeItems[0] && safeItems[0].itemName ? safeItems[0].itemName : 'Item')
+                };
+            }
+            return {
+                itemId: 'multiple',
+                itemName: 'Multiple Items'
+            };
+        }
+
+        function removeInlineBrokerageBySource(sourceKey, invoiceId) {
+            appData.brokerage = (appData.brokerage || []).filter(function(entry) {
+                return !(entry.source === sourceKey && String(entry.sourceInvoiceId) === String(invoiceId));
+            });
+        }
+
+        function pushInlineBrokerageEntries(config) {
+            const entries = config.entries || [];
+            if (!entries.length) return;
+            const itemInfo = summarizeItemForBrokerage(config.items || []);
+            entries.forEach(function(entry, idx) {
+                const amount = parseFloat(entry.amount) || 0;
+                if (amount <= 0) return;
+                const brokerage = {
+                    id: Date.now() + idx + Math.floor(Math.random() * 1000),
+                    date: config.date || '',
+                    brokerId: entry.brokerId,
+                    brokerName: entry.brokerName || '',
+                    itemId: itemInfo.itemId,
+                    itemName: itemInfo.itemName,
+                    type: config.type,
+                    amount: +amount.toFixed(2),
+                    reference: config.reference || '',
+                    source: config.source,
+                    sourceInvoiceId: config.sourceInvoiceId,
+                    sourceInvoiceNo: config.sourceInvoiceNo
+                };
+                appData.brokerage.push(brokerage);
+            });
+        }
+
+        function allocateBrokerageEntriesByGroups(entries, groups) {
+            const safeEntries = Array.isArray(entries) ? entries : [];
+            const safeGroups = Array.isArray(groups) ? groups : [];
+            if (!safeEntries.length || !safeGroups.length) return safeGroups.map(function() { return []; });
+            const totalValue = safeGroups.reduce(function(sum, group) { return sum + (parseFloat(group.itemsTotal) || 0); }, 0);
+            return safeGroups.map(function(group, groupIdx) {
+                return safeEntries.map(function(entry) {
+                    if (groupIdx === safeGroups.length - 1) {
+                        const usedSoFar = safeGroups.slice(0, groupIdx).reduce(function(sum, prevGroup, prevIdx) {
+                            const prevAlloc = safeEntries.map(function(prevEntry) {
+                                if (String(prevEntry.brokerId) !== String(entry.brokerId)) return 0;
+                                if (totalValue > 0) {
+                                    const ratio = (parseFloat(prevGroup.itemsTotal) || 0) / totalValue;
+                                    return +(prevEntry.amount * ratio).toFixed(2);
+                                }
+                                return +(prevEntry.amount / safeGroups.length).toFixed(2);
+                            }).reduce(function(s, v) { return s + v; }, 0);
+                            return sum + prevAlloc;
+                        }, 0);
+                        return {
+                            brokerId: entry.brokerId,
+                            brokerName: entry.brokerName,
+                            amount: +Math.max(0, (parseFloat(entry.amount) || 0) - usedSoFar).toFixed(2)
+                        };
+                    }
+                    const ratio = totalValue > 0 ? ((parseFloat(group.itemsTotal) || 0) / totalValue) : (1 / safeGroups.length);
+                    return {
+                        brokerId: entry.brokerId,
+                        brokerName: entry.brokerName,
+                        amount: +((parseFloat(entry.amount) || 0) * ratio).toFixed(2)
+                    };
+                }).filter(function(alloc) { return alloc.amount > 0; });
+            });
+        }
+
         // Audit trail: who/when (uses currentUser from auth.js)
         function getAuditMeta(isNew) {
             const who = (typeof currentUserEmail !== 'undefined' && currentUserEmail) ? currentUserEmail : 'anonymous';
@@ -2070,6 +2383,7 @@ function deleteAllMasters() {
             
             // Opening balance dropdowns
             populateOpeningBalanceDropdowns();
+            refreshInlineBrokerageBrokerOptions();
             syncPurchaseSupplierDisplay();
             syncSaleCustomerDisplay();
             initPurchaseSupplierSearch();
@@ -2829,10 +3143,16 @@ function deleteAllMasters() {
             const truck = document.getElementById('purchaseTruck').value;
             const lrNumber = (document.getElementById('purchaseLRNumber') && document.getElementById('purchaseLRNumber').value) ? document.getElementById('purchaseLRNumber').value.trim() : '';
             const chargeMode = getPurchaseChargeMode();
+            const postInlineBrokerage = !!(document.getElementById('purchasePostBrokerageToggle') && document.getElementById('purchasePostBrokerageToggle').checked);
+            const inlineBrokerageEntries = postInlineBrokerage ? getPurchaseBrokerageEntries() : [];
             const purchaseMessageTargets = [];
             
             if (!date || !invoice || currentPurchaseItems.length === 0) {
                 alert('Please fill in all required fields and add at least one item');
+                return;
+            }
+            if (postInlineBrokerage && inlineBrokerageEntries.length === 0) {
+                alert('Please add at least one valid brokerage row (broker and amount) or turn off Post to Brokerage.');
                 return;
             }
 
@@ -2897,6 +3217,8 @@ function deleteAllMasters() {
                     existingPurchase.multiTrucks = itemTrucks;
                     existingPurchase.multiLrNumbers = itemLrNumbers;
                     existingPurchase.multiKaantaParchi = itemKaantaParchi;
+                    existingPurchase.inlineBrokerageEnabled = postInlineBrokerage;
+                    existingPurchase.inlineBrokerageEntries = postInlineBrokerage ? inlineBrokerageEntries.map(function(entry) { return { brokerId: entry.brokerId, brokerName: entry.brokerName, amount: entry.amount }; }) : [];
                     existingPurchase.items = [...currentPurchaseItems];
                     existingPurchase.itemsTotal = itemsTotal;
                     existingPurchase.hammali = hammali;
@@ -2914,6 +3236,19 @@ function deleteAllMasters() {
                         appData.inventory[item.itemId].quantity += item.grossWeight;
                         appData.inventory[item.itemId].totalCost += item.total;
                     });
+                    removeInlineBrokerageBySource('inline_purchase', existingPurchase.id);
+                    if (postInlineBrokerage) {
+                        pushInlineBrokerageEntries({
+                            entries: inlineBrokerageEntries,
+                            items: existingPurchase.items || [],
+                            date: existingPurchase.date || date,
+                            type: 'Purchase',
+                            reference: existingPurchase.invoice || invoice,
+                            source: 'inline_purchase',
+                            sourceInvoiceId: existingPurchase.id,
+                            sourceInvoiceNo: existingPurchase.invoice || invoice
+                        });
+                    }
                     purchaseMessageTargets.push(existingPurchase.id);
                 }
                 editingPurchaseId = null;
@@ -2980,6 +3315,8 @@ function deleteAllMasters() {
 
                 const reservedInvoices = new Set();
                 const singleSupplierEntry = allocatedGroups.length === 1;
+                const brokerageAllocations = postInlineBrokerage ? allocateBrokerageEntriesByGroups(inlineBrokerageEntries, allocatedGroups) : [];
+                const createdPurchases = [];
                 let createdCount = 0;
                 allocatedGroups.forEach((group, idx) => {
                     const groupInvoice = singleSupplierEntry && idx === 0
@@ -3008,6 +3345,8 @@ function deleteAllMasters() {
                         multiTrucks: groupTrucks,
                         multiLrNumbers: groupLrNumbers,
                         multiKaantaParchi: groupKaantaParchi,
+                        inlineBrokerageEnabled: postInlineBrokerage,
+                        inlineBrokerageEntries: postInlineBrokerage ? (brokerageAllocations[idx] || []) : [],
                         items: [...group.items],
                         itemsTotal: +group.itemsTotal.toFixed(2),
                         hammali: +group.hammali.toFixed(2),
@@ -3020,6 +3359,7 @@ function deleteAllMasters() {
                         ...getAuditMeta(true)
                     };
                     appData.purchases.push(purchase);
+                    createdPurchases.push(purchase);
                     createdCount++;
                     purchaseMessageTargets.push(purchase.id);
                 });
@@ -3036,10 +3376,26 @@ function deleteAllMasters() {
                     appData.inventory[item.itemId].quantity += item.grossWeight;
                     appData.inventory[item.itemId].totalCost += item.total;
                 });
+
+                if (postInlineBrokerage) {
+                    createdPurchases.forEach(function(createdPurchase, idx) {
+                        pushInlineBrokerageEntries({
+                            entries: brokerageAllocations[idx] || [],
+                            items: createdPurchase.items || [],
+                            date: createdPurchase.date || date,
+                            type: 'Purchase',
+                            reference: createdPurchase.invoice || invoice,
+                            source: 'inline_purchase',
+                            sourceInvoiceId: createdPurchase.id,
+                            sourceInvoiceNo: createdPurchase.invoice || invoice
+                        });
+                    });
+                }
             }
             
             saveData();
             updatePurchaseHistory();
+            updateBrokerageHistory();
             updateDashboard();
             
             // Regenerate ledger only if type and entity are already selected (avoid "Please select ledger type and entity" alert)
@@ -4258,10 +4614,16 @@ function deleteAllMasters() {
             const advance = parseFloat(document.getElementById('saleAdvance').value) || 0;
             const truckAdvance = parseFloat(document.getElementById('saleTruckAdvance').value) || 0;
             const othersEntries = getSaleOthersEntries();
+            const postInlineBrokerage = !!(document.getElementById('salePostBrokerageToggle') && document.getElementById('salePostBrokerageToggle').checked);
+            const inlineBrokerageEntries = postInlineBrokerage ? getSaleBrokerageEntries() : [];
             let saleMessageTargetId = null;
             
             if (!date || !invoice || !customerId || currentSaleItems.length === 0) {
                 alert('Please fill in all required fields and add at least one item');
+                return;
+            }
+            if (postInlineBrokerage && inlineBrokerageEntries.length === 0) {
+                alert('Please add at least one valid brokerage row (broker and amount) or turn off Post to Brokerage.');
                 return;
             }
 
@@ -4393,6 +4755,8 @@ function deleteAllMasters() {
                     existingSale.multiTrucks = itemTrucks;
                     existingSale.multiLrNumbers = itemLrNumbers;
                     existingSale.multiKaantaParchi = itemKaantaParchi;
+                    existingSale.inlineBrokerageEnabled = postInlineBrokerage;
+                    existingSale.inlineBrokerageEntries = postInlineBrokerage ? inlineBrokerageEntries.map(function(entry) { return { brokerId: entry.brokerId, brokerName: entry.brokerName, amount: entry.amount }; }) : [];
                     existingSale.items = [...currentSaleItems];
                     existingSale.itemsTotal = itemsTotal;
                     existingSale.hammali = hammali;
@@ -4403,6 +4767,19 @@ function deleteAllMasters() {
                     existingSale.balance = grandTotal - (existingSale.received || 0);
                     existingSale.linkedPurchases = [...linkedPurchases]; // Add linked purchases
                     Object.assign(existingSale, getAuditMeta(false));
+                    removeInlineBrokerageBySource('inline_sale', existingSale.id);
+                    if (postInlineBrokerage) {
+                        pushInlineBrokerageEntries({
+                            entries: inlineBrokerageEntries,
+                            items: existingSale.items || [],
+                            date: existingSale.date || date,
+                            type: 'Sale',
+                            reference: existingSale.invoice || invoice,
+                            source: 'inline_sale',
+                            sourceInvoiceId: existingSale.id,
+                            sourceInvoiceNo: existingSale.invoice || invoice
+                        });
+                    }
                     
                     // Deduct new inventory for updated sale (using gross weight)
                     adjustInventoryForSaleItems(currentSaleItems, -1);
@@ -4425,6 +4802,8 @@ function deleteAllMasters() {
                     multiTrucks: itemTrucks,
                     multiLrNumbers: itemLrNumbers,
                     multiKaantaParchi: itemKaantaParchi,
+                    inlineBrokerageEnabled: postInlineBrokerage,
+                    inlineBrokerageEntries: postInlineBrokerage ? inlineBrokerageEntries.map(function(entry) { return { brokerId: entry.brokerId, brokerName: entry.brokerName, amount: entry.amount }; }) : [],
                     items: [...currentSaleItems],
                     itemsTotal: itemsTotal,
                     hammali: hammali,
@@ -4438,6 +4817,18 @@ function deleteAllMasters() {
                     ...getAuditMeta(true)
                 };
                 appData.sales.push(sale);
+                if (postInlineBrokerage) {
+                    pushInlineBrokerageEntries({
+                        entries: inlineBrokerageEntries,
+                        items: sale.items || [],
+                        date: sale.date || date,
+                        type: 'Sale',
+                        reference: sale.invoice || invoice,
+                        source: 'inline_sale',
+                        sourceInvoiceId: sale.id,
+                        sourceInvoiceNo: sale.invoice || invoice
+                    });
+                }
                 saleMessageTargetId = sale.id;
                 
                 // Update inventory for new sale (using gross weight)
@@ -4446,6 +4837,7 @@ function deleteAllMasters() {
             
             saveData();
             updateSalesHistory();
+            updateBrokerageHistory();
             updateDashboard();
             populateDropdowns();
             
@@ -8475,6 +8867,10 @@ function onPnLFilterChange() {
             if (!purchase) return;
             
             editingPurchaseId = purchaseId;
+            populateDropdowns();
+            
+            // Show the purchase form first so init logic runs before prefill.
+            showPurchaseForm();
             
             // Fill the form with existing data
             document.getElementById('purchaseDate').value = (purchase.multiDates && purchase.multiDates.length > 0) ? purchase.multiDates[0] : purchase.date;
@@ -8486,6 +8882,12 @@ function onPnLFilterChange() {
             if (plrEl) plrEl.value = (purchase.multiLrNumbers && purchase.multiLrNumbers.length > 0) ? purchase.multiLrNumbers[0] : (purchase.lrNumber || '');
             var pkpEl = document.getElementById('purchaseKaantaParchi');
             if (pkpEl) pkpEl.value = (purchase.multiKaantaParchi && purchase.multiKaantaParchi.length > 0) ? purchase.multiKaantaParchi[0] : '';
+            const purchaseBrokerageToggle = document.getElementById('purchasePostBrokerageToggle');
+            if (purchaseBrokerageToggle) {
+                purchaseBrokerageToggle.checked = !!purchase.inlineBrokerageEnabled;
+            }
+            setPurchaseBrokerageRows(purchase.inlineBrokerageEntries || []);
+            togglePurchaseBrokerageSection();
             document.getElementById('purchaseHammali').value = purchase.hammali || 0;
             document.getElementById('purchaseAdvance').value = purchase.advance || 0;
             const totalModeRadio = document.getElementById('purchaseChargeModeTotal');
@@ -8498,9 +8900,6 @@ function onPnLFilterChange() {
             updateCurrentPurchaseItemsDisplay();
             onPurchaseChargeModeChange();
             calculatePurchaseTotals();
-            
-            // Show the purchase form
-            showPurchaseForm();
             
             // Scroll to form
             document.querySelector('#purchaseEntryView').scrollIntoView({ behavior: 'smooth' });
@@ -8530,6 +8929,12 @@ function onPnLFilterChange() {
             document.getElementById('purchaseTruck').value = '';
             var plr = document.getElementById('purchaseLRNumber');
             if (plr) plr.value = '';
+            var pkp = document.getElementById('purchaseKaantaParchi');
+            if (pkp) pkp.value = '';
+            const purchaseBrokerageToggle = document.getElementById('purchasePostBrokerageToggle');
+            if (purchaseBrokerageToggle) purchaseBrokerageToggle.checked = false;
+            setPurchaseBrokerageRows([]);
+            togglePurchaseBrokerageSection();
             document.getElementById('purchaseHammali').value = '';
             document.getElementById('purchaseAdvance').value = '';
             var pdEl = document.getElementById('purchaseDiscount');
@@ -8741,6 +9146,9 @@ function onPnLFilterChange() {
             saleEditInventoryReversed = true;
             populateDropdowns();
             
+            // Show the sales form first so init logic runs before prefill.
+            showSalesForm();
+            
             // Fill the form with existing data
             document.getElementById('saleDate').value = (sale.multiDates && sale.multiDates.length > 0) ? sale.multiDates[0] : sale.date;
             document.getElementById('saleInvoice').value = sale.invoice;
@@ -8750,6 +9158,12 @@ function onPnLFilterChange() {
             document.getElementById('saleLRNumber').value = (sale.multiLrNumbers && sale.multiLrNumbers.length > 0) ? sale.multiLrNumbers[0] : (sale.lrNumber || '');
             var skpEl = document.getElementById('saleKaantaParchi');
             if (skpEl) skpEl.value = (sale.multiKaantaParchi && sale.multiKaantaParchi.length > 0) ? sale.multiKaantaParchi[0] : '';
+            const saleBrokerageToggle = document.getElementById('salePostBrokerageToggle');
+            if (saleBrokerageToggle) {
+                saleBrokerageToggle.checked = !!sale.inlineBrokerageEnabled;
+            }
+            setSaleBrokerageRows(sale.inlineBrokerageEntries || []);
+            toggleSaleBrokerageSection();
             document.getElementById('saleHammali').value = sale.hammali || 0;
             document.getElementById('saleAdvance').value = sale.advance || 0;
             
@@ -8761,9 +9175,6 @@ function onPnLFilterChange() {
             // Load linked purchases
             linkedPurchases = normalizeLinkedPurchasesForItems(sale.linkedPurchases ? [...sale.linkedPurchases] : [], currentSaleItems);
             updateLinkedPurchasesDisplay();
-            
-            // Show the sales form
-            showSalesForm();
             
             // Scroll to form
             document.querySelector('#salesEntryView').scrollIntoView({ behavior: 'smooth' });
@@ -8802,6 +9213,12 @@ function onPnLFilterChange() {
             if (scd) scd.classList.add('hidden');
             document.getElementById('saleTruck').value = '';
             document.getElementById('saleLRNumber').value = '';
+            var skp = document.getElementById('saleKaantaParchi');
+            if (skp) skp.value = '';
+            const saleBrokerageToggle = document.getElementById('salePostBrokerageToggle');
+            if (saleBrokerageToggle) saleBrokerageToggle.checked = false;
+            setSaleBrokerageRows([]);
+            toggleSaleBrokerageSection();
             document.getElementById('saleHammali').value = '';
             document.getElementById('saleAdvance').value = '';
             document.getElementById('saleTruckAdvance').value = '';
