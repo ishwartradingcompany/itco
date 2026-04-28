@@ -10,6 +10,27 @@
             return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
+        function collectUniqueNonEmpty(values) {
+            const seen = new Set();
+            const out = [];
+            (values || []).forEach(function(value) {
+                const text = String(value == null ? '' : value).trim();
+                if (!text) return;
+                const key = text.toLowerCase();
+                if (seen.has(key)) return;
+                seen.add(key);
+                out.push(text);
+            });
+            return out;
+        }
+
+        function summarizeMultiValue(values, fallbackText) {
+            const list = collectUniqueNonEmpty(values);
+            if (list.length === 0) return fallbackText || '-';
+            if (list.length === 1) return list[0];
+            return 'Multiple (' + list.length + ')';
+        }
+
         // Audit trail: who/when (uses currentUser from auth.js)
         function getAuditMeta(isNew) {
             const who = (typeof currentUserEmail !== 'undefined' && currentUserEmail) ? currentUserEmail : 'anonymous';
@@ -2342,14 +2363,18 @@ function deleteAllMasters() {
         function addItemToPurchase() {
             const itemId = document.getElementById('purchaseItem').value;
             const supplierId = document.getElementById('purchaseSupplier').value;
+            const date = (document.getElementById('purchaseDate') && document.getElementById('purchaseDate').value) ? document.getElementById('purchaseDate').value : '';
+            const truck = (document.getElementById('purchaseTruck') && document.getElementById('purchaseTruck').value) ? document.getElementById('purchaseTruck').value.trim() : '';
+            const lrNumber = (document.getElementById('purchaseLRNumber') && document.getElementById('purchaseLRNumber').value) ? document.getElementById('purchaseLRNumber').value.trim() : '';
+            const kaantaParchi = (document.getElementById('purchaseKaantaParchi') && document.getElementById('purchaseKaantaParchi').value) ? document.getElementById('purchaseKaantaParchi').value.trim() : '';
             const grossWeight = parseFloat(document.getElementById('purchaseQuantity').value);
             const bags = parseFloat(document.getElementById('purchaseBags').value) || 0;
             const discountQty = parseFloat(document.getElementById('purchaseDiscountQty').value) || 0;
             const rate = parseFloat(document.getElementById('purchaseRate').value) || 0;
             const amount = parseFloat(document.getElementById('purchaseAmount').value) || 0;
             
-            if (!supplierId || !itemId || !grossWeight) {
-                alert('Please select supplier, item and enter gross weight');
+            if (!date || !supplierId || !itemId || !grossWeight) {
+                alert('Please select date, supplier, item and enter gross weight');
                 return;
             }
             
@@ -2400,6 +2425,10 @@ function deleteAllMasters() {
                     : Date.now(),
                 supplierId: supplierId,
                 supplierName: supplier.name,
+                date: date,
+                truck: truck,
+                lrNumber: lrNumber,
+                kaantaParchi: kaantaParchi,
                 itemId: itemId,
                 itemName: item.name,
                 grossWeight: grossWeight,
@@ -2431,6 +2460,8 @@ function deleteAllMasters() {
             document.getElementById('purchaseRate').value = '';
             document.getElementById('purchaseAmount').value = '';
             document.getElementById('purchaseItemTotal').value = '';
+            var pkp = document.getElementById('purchaseKaantaParchi');
+            if (pkp) pkp.value = '';
             document.getElementById('purchaseDiscountQtyContainer').style.display = 'none';
             document.getElementById('purchaseBagsContainer').style.display = 'block';
         }
@@ -2455,6 +2486,12 @@ function deleteAllMasters() {
             document.getElementById('purchaseDiscountQty').value = item.discountQty || 0;
             document.getElementById('purchaseRate').value = item.rate || '';
             document.getElementById('purchaseAmount').value = item.total || '';
+            var pkp = document.getElementById('purchaseKaantaParchi');
+            if (pkp) pkp.value = item.kaantaParchi || '';
+            if (item.date) document.getElementById('purchaseDate').value = item.date;
+            document.getElementById('purchaseTruck').value = item.truck || '';
+            var plrEdit = document.getElementById('purchaseLRNumber');
+            if (plrEdit) plrEdit.value = item.lrNumber || '';
 
             calculatePurchaseTotal();
             document.getElementById('purchaseNetWeight').value = item.netWeight || '';
@@ -2486,6 +2523,8 @@ function deleteAllMasters() {
             document.getElementById('purchaseRate').value = '';
             document.getElementById('purchaseAmount').value = '';
             document.getElementById('purchaseItemTotal').value = '';
+            var pkp = document.getElementById('purchaseKaantaParchi');
+            if (pkp) pkp.value = '';
             if (typeof updatePurchaseInputs === 'function') updatePurchaseInputs();
             updateCurrentPurchaseItemsDisplay();
         }
@@ -2504,7 +2543,7 @@ function deleteAllMasters() {
             tbody.innerHTML = '';
             
             if (currentPurchaseItems.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
                 return;
             }
             
@@ -2523,7 +2562,10 @@ function deleteAllMasters() {
                        <button type="button" class="js-remove-purchase-item text-red-500 hover:text-red-700 font-medium">Remove</button>`;
                 
                 row.innerHTML = `
-                    <td class="px-4 py-3">${item.supplierName || '-'}</td>
+                    <td class="px-4 py-3">
+                        <div>${escapeHtml(item.supplierName || '-')}</div>
+                        <div class="text-xs text-slate-500">${escapeHtml(item.date || '-')} | ${escapeHtml(item.truck || '-')} | ${escapeHtml(item.lrNumber || '-')}</div>
+                    </td>
                     <td class="px-4 py-3">${item.itemName}</td>
                     <td class="px-4 py-3">${item.grossWeight}</td>
                     <td class="px-4 py-3">${bagsDisplay}</td>
@@ -2531,6 +2573,7 @@ function deleteAllMasters() {
                     <td class="px-4 py-3">${item.netWeight}</td>
                     <td class="px-4 py-3">${RU}${item.rate}</td>
                     <td class="px-4 py-3">${RU}${item.total.toFixed(2)}</td>
+                    <td class="px-4 py-3">${escapeHtml(item.kaantaParchi || '-')}</td>
                     <td class="px-4 py-3">${actionCell}</td>
                 `;
                 const editBtn = row.querySelector('.js-edit-purchase-item');
@@ -2825,6 +2868,10 @@ function deleteAllMasters() {
                 // Editing existing purchase
                 const existingPurchase = appData.purchases.find(p => p.id === editingPurchaseId);
                 if (existingPurchase) {
+                    const itemDates = collectUniqueNonEmpty(currentPurchaseItems.map(function(item) { return item.date || date; }));
+                    const itemTrucks = collectUniqueNonEmpty(currentPurchaseItems.map(function(item) { return item.truck || truck; }));
+                    const itemLrNumbers = collectUniqueNonEmpty(currentPurchaseItems.map(function(item) { return item.lrNumber || lrNumber; }));
+                    const itemKaantaParchi = collectUniqueNonEmpty(currentPurchaseItems.map(function(item) { return item.kaantaParchi || ''; }));
                     // Reverse old inventory changes (using gross weight)
                     if (existingPurchase.items) {
                         existingPurchase.items.forEach(item => {
@@ -2839,12 +2886,17 @@ function deleteAllMasters() {
                     }
                     
                     // Update purchase with new data
-                    existingPurchase.date = date;
+                    existingPurchase.date = itemDates[0] || date;
                     existingPurchase.invoice = invoice;
+                    existingPurchase.masterInvoice = existingPurchase.masterInvoice || invoice;
                     existingPurchase.supplierId = supplierId;
                     existingPurchase.supplierName = supplier.name;
-                    existingPurchase.truck = truck;
-                    existingPurchase.lrNumber = lrNumber;
+                    existingPurchase.truck = itemTrucks[0] || truck;
+                    existingPurchase.lrNumber = itemLrNumbers[0] || lrNumber;
+                    existingPurchase.multiDates = itemDates;
+                    existingPurchase.multiTrucks = itemTrucks;
+                    existingPurchase.multiLrNumbers = itemLrNumbers;
+                    existingPurchase.multiKaantaParchi = itemKaantaParchi;
                     existingPurchase.items = [...currentPurchaseItems];
                     existingPurchase.itemsTotal = itemsTotal;
                     existingPurchase.hammali = hammali;
@@ -2932,20 +2984,30 @@ function deleteAllMasters() {
                 allocatedGroups.forEach((group, idx) => {
                     const groupInvoice = singleSupplierEntry && idx === 0
                         ? invoice
-                        : generateNextPurchaseInvoiceNumber(reservedInvoices);
+                        : (invoice + '-' + (idx + 1));
                     const invoiceTrim = (groupInvoice || '').trim().toUpperCase();
                     const duplicatePurchase = appData.purchases.find(p => (p.invoice || '').trim().toUpperCase() === invoiceTrim);
                     if (duplicatePurchase) return;
                     reservedInvoices.add(groupInvoice);
 
+                    const groupDates = collectUniqueNonEmpty(group.items.map(function(item) { return item.date || date; }));
+                    const groupTrucks = collectUniqueNonEmpty(group.items.map(function(item) { return item.truck || truck; }));
+                    const groupLrNumbers = collectUniqueNonEmpty(group.items.map(function(item) { return item.lrNumber || lrNumber; }));
+                    const groupKaantaParchi = collectUniqueNonEmpty(group.items.map(function(item) { return item.kaantaParchi || ''; }));
+
                     const purchase = {
                         id: Date.now() + idx,
-                        date: date,
+                        date: groupDates[0] || date,
                         invoice: groupInvoice,
+                        masterInvoice: invoice,
                         supplierId: group.supplierId,
                         supplierName: group.supplierName,
-                        truck: truck,
-                        lrNumber: lrNumber,
+                        truck: groupTrucks[0] || truck,
+                        lrNumber: groupLrNumbers[0] || lrNumber,
+                        multiDates: groupDates,
+                        multiTrucks: groupTrucks,
+                        multiLrNumbers: groupLrNumbers,
+                        multiKaantaParchi: groupKaantaParchi,
                         items: [...group.items],
                         itemsTotal: +group.itemsTotal.toFixed(2),
                         hammali: +group.hammali.toFixed(2),
@@ -3018,6 +3080,8 @@ function deleteAllMasters() {
             document.getElementById('purchaseTruck').value = '';
             var plr = document.getElementById('purchaseLRNumber');
             if (plr) plr.value = '';
+            var pkp = document.getElementById('purchaseKaantaParchi');
+            if (pkp) pkp.value = '';
             document.getElementById('purchaseHammali').value = '';
             document.getElementById('purchaseAdvance').value = '';
             var pdEl = document.getElementById('purchaseDiscount');
@@ -3287,6 +3351,8 @@ function deleteAllMasters() {
                 const paid = purchase.paid || 0;
                 const currentBalance = grandTotal - paid;
                 purchase.balance = currentBalance;
+                const purchaseDateText = summarizeMultiValue(purchase.multiDates || [purchase.date], purchase.date || '-');
+                const purchaseTruckText = summarizeMultiValue(purchase.multiTrucks || [purchase.truck], purchase.truck || '-');
                 var linkedSales = (appData.sales || []).filter(function(s) {
                     return s.linkedPurchases && s.linkedPurchases.some(function(lp) {
                         return String(lp.purchaseId) === String(purchase.id);
@@ -3298,15 +3364,15 @@ function deleteAllMasters() {
                 row.className = 'hover:bg-blue-50/50 transition-colors';
                 row.innerHTML = `
                     <td class="px-4 py-3 text-sm">
-                        <span class="text-slate-600">${purchase.date}</span>
+                        <span class="text-slate-600">${escapeHtml(purchaseDateText)}</span>
                     </td>
                     <td class="px-4 py-3">
-                        <span class="font-mono text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">${purchase.invoice}</span>${linkedBadge}
+                        <span class="font-mono text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">${purchase.masterInvoice || purchase.invoice}</span>${linkedBadge}
                     </td>
                     <td class="px-4 py-3">
                         <span class="font-medium text-slate-700 text-sm">${escapeHtml(purchase.supplierName)}</span>
                     </td>
-                    <td class="px-4 py-3 text-sm text-slate-500">${purchase.truck || '-'}</td>
+                    <td class="px-4 py-3 text-sm text-slate-500">${escapeHtml(purchaseTruckText)}</td>
                     <td class="px-4 py-3">
                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
                             ${itemsText}
@@ -3858,13 +3924,17 @@ function deleteAllMasters() {
 
         function addItemToSale() {
             const itemId = document.getElementById('saleItem').value;
+            const date = (document.getElementById('saleDate') && document.getElementById('saleDate').value) ? document.getElementById('saleDate').value : '';
+            const truck = (document.getElementById('saleTruck') && document.getElementById('saleTruck').value) ? document.getElementById('saleTruck').value.trim() : '';
+            const lrNumber = (document.getElementById('saleLRNumber') && document.getElementById('saleLRNumber').value) ? document.getElementById('saleLRNumber').value.trim() : '';
+            const kaantaParchi = (document.getElementById('saleKaantaParchi') && document.getElementById('saleKaantaParchi').value) ? document.getElementById('saleKaantaParchi').value.trim() : '';
             const grossWeight = parseFloat(document.getElementById('saleQuantity').value);
             const bags = parseFloat(document.getElementById('saleBags').value) || 0;
             const discountQty = parseFloat(document.getElementById('saleDiscountQty').value) || 0;
             const rate = parseFloat(document.getElementById('saleRate').value);
             
-            if (!itemId || !grossWeight || !rate) {
-                alert('Please select item, enter gross weight and rate');
+            if (!date || !itemId || !grossWeight || !rate) {
+                alert('Please select date, item, enter gross weight and rate');
                 return;
             }
             
@@ -3906,6 +3976,10 @@ function deleteAllMasters() {
                     : Date.now(),
                 itemId: itemId,
                 itemName: item.name,
+                date: date,
+                truck: truck,
+                lrNumber: lrNumber,
+                kaantaParchi: kaantaParchi,
                 grossWeight: grossWeight, // Gross quantity to be deducted from inventory
                 bags: bags,
                 netWeight: netWeight, // Net quantity after discount (for display)
@@ -3935,6 +4009,8 @@ function deleteAllMasters() {
             document.getElementById('saleRate').value = '';
             document.getElementById('saleItemTotal').value = '';
             document.getElementById('availableStock').textContent = 'Available: 0';
+            var skp = document.getElementById('saleKaantaParchi');
+            if (skp) skp.value = '';
             document.getElementById('saleDiscountQtyContainer').style.display = 'none';
         }
 
@@ -3967,6 +4043,11 @@ function deleteAllMasters() {
             document.getElementById('saleDiscount').value = item.isCoconut ? 0 : (item.bags || 0);
             document.getElementById('saleDiscountQty').value = item.discountQty || 0;
             document.getElementById('saleRate').value = item.rate || '';
+            var skp = document.getElementById('saleKaantaParchi');
+            if (skp) skp.value = item.kaantaParchi || '';
+            if (item.date) document.getElementById('saleDate').value = item.date;
+            document.getElementById('saleTruck').value = item.truck || '';
+            document.getElementById('saleLRNumber').value = item.lrNumber || '';
 
             // Let the shared auto-calc compute Net Weight & Item Total (same as new entry).
             calculateSaleItemTotal();
@@ -3998,6 +4079,8 @@ function deleteAllMasters() {
             document.getElementById('saleRate').value = '';
             document.getElementById('saleItemTotal').value = '';
             document.getElementById('availableStock').textContent = 'Available: 0';
+            var skp = document.getElementById('saleKaantaParchi');
+            if (skp) skp.value = '';
             document.getElementById('saleDiscountQtyContainer').style.display = 'none';
             updateCurrentSaleItemsDisplay();
         }
@@ -4016,7 +4099,7 @@ function deleteAllMasters() {
             tbody.innerHTML = '';
             
             if (currentSaleItems.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
                 return;
             }
             
@@ -4037,12 +4120,16 @@ function deleteAllMasters() {
                        <button onclick="removeItemFromSale(${index})" class="text-red-500 hover:text-red-700 font-medium">Remove</button>`;
 
                 row.innerHTML = `
-                    <td class="px-4 py-3">${item.itemName}</td>
+                    <td class="px-4 py-3">
+                        <div>${item.itemName}</div>
+                        <div class="text-xs text-slate-500">${escapeHtml(item.date || '-')} | ${escapeHtml(item.truck || '-')} | ${escapeHtml(item.lrNumber || '-')}</div>
+                    </td>
                     <td class="px-4 py-3">${item.grossWeight}</td>
                     ${middleColumn}
                     <td class="px-4 py-3">${item.netWeight}</td>
                     <td class="px-4 py-3">${RU}${item.rate}</td>
                     <td class="px-4 py-3">${RU}${item.total.toFixed(2)}</td>
+                    <td class="px-4 py-3">${escapeHtml(item.kaantaParchi || '-')}</td>
                     <td class="px-4 py-3">${actionCell}</td>
                 `;
                 tbody.appendChild(row);
@@ -4190,6 +4277,10 @@ function deleteAllMasters() {
                 alert('Selected customer not found');
                 return;
             }
+            const itemDates = collectUniqueNonEmpty(currentSaleItems.map(function(item) { return item.date || date; }));
+            const itemTrucks = collectUniqueNonEmpty(currentSaleItems.map(function(item) { return item.truck || truck; }));
+            const itemLrNumbers = collectUniqueNonEmpty(currentSaleItems.map(function(item) { return item.lrNumber || lrNumber; }));
+            const itemKaantaParchi = collectUniqueNonEmpty(currentSaleItems.map(function(item) { return item.kaantaParchi || ''; }));
             // Mandatory item-wise purchase linking for sale items.
             linkedPurchases = normalizeLinkedPurchasesForItems(linkedPurchases, currentSaleItems);
             if (!linkedPurchases.length) {
@@ -4294,8 +4385,14 @@ function deleteAllMasters() {
                     existingSale.invoice = invoice;
                     existingSale.customerId = customerId;
                     existingSale.customerName = customer.name;
-                    existingSale.truck = truck;
-                    existingSale.lrNumber = lrNumber;
+                    existingSale.date = itemDates[0] || date;
+                    existingSale.truck = itemTrucks[0] || truck;
+                    existingSale.lrNumber = itemLrNumbers[0] || lrNumber;
+                    existingSale.masterInvoice = existingSale.masterInvoice || invoice;
+                    existingSale.multiDates = itemDates;
+                    existingSale.multiTrucks = itemTrucks;
+                    existingSale.multiLrNumbers = itemLrNumbers;
+                    existingSale.multiKaantaParchi = itemKaantaParchi;
                     existingSale.items = [...currentSaleItems];
                     existingSale.itemsTotal = itemsTotal;
                     existingSale.hammali = hammali;
@@ -4317,12 +4414,17 @@ function deleteAllMasters() {
                 // Creating new sale
                 const sale = {
                     id: Date.now(),
-                    date: date,
+                    date: itemDates[0] || date,
                     invoice: invoice,
+                    masterInvoice: invoice,
                     customerId: customerId,
                     customerName: customer.name,
-                    truck: truck,
-                    lrNumber: lrNumber,
+                    truck: itemTrucks[0] || truck,
+                    lrNumber: itemLrNumbers[0] || lrNumber,
+                    multiDates: itemDates,
+                    multiTrucks: itemTrucks,
+                    multiLrNumbers: itemLrNumbers,
+                    multiKaantaParchi: itemKaantaParchi,
                     items: [...currentSaleItems],
                     itemsTotal: itemsTotal,
                     hammali: hammali,
@@ -4382,6 +4484,8 @@ function deleteAllMasters() {
             if (scd) scd.classList.add('hidden');
             document.getElementById('saleTruck').value = '';
             document.getElementById('saleLRNumber').value = '';
+            var skp = document.getElementById('saleKaantaParchi');
+            if (skp) skp.value = '';
             document.getElementById('saleHammali').value = '';
             document.getElementById('saleAdvance').value = '';
             document.getElementById('saleTruckAdvance').value = '';
@@ -5094,20 +5198,22 @@ function deleteAllMasters() {
                 const received = sale.received || 0;
                 const currentBalance = grandTotal - received;
                 sale.balance = currentBalance;
+                const saleDateText = summarizeMultiValue(sale.multiDates || [sale.date], sale.date || '-');
+                const saleTruckText = summarizeMultiValue(sale.multiTrucks || [sale.truck], sale.truck || '-');
                 
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-green-50/50 transition-colors';
                 row.innerHTML = `
                     <td class="px-4 py-3 text-sm">
-                        <span class="text-slate-600">${sale.date}</span>
+                        <span class="text-slate-600">${escapeHtml(saleDateText)}</span>
                     </td>
                     <td class="px-4 py-3">
-                        <span class="font-mono text-sm font-medium text-green-600 bg-green-50 px-2 py-1 rounded">${sale.invoice}</span>
+                        <span class="font-mono text-sm font-medium text-green-600 bg-green-50 px-2 py-1 rounded">${sale.masterInvoice || sale.invoice}</span>
                     </td>
                     <td class="px-4 py-3">
                         <span class="font-medium text-slate-700 text-sm">${escapeHtml(sale.customerName)}</span>
                     </td>
-                    <td class="px-4 py-3 text-sm text-slate-500">${sale.truck || '-'}</td>
+                    <td class="px-4 py-3 text-sm text-slate-500">${escapeHtml(saleTruckText)}</td>
                     <td class="px-4 py-3">
                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
                             ${itemsText}
@@ -7779,6 +7885,10 @@ function onPnLFilterChange() {
         function buildPurchaseInvoiceHtml(purchase) {
             if (!purchase) return '';
             const company = appData.company;
+            const purchaseInvoiceText = purchase.masterInvoice || purchase.invoice;
+            const purchaseDateText = collectUniqueNonEmpty(purchase.multiDates || [purchase.date]).join(', ') || (purchase.date || '-');
+            const purchaseTruckText = collectUniqueNonEmpty(purchase.multiTrucks || [purchase.truck]).join(', ') || (purchase.truck || '-');
+            const purchaseLrText = collectUniqueNonEmpty(purchase.multiLrNumbers || [purchase.lrNumber]).join(', ') || (purchase.lrNumber || '-');
             
             let itemsHtml = '';
             if (purchase.items) {
@@ -7794,6 +7904,7 @@ function onPnLFilterChange() {
                             <td class="inv-td text-center">${item.netWeight}</td>
                             <td class="inv-td text-right">${RU}${item.rate}</td>
                             <td class="inv-td text-right">${RU}${item.total.toFixed(2)}</td>
+                            <td class="inv-td">${escapeHtml(item.kaantaParchi || '-')}</td>
                         </tr>
                     `;
                 });
@@ -7842,7 +7953,7 @@ function onPnLFilterChange() {
             return `
                 <html>
                 <head>
-                    <title>Purchase Invoice - ${purchase.invoice}</title>
+                    <title>Purchase Invoice - ${purchaseInvoiceText}</title>
                     <style>
                         * { box-sizing: border-box; }
                         body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
@@ -7897,10 +8008,10 @@ function onPnLFilterChange() {
                             ${supplier && supplier.account ? `<div style="font-size:12px;">Account: ${supplier.account}${supplier.ifsc ? ' | IFSC: ' + supplier.ifsc : ''}</div>` : ''}
                         </div>
                         <div class="inv-meta-box">
-                            <div><strong>Invoice No:</strong> ${purchase.invoice}</div>
-                            <div><strong>Date:</strong> ${purchase.date}</div>
-                            <div><strong>Truck No:</strong> ${purchase.truck || '—'}</div>
-                            <div><strong>LR Number:</strong> ${purchase.lrNumber || '—'}</div>
+                            <div><strong>Invoice No:</strong> ${purchaseInvoiceText}</div>
+                            <div><strong>Date:</strong> ${escapeHtml(purchaseDateText)}</div>
+                            <div><strong>Truck No:</strong> ${escapeHtml(purchaseTruckText)}</div>
+                            <div><strong>LR Number:</strong> ${escapeHtml(purchaseLrText)}</div>
                         </div>
                     </div>
                     <table class="inv-table">
@@ -7913,6 +8024,7 @@ function onPnLFilterChange() {
                                 <th class="text-center">Net Wt</th>
                                 <th class="text-right">Rate</th>
                                 <th class="text-right">Amount</th>
+                                <th>Kaanta Parchi</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -7956,6 +8068,10 @@ function onPnLFilterChange() {
         function buildSaleInvoiceHtml(sale) {
             if (!sale) return '';
             const company = appData.company;
+            const saleInvoiceText = sale.masterInvoice || sale.invoice;
+            const saleDateText = collectUniqueNonEmpty(sale.multiDates || [sale.date]).join(', ') || (sale.date || '-');
+            const saleTruckText = collectUniqueNonEmpty(sale.multiTrucks || [sale.truck]).join(', ') || (sale.truck || '-');
+            const saleLrText = collectUniqueNonEmpty(sale.multiLrNumbers || [sale.lrNumber]).join(', ') || (sale.lrNumber || '-');
             
             let itemsHtml = '';
             if (sale.items) {
@@ -7973,6 +8089,7 @@ function onPnLFilterChange() {
                             <td class="border px-2 py-1 text-center">${item.netWeight}</td>
                             <td class="border px-2 py-1 text-right">${RU}${item.rate}</td>
                             <td class="border px-2 py-1 text-right">${RU}${item.total.toFixed(2)}</td>
+                            <td class="border px-2 py-1">${escapeHtml(item.kaantaParchi || '-')}</td>
                         </tr>
                     `;
                 });
@@ -8045,7 +8162,7 @@ function onPnLFilterChange() {
             return `
                 <html>
                 <head>
-                    <title>Sale Invoice - ${sale.invoice}</title>
+                    <title>Sale Invoice - ${saleInvoiceText}</title>
                     <style>
                         body { font-family: Arial, sans-serif; margin: 20px; }
                         .header { text-align: center; margin-bottom: 20px; }
@@ -8068,10 +8185,10 @@ function onPnLFilterChange() {
                     <div class="invoice-details">
                         <div style="display: flex; justify-content: space-between;">
                             <div>
-                                <strong>Invoice No:</strong> ${sale.invoice}<br>
-                                <strong>Date:</strong> ${sale.date}<br>
-                                <strong>Truck No:</strong> ${sale.truck || 'N/A'}<br>
-                                <strong>LR Number:</strong> ${sale.lrNumber || 'N/A'}
+                                <strong>Invoice No:</strong> ${saleInvoiceText}<br>
+                                <strong>Date:</strong> ${escapeHtml(saleDateText)}<br>
+                                <strong>Truck No:</strong> ${escapeHtml(saleTruckText)}<br>
+                                <strong>LR Number:</strong> ${escapeHtml(saleLrText)}
                             </div>
                             <div>
                                 <strong>Customer:</strong> ${sale.customerName}
@@ -8114,6 +8231,7 @@ function onPnLFilterChange() {
                                 <th class="border px-2 py-1">Net Weight</th>
                                 <th class="border px-2 py-1">Rate</th>
                                 <th class="border px-2 py-1">Amount</th>
+                                <th class="border px-2 py-1">Kaanta Parchi</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -8210,6 +8328,9 @@ function onPnLFilterChange() {
                 alert('Purchase not found');
                 return;
             }
+            const purchaseDateText = summarizeMultiValue(purchase.multiDates || [purchase.date], purchase.date || 'N/A');
+            const purchaseTruckText = summarizeMultiValue(purchase.multiTrucks || [purchase.truck], purchase.truck || 'N/A');
+            const purchaseLrText = summarizeMultiValue(purchase.multiLrNumbers || [purchase.lrNumber], purchase.lrNumber || 'N/A');
             
             // Build items table
             let itemsTable = '';
@@ -8225,6 +8346,7 @@ function onPnLFilterChange() {
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Net Wt</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Rate</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Amount</th>
+                                <th class="border border-slate-300 px-3 py-2 text-left text-sm">Kaanta Parchi</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -8241,6 +8363,7 @@ function onPnLFilterChange() {
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.netWeight} ${unit}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${item.rate.toFixed(2)}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm font-semibold">${RU}${item.total.toFixed(2)}</td>
+                                    <td class="border border-slate-300 px-3 py-2 text-sm">${escapeHtml(item.kaantaParchi || '-')}</td>
                                 </tr>
                             `; }).join('')}
                         </tbody>
@@ -8280,13 +8403,13 @@ function onPnLFilterChange() {
                 <div class="text-left">
                     <div class="bg-blue-50 border-l-4 border-blue-600 p-4 mb-4 rounded">
                         <h3 class="text-xl font-bold text-slate-900 mb-1">Purchase Invoice</h3>
-                        <p class="text-sm text-slate-600">Invoice No: ${purchase.invoice}</p>
+                        <p class="text-sm text-slate-600">Invoice No: ${purchase.masterInvoice || purchase.invoice}</p>
                     </div>
                     
                     <div class="grid grid-cols-2 gap-4 mb-4 bg-slate-50 p-4 rounded">
                         <div>
                             <p class="text-xs text-slate-500 uppercase tracking-wide">Date</p>
-                            <p class="font-semibold text-slate-900">${purchase.date}</p>
+                            <p class="font-semibold text-slate-900">${escapeHtml(purchaseDateText)}</p>
                         </div>
                         <div>
                             <p class="text-xs text-slate-500 uppercase tracking-wide">Supplier</p>
@@ -8294,15 +8417,15 @@ function onPnLFilterChange() {
                         </div>
                         <div>
                             <p class="text-xs text-slate-500 uppercase tracking-wide">Truck No</p>
-                            <p class="font-semibold text-slate-900">${purchase.truck || 'N/A'}</p>
+                            <p class="font-semibold text-slate-900">${escapeHtml(purchaseTruckText)}</p>
                         </div>
                         <div>
                             <p class="text-xs text-slate-500 uppercase tracking-wide">LR Number</p>
-                            <p class="font-semibold text-slate-900">${purchase.lrNumber || 'N/A'}</p>
+                            <p class="font-semibold text-slate-900">${escapeHtml(purchaseLrText)}</p>
                         </div>
                         <div>
                             <p class="text-xs text-slate-500 uppercase tracking-wide">Invoice No</p>
-                            <p class="font-semibold text-slate-900">${purchase.invoice}</p>
+                            <p class="font-semibold text-slate-900">${purchase.masterInvoice || purchase.invoice}</p>
                         </div>
                     </div>
                     
@@ -8354,13 +8477,15 @@ function onPnLFilterChange() {
             editingPurchaseId = purchaseId;
             
             // Fill the form with existing data
-            document.getElementById('purchaseDate').value = purchase.date;
+            document.getElementById('purchaseDate').value = (purchase.multiDates && purchase.multiDates.length > 0) ? purchase.multiDates[0] : purchase.date;
             document.getElementById('purchaseInvoice').value = purchase.invoice;
             document.getElementById('purchaseSupplier').value = purchase.supplierId;
             syncPurchaseSupplierDisplay();
-            document.getElementById('purchaseTruck').value = purchase.truck || '';
+            document.getElementById('purchaseTruck').value = (purchase.multiTrucks && purchase.multiTrucks.length > 0) ? purchase.multiTrucks[0] : (purchase.truck || '');
             var plrEl = document.getElementById('purchaseLRNumber');
-            if (plrEl) plrEl.value = purchase.lrNumber || '';
+            if (plrEl) plrEl.value = (purchase.multiLrNumbers && purchase.multiLrNumbers.length > 0) ? purchase.multiLrNumbers[0] : (purchase.lrNumber || '');
+            var pkpEl = document.getElementById('purchaseKaantaParchi');
+            if (pkpEl) pkpEl.value = (purchase.multiKaantaParchi && purchase.multiKaantaParchi.length > 0) ? purchase.multiKaantaParchi[0] : '';
             document.getElementById('purchaseHammali').value = purchase.hammali || 0;
             document.getElementById('purchaseAdvance').value = purchase.advance || 0;
             const totalModeRadio = document.getElementById('purchaseChargeModeTotal');
@@ -8463,6 +8588,9 @@ function onPnLFilterChange() {
                 alert('Sale not found');
                 return;
             }
+            const saleDateText = summarizeMultiValue(sale.multiDates || [sale.date], sale.date || 'N/A');
+            const saleTruckText = summarizeMultiValue(sale.multiTrucks || [sale.truck], sale.truck || 'N/A');
+            const saleLrText = summarizeMultiValue(sale.multiLrNumbers || [sale.lrNumber], sale.lrNumber || 'N/A');
             
             // Build items table
             let itemsTable = '';
@@ -8477,6 +8605,7 @@ function onPnLFilterChange() {
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Net Wt</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Rate</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Amount</th>
+                                <th class="border border-slate-300 px-3 py-2 text-left text-sm">Kaanta Parchi</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -8488,6 +8617,7 @@ function onPnLFilterChange() {
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${item.netWeight} ${item.unit}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${item.rate.toFixed(2)}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm font-semibold">${RU}${item.total.toFixed(2)}</td>
+                                    <td class="border border-slate-300 px-3 py-2 text-sm">${escapeHtml(item.kaantaParchi || '-')}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -8527,13 +8657,13 @@ function onPnLFilterChange() {
                 <div class="text-left">
                     <div class="bg-blue-50 border-l-4 border-blue-600 p-4 mb-4 rounded">
                         <h3 class="text-xl font-bold text-slate-900 mb-1">Sale Invoice</h3>
-                        <p class="text-sm text-slate-600">Invoice No: ${sale.invoice}</p>
+                        <p class="text-sm text-slate-600">Invoice No: ${sale.masterInvoice || sale.invoice}</p>
                     </div>
                     
                     <div class="grid grid-cols-2 gap-4 mb-4 bg-slate-50 p-4 rounded">
                         <div>
                             <p class="text-xs text-slate-500 uppercase tracking-wide">Date</p>
-                            <p class="font-semibold text-slate-900">${sale.date}</p>
+                            <p class="font-semibold text-slate-900">${escapeHtml(saleDateText)}</p>
                         </div>
                         <div>
                             <p class="text-xs text-slate-500 uppercase tracking-wide">Customer</p>
@@ -8541,11 +8671,15 @@ function onPnLFilterChange() {
                         </div>
                         <div>
                             <p class="text-xs text-slate-500 uppercase tracking-wide">Truck No</p>
-                            <p class="font-semibold text-slate-900">${sale.truck || 'N/A'}</p>
+                            <p class="font-semibold text-slate-900">${escapeHtml(saleTruckText)}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500 uppercase tracking-wide">LR Number</p>
+                            <p class="font-semibold text-slate-900">${escapeHtml(saleLrText)}</p>
                         </div>
                         <div>
                             <p class="text-xs text-slate-500 uppercase tracking-wide">Invoice No</p>
-                            <p class="font-semibold text-slate-900">${sale.invoice}</p>
+                            <p class="font-semibold text-slate-900">${sale.masterInvoice || sale.invoice}</p>
                         </div>
                     </div>
                     
@@ -8608,11 +8742,14 @@ function onPnLFilterChange() {
             populateDropdowns();
             
             // Fill the form with existing data
-            document.getElementById('saleDate').value = sale.date;
+            document.getElementById('saleDate').value = (sale.multiDates && sale.multiDates.length > 0) ? sale.multiDates[0] : sale.date;
             document.getElementById('saleInvoice').value = sale.invoice;
             document.getElementById('saleCustomer').value = sale.customerId;
             syncSaleCustomerDisplay();
-            document.getElementById('saleTruck').value = sale.truck || '';
+            document.getElementById('saleTruck').value = (sale.multiTrucks && sale.multiTrucks.length > 0) ? sale.multiTrucks[0] : (sale.truck || '');
+            document.getElementById('saleLRNumber').value = (sale.multiLrNumbers && sale.multiLrNumbers.length > 0) ? sale.multiLrNumbers[0] : (sale.lrNumber || '');
+            var skpEl = document.getElementById('saleKaantaParchi');
+            if (skpEl) skpEl.value = (sale.multiKaantaParchi && sale.multiKaantaParchi.length > 0) ? sale.multiKaantaParchi[0] : '';
             document.getElementById('saleHammali').value = sale.hammali || 0;
             document.getElementById('saleAdvance').value = sale.advance || 0;
             
