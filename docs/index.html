@@ -1339,8 +1339,10 @@
                             <input type="text" id="coldMoveRemarks" placeholder="Notes / lot details" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         </div>
                     </div>
-                    <div class="mt-4">
-                        <button type="button" onclick="moveToColdStorage()" class="bg-primary text-white px-5 py-2 rounded-lg hover:bg-green-700 transition-colors">Move to Cold</button>
+                    <div class="mt-4 flex flex-wrap items-center gap-3">
+                        <button type="button" id="coldMoveSubmitBtn" onclick="moveToColdStorage()" class="bg-primary text-white px-5 py-2 rounded-lg hover:bg-green-700 transition-colors">Move to Cold</button>
+                        <button type="button" id="coldMoveCancelBtn" onclick="cancelColdLotEdit()" class="hidden px-5 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">Cancel Edit</button>
+                        <span id="coldMoveModeLabel" class="hidden text-sm text-amber-700 font-medium">Editing existing cold lot</span>
                     </div>
                 </div>
 
@@ -1405,6 +1407,10 @@
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-2">Other Charge</label>
                             <input type="number" id="coldLotEditOtherCharge" min="0" step="any" oninput="calculateColdLotEditEstimatedTotals()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Paid at Move</label>
+                            <input type="number" id="coldLotEditPaidAtMove" min="0" step="any" oninput="calculateColdLotEditEstimatedTotals()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         </div>
                         <div class="md:col-span-2 lg:col-span-4">
                             <label class="block text-sm font-medium text-slate-700 mb-2">Remarks</label>
