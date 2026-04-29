@@ -9990,7 +9990,7 @@ function onPnLFilterChange() {
             // Subtract all receipts (credit from customer)
             appData.payments
                 .filter(p => (p.type === 'sale' && appData.sales.find(s => s.id === p.invoiceId && String(s.customerId) === String(customerId))) || 
-                            (p.type === 'ledger_payment' && p.entityType === 'customer' && String(p.entityId) === String(customerId)))
+                            ((p.type === 'ledger_receipt' || p.type === 'ledger_payment') && p.entityType === 'customer' && String(p.entityId) === String(customerId)))
                 .forEach(payment => {
                     // For customer payments, positive amount means they paid us (reduces their balance)
                     balance -= Math.abs(payment.amount);
@@ -10045,41 +10045,8 @@ function onPnLFilterChange() {
             
             const supplier = appData.suppliers.find(s => s.id == purchase.supplierId);
             
-            // Calculate ledger balance with detailed breakdown
-            let ledgerBalance = 0;
-            let openingTotal = 0;
-            let purchasesTotal = 0;
-            let paymentsTotal = 0;
-            
-            // Count opening balances - ensure array exists and is not null
-            if (appData.openingBalances && Array.isArray(appData.openingBalances) && appData.openingBalances.length > 0) {
-                appData.openingBalances
-                    .filter(ob => ob.entityType === 'supplier' && String(ob.entityId) === String(purchase.supplierId))
-                    .forEach(opening => {
-                        openingTotal += opening.amount || 0;
-                    });
-            }
-            
-            // Count purchases
-            if (appData.purchases && Array.isArray(appData.purchases)) {
-                appData.purchases
-                    .filter(p => String(p.supplierId) === String(purchase.supplierId))
-                    .forEach(p => {
-                        purchasesTotal += p.grandTotal || p.total || 0;
-                    });
-            }
-            
-            // Count payments
-            if (appData.payments && Array.isArray(appData.payments)) {
-                appData.payments
-                    .filter(p => (p.type === 'purchase' && appData.purchases.find(pur => pur.id === p.invoiceId && String(pur.supplierId) === String(purchase.supplierId))) || 
-                                (p.type === 'ledger_payment' && p.entityType === 'supplier' && String(p.entityId) === String(purchase.supplierId)))
-                    .forEach(payment => {
-                        paymentsTotal += payment.amount || 0;
-                    });
-            }
-            
-            ledgerBalance = openingTotal + purchasesTotal - paymentsTotal;
+            // Keep printed balance exactly aligned with ledger page calculations.
+            const ledgerBalance = getSupplierLedgerBalance(purchase.supplierId);
             
             const amountInWords = numberToWords(purchase.grandTotal || purchase.total || 0);
             
@@ -10230,65 +10197,8 @@ function onPnLFilterChange() {
             
             const customer = appData.customers.find(c => c.id == sale.customerId);
             
-            // DEBUG: Log opening balances data
-            console.log('=== INVOICE PRINT DEBUG ===');
-            console.log('Customer ID:', sale.customerId);
-            console.log('appData.openingBalances:', appData.openingBalances);
-            console.log('Is Array?:', Array.isArray(appData.openingBalances));
-            console.log('Length:', appData.openingBalances ? appData.openingBalances.length : 'undefined');
-            
-            // Calculate ledger balance with detailed breakdown
-            let ledgerBalance = 0;
-            let openingTotal = 0;
-            let salesTotal = 0;
-            let paymentsTotal = 0;
-            let deductionsTotal = 0;
-            
-            // Count opening balances - ensure array exists and is not null
-            if (appData.openingBalances && Array.isArray(appData.openingBalances) && appData.openingBalances.length > 0) {
-                const filteredOpenings = appData.openingBalances.filter(ob => ob.entityType === 'customer' && String(ob.entityId) === String(sale.customerId));
-                console.log('Filtered openings for this customer:', filteredOpenings);
-                
-                filteredOpenings.forEach(opening => {
-                    openingTotal += opening.amount || 0;
-                    console.log('Adding opening balance:', opening.amount, 'Total now:', openingTotal);
-                });
-            } else {
-                console.log('No opening balances found or array is empty');
-            }
-            
-            console.log('Final openingTotal:', openingTotal);
-            console.log('===========================');
-            
-            // Count sales
-            if (appData.sales && Array.isArray(appData.sales)) {
-                appData.sales
-                    .filter(s => String(s.customerId) === String(sale.customerId))
-                    .forEach(s => {
-                        salesTotal += s.grandTotal || s.total || 0;
-                    });
-            }
-            
-            // Count payments
-            if (appData.payments && Array.isArray(appData.payments)) {
-                appData.payments
-                    .filter(p => (p.type === 'sale' && appData.sales.find(s => s.id === p.invoiceId && String(s.customerId) === String(sale.customerId))) || 
-                                (p.type === 'ledger_payment' && p.entityType === 'customer' && String(p.entityId) === String(sale.customerId)))
-                    .forEach(payment => {
-                        paymentsTotal += Math.abs(payment.amount) || 0;
-                    });
-            }
-            
-            // Count deductions
-            if (appData.deductions && Array.isArray(appData.deductions)) {
-                appData.deductions
-                    .filter(d => String(d.customerId) === String(sale.customerId))
-                    .forEach(deduction => {
-                        deductionsTotal += deduction.amount || 0;
-                    });
-            }
-            
-            ledgerBalance = openingTotal + salesTotal - paymentsTotal - deductionsTotal;
+            // Keep printed balance exactly aligned with ledger page calculations.
+            const ledgerBalance = getCustomerLedgerBalance(sale.customerId);
             
             const amountInWords = numberToWords(sale.grandTotal || sale.total || 0);
             
