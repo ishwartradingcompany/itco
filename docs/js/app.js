@@ -4391,6 +4391,44 @@ function deleteAllMasters() {
             return total;
         }
 
+        function setColdMoveEditMode(isEditing) {
+            const submitBtn = document.getElementById('coldMoveSubmitBtn');
+            const cancelBtn = document.getElementById('coldMoveCancelBtn');
+            const modeLabel = document.getElementById('coldMoveModeLabel');
+            const itemSelect = document.getElementById('coldMoveItem');
+            if (submitBtn) submitBtn.textContent = isEditing ? 'Update Cold Lot' : 'Move to Cold';
+            if (cancelBtn) cancelBtn.classList.toggle('hidden', !isEditing);
+            if (modeLabel) modeLabel.classList.toggle('hidden', !isEditing);
+            if (itemSelect) itemSelect.disabled = !!isEditing;
+        }
+
+        function resetColdMoveForm() {
+            const moveDateEl = document.getElementById('coldMoveDate');
+            const itemEl = document.getElementById('coldMoveItem');
+            const qtyEl = document.getElementById('coldMoveQty');
+            const bagsEl = document.getElementById('coldMoveBags');
+            const storageEl = document.getElementById('coldMoveStorageName');
+            const vendorEl = document.getElementById('coldMoveVendorName');
+            const rentEl = document.getElementById('coldMoveRentPerKg');
+            const inOutEl = document.getElementById('coldMoveInOutPerBag');
+            const otherEl = document.getElementById('coldMoveOtherCharge');
+            const paidEl = document.getElementById('coldMovePaidAtMove');
+            const remarksEl = document.getElementById('coldMoveRemarks');
+            if (moveDateEl) moveDateEl.value = new Date().toISOString().split('T')[0];
+            if (itemEl) itemEl.value = '';
+            if (qtyEl) qtyEl.value = '';
+            if (bagsEl) bagsEl.value = '';
+            if (storageEl) storageEl.value = '';
+            if (vendorEl) vendorEl.value = '';
+            if (rentEl) rentEl.value = '';
+            if (inOutEl) inOutEl.value = '';
+            if (otherEl) otherEl.value = '';
+            if (paidEl) paidEl.value = '';
+            if (remarksEl) remarksEl.value = '';
+            calculateColdMoveEstimatedTotals();
+            onColdMoveItemChange();
+        }
+
         function moveToColdStorage() {
             const date = (document.getElementById('coldMoveDate') && document.getElementById('coldMoveDate').value) || '';
             const itemId = (document.getElementById('coldMoveItem') && document.getElementById('coldMoveItem').value) || '';
@@ -4405,6 +4443,90 @@ function deleteAllMasters() {
             const remarks = (document.getElementById('coldMoveRemarks') && document.getElementById('coldMoveRemarks').value || '').trim();
             if (!date || !itemId || qty <= 0 || !coldStorageName || !vendorName) {
                 alert('Please fill date, item, quantity, cold storage name, and vendor name.');
+                return;
+            }
+            if (editingColdLotId != null) {
+                const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(editingColdLotId); });
+                if (!lot) {
+                    alert('Cold lot not found.');
+                    cancelColdLotEdit();
+                    return;
+                }
+                if (!canEditOrRemoveColdLot(lot)) {
+                    alert('This lot cannot be edited now because it already has release, damage, charges, or payment activity.');
+                    cancelColdLotEdit();
+                    return;
+                }
+                if (String(itemId) !== String(lot.itemId)) {
+                    alert('Item cannot be changed during edit.');
+                    return;
+                }
+                const estimatedTotalCharge = calculateColdMoveEstimatedTotals();
+                if (paidAtMove > estimatedTotalCharge) {
+                    alert('Paid at move cannot exceed estimated total charge.');
+                    return;
+                }
+                const previousQty = Math.max(0, parseFloat(lot.qtyInCold) || 0);
+                const unitCost = previousQty > 0 ? ((parseFloat(lot.sourceInventoryCost) || 0) / previousQty) : 0;
+                lot.date = date;
+                lot.qtyInCold = +qty.toFixed(2);
+                lot.bagsInCold = +bags.toFixed(2);
+                lot.coldStorageName = coldStorageName;
+                lot.vendorName = vendorName;
+                lot.rentPerKg = rentPerKg;
+                lot.inOutPerBag = inOutPerBag;
+                lot.otherCharge = otherCharge;
+                lot.estimatedTotalCharge = +estimatedTotalCharge.toFixed(2);
+                lot.paidAtMove = +paidAtMove.toFixed(2);
+                lot.paidTotal = +paidAtMove.toFixed(2);
+                lot.sourceInventoryCost = +Math.max(0, unitCost * qty).toFixed(2);
+                lot.remarks = remarks;
+                Object.assign(lot, getAuditMeta(false));
+                recalculateColdLotPayables(lot);
+
+                const moveEntry = (appData.coldStorageMovements || []).find(function(m) {
+                    return String(m.lotId) === String(lot.id) && String(m.type || '') === 'move_in';
+                });
+                if (moveEntry) {
+                    moveEntry.date = lot.date;
+                    moveEntry.itemName = lot.itemName;
+                    moveEntry.coldStorageName = lot.coldStorageName;
+                    moveEntry.vendorName = lot.vendorName;
+                    moveEntry.qty = lot.qtyInCold;
+                    moveEntry.bags = lot.bagsInCold;
+                    moveEntry.amount = lot.estimatedTotalCharge;
+                    moveEntry.paidAmount = lot.paidAtMove;
+                    moveEntry.remarks = lot.remarks;
+                }
+
+                appData.payments = appData.payments || [];
+                appData.payments = appData.payments.filter(function(payment) {
+                    if (String(payment.type || '').toLowerCase() !== 'cold_storage_payment') return true;
+                    if (String(payment.invoiceId || '') !== String(lot.id)) return true;
+                    return String(payment.paidThrough || '') !== 'Cold Storage Move';
+                });
+                if (lot.paidAtMove > 0) {
+                    appData.payments.push({
+                        id: Date.now() + Math.floor(Math.random() * 1000),
+                        type: 'cold_storage_payment',
+                        invoiceId: lot.id,
+                        invoice: `COLD-${lot.id}`,
+                        party: lot.vendorName,
+                        amount: lot.paidAtMove,
+                        mode: 'cash',
+                        paidThrough: 'Cold Storage Move',
+                        remarks: `Edited move payment | ${lot.coldStorageName}`,
+                        date: lot.date
+                    });
+                }
+
+                rebuildInventoryFromTransactions();
+                saveData();
+                refreshInventory();
+                updateDashboard();
+                refreshColdStoragePanel();
+                cancelColdLotEdit();
+                alert('Cold lot updated successfully.');
                 return;
             }
             const stock = appData.inventory[itemId];
@@ -4496,6 +4618,7 @@ function deleteAllMasters() {
             refreshInventory();
             updateDashboard();
             refreshColdStoragePanel();
+            resetColdMoveForm();
             alert('Moved to cold storage successfully.');
         }
 
@@ -4840,19 +4963,24 @@ function deleteAllMasters() {
             }
             editingColdLotId = lot.id;
             const panel = document.getElementById('coldLotEditPanel');
-            if (panel) panel.classList.remove('hidden');
-            if (document.getElementById('coldLotEditDate')) document.getElementById('coldLotEditDate').value = lot.date || '';
-            if (document.getElementById('coldLotEditQty')) document.getElementById('coldLotEditQty').value = Number(lot.qtyInCold || 0).toFixed(2);
-            if (document.getElementById('coldLotEditBags')) document.getElementById('coldLotEditBags').value = Number(lot.bagsInCold || 0).toFixed(2);
-            if (document.getElementById('coldLotEditStorageName')) document.getElementById('coldLotEditStorageName').value = lot.coldStorageName || '';
-            if (document.getElementById('coldLotEditVendorName')) document.getElementById('coldLotEditVendorName').value = lot.vendorName || '';
-            if (document.getElementById('coldLotEditRentPerKg')) document.getElementById('coldLotEditRentPerKg').value = Number(lot.rentPerKg || 0).toFixed(2);
-            if (document.getElementById('coldLotEditInOutPerBag')) document.getElementById('coldLotEditInOutPerBag').value = Number(lot.inOutPerBag || 0).toFixed(2);
-            if (document.getElementById('coldLotEditOtherCharge')) document.getElementById('coldLotEditOtherCharge').value = Number(lot.otherCharge || 0).toFixed(2);
-            if (document.getElementById('coldLotEditRemarks')) document.getElementById('coldLotEditRemarks').value = lot.remarks || '';
-            calculateColdLotEditEstimatedTotals();
-            if (panel && typeof panel.scrollIntoView === 'function') {
-                panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (panel) panel.classList.add('hidden');
+            if (document.getElementById('coldMoveDate')) document.getElementById('coldMoveDate').value = lot.date || '';
+            if (document.getElementById('coldMoveItem')) document.getElementById('coldMoveItem').value = String(lot.itemId || '');
+            if (document.getElementById('coldMoveQty')) document.getElementById('coldMoveQty').value = Number(lot.qtyInCold || 0).toFixed(2);
+            if (document.getElementById('coldMoveBags')) document.getElementById('coldMoveBags').value = Number(lot.bagsInCold || 0).toFixed(2);
+            if (document.getElementById('coldMoveStorageName')) document.getElementById('coldMoveStorageName').value = lot.coldStorageName || '';
+            if (document.getElementById('coldMoveVendorName')) document.getElementById('coldMoveVendorName').value = lot.vendorName || '';
+            if (document.getElementById('coldMoveRentPerKg')) document.getElementById('coldMoveRentPerKg').value = Number(lot.rentPerKg || 0).toFixed(2);
+            if (document.getElementById('coldMoveInOutPerBag')) document.getElementById('coldMoveInOutPerBag').value = Number(lot.inOutPerBag || 0).toFixed(2);
+            if (document.getElementById('coldMoveOtherCharge')) document.getElementById('coldMoveOtherCharge').value = Number(lot.otherCharge || 0).toFixed(2);
+            if (document.getElementById('coldMovePaidAtMove')) document.getElementById('coldMovePaidAtMove').value = Number(lot.paidAtMove || 0).toFixed(2);
+            if (document.getElementById('coldMoveRemarks')) document.getElementById('coldMoveRemarks').value = lot.remarks || '';
+            setColdMoveEditMode(true);
+            calculateColdMoveEstimatedTotals();
+            onColdMoveItemChange();
+            const movePanel = document.getElementById('coldMoveItem');
+            if (movePanel && typeof movePanel.scrollIntoView === 'function') {
+                movePanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
 
@@ -4860,74 +4988,12 @@ function deleteAllMasters() {
             editingColdLotId = null;
             const panel = document.getElementById('coldLotEditPanel');
             if (panel) panel.classList.add('hidden');
+            setColdMoveEditMode(false);
+            resetColdMoveForm();
         }
 
         function saveColdLotEdit() {
-            if (editingColdLotId == null) {
-                alert('No cold lot selected for edit.');
-                return;
-            }
-            const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(editingColdLotId); });
-            if (!lot) {
-                alert('Cold lot not found.');
-                return;
-            }
-            if (!canEditOrRemoveColdLot(lot)) {
-                alert('This lot cannot be edited now because it already has release, damage, charges, or payment activity.');
-                cancelColdLotEdit();
-                return;
-            }
-            const date = (document.getElementById('coldLotEditDate') && document.getElementById('coldLotEditDate').value) || '';
-            const qty = Math.max(0, parseFloat(document.getElementById('coldLotEditQty') && document.getElementById('coldLotEditQty').value) || 0);
-            const bags = Math.max(0, parseFloat(document.getElementById('coldLotEditBags') && document.getElementById('coldLotEditBags').value) || 0);
-            const storageName = ((document.getElementById('coldLotEditStorageName') && document.getElementById('coldLotEditStorageName').value) || '').trim();
-            const vendorName = ((document.getElementById('coldLotEditVendorName') && document.getElementById('coldLotEditVendorName').value) || '').trim();
-            const rentPerKg = Math.max(0, parseFloat(document.getElementById('coldLotEditRentPerKg') && document.getElementById('coldLotEditRentPerKg').value) || 0);
-            const inOutPerBag = Math.max(0, parseFloat(document.getElementById('coldLotEditInOutPerBag') && document.getElementById('coldLotEditInOutPerBag').value) || 0);
-            const otherCharge = Math.max(0, parseFloat(document.getElementById('coldLotEditOtherCharge') && document.getElementById('coldLotEditOtherCharge').value) || 0);
-            const remarks = ((document.getElementById('coldLotEditRemarks') && document.getElementById('coldLotEditRemarks').value) || '').trim();
-            if (!date || !storageName || !vendorName || qty <= 0) {
-                alert('Please fill date, quantity, cold storage name and vendor name.');
-                return;
-            }
-            const previousQty = Math.max(0, parseFloat(lot.qtyInCold) || 0);
-            const unitCost = previousQty > 0 ? ((parseFloat(lot.sourceInventoryCost) || 0) / previousQty) : 0;
-            const estimatedTotalCharge = calculateColdLotEditEstimatedTotals();
-            lot.date = date;
-            lot.qtyInCold = +qty.toFixed(2);
-            lot.bagsInCold = +bags.toFixed(2);
-            lot.coldStorageName = storageName;
-            lot.vendorName = vendorName;
-            lot.rentPerKg = rentPerKg;
-            lot.inOutPerBag = inOutPerBag;
-            lot.otherCharge = otherCharge;
-            lot.estimatedTotalCharge = +estimatedTotalCharge.toFixed(2);
-            lot.sourceInventoryCost = +Math.max(0, unitCost * qty).toFixed(2);
-            lot.remarks = remarks;
-            Object.assign(lot, getAuditMeta(false));
-            recalculateColdLotPayables(lot);
-
-            const moveEntry = (appData.coldStorageMovements || []).find(function(m) {
-                return String(m.lotId) === String(lot.id) && String(m.type || '') === 'move_in';
-            });
-            if (moveEntry) {
-                moveEntry.date = lot.date;
-                moveEntry.itemName = lot.itemName;
-                moveEntry.coldStorageName = lot.coldStorageName;
-                moveEntry.vendorName = lot.vendorName;
-                moveEntry.qty = lot.qtyInCold;
-                moveEntry.bags = lot.bagsInCold;
-                moveEntry.amount = lot.estimatedTotalCharge;
-                moveEntry.remarks = lot.remarks;
-            }
-
-            rebuildInventoryFromTransactions();
-            saveData();
-            refreshInventory();
-            updateDashboard();
-            refreshColdStoragePanel();
-            cancelColdLotEdit();
-            alert('Cold lot updated successfully.');
+            moveToColdStorage();
         }
 
         function removeColdLot(lotId) {
