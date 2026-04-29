@@ -2684,12 +2684,20 @@ function deleteAllMasters() {
             const inOutCostDisplay = document.getElementById('purchaseColdStorageInOutCostDisplay');
             const otherDisplay = document.getElementById('purchaseColdStorageOtherDisplay');
             const totalDisplay = document.getElementById('purchaseColdStorageTotalDisplay');
+            const rentRateDisplay = document.getElementById('purchaseColdStorageRentRateDisplay');
+            const weightDisplay = document.getElementById('purchaseColdStorageWeightDisplay');
+            const inOutRateDisplay = document.getElementById('purchaseColdStorageInOutRateDisplay');
+            const bagsDisplay = document.getElementById('purchaseColdStorageBagsDisplay');
             if (!costEl || !toggleEl || !toggleEl.checked) {
                 if (costEl) costEl.value = '';
                 if (rentCostDisplay) rentCostDisplay.textContent = '0.00';
                 if (inOutCostDisplay) inOutCostDisplay.textContent = '0.00';
                 if (otherDisplay) otherDisplay.textContent = '0.00';
                 if (totalDisplay) totalDisplay.textContent = '0.00';
+                if (rentRateDisplay) rentRateDisplay.textContent = '0.00';
+                if (weightDisplay) weightDisplay.textContent = '0.00';
+                if (inOutRateDisplay) inOutRateDisplay.textContent = '0.00';
+                if (bagsDisplay) bagsDisplay.textContent = '0.00';
                 return 0;
             }
             const grossWeight = Math.max(0, parseFloat(document.getElementById('purchaseQuantity') && document.getElementById('purchaseQuantity').value) || 0);
@@ -2705,6 +2713,10 @@ function deleteAllMasters() {
             if (inOutCostDisplay) inOutCostDisplay.textContent = inOutCost.toFixed(2);
             if (otherDisplay) otherDisplay.textContent = otherCharge.toFixed(2);
             if (totalDisplay) totalDisplay.textContent = totalCost.toFixed(2);
+            if (rentRateDisplay) rentRateDisplay.textContent = rentPerKg.toFixed(2);
+            if (weightDisplay) weightDisplay.textContent = grossWeight.toFixed(2);
+            if (inOutRateDisplay) inOutRateDisplay.textContent = inOutPerBag.toFixed(2);
+            if (bagsDisplay) bagsDisplay.textContent = bags.toFixed(2);
             return totalCost;
         }
 
@@ -2740,12 +2752,14 @@ function deleteAllMasters() {
             const inOutEl = document.getElementById('purchaseColdStorageInOutPerBag');
             const otherEl = document.getElementById('purchaseColdStorageOtherCharge');
             const costEl = document.getElementById('purchaseColdStorageCost');
+            const remarksEl = document.getElementById('purchaseColdStorageRemarks');
             if (toggleEl) toggleEl.checked = false;
             if (fieldsEl) fieldsEl.style.display = 'grid';
             if (rentEl) rentEl.value = '';
             if (inOutEl) inOutEl.value = '';
             if (otherEl) otherEl.value = '';
             if (costEl) costEl.value = '';
+            if (remarksEl) remarksEl.value = '';
             if (typeof switchPurchaseItemTab === 'function') switchPurchaseItemTab('basic');
             calculatePurchaseColdStorageCost();
         }
@@ -2788,6 +2802,7 @@ function deleteAllMasters() {
             const coldStorageRentPerKg = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageRentPerKg') && document.getElementById('purchaseColdStorageRentPerKg').value) || 0);
             const coldStorageInOutPerBag = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageInOutPerBag') && document.getElementById('purchaseColdStorageInOutPerBag').value) || 0);
             const coldStorageOtherCharge = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageOtherCharge') && document.getElementById('purchaseColdStorageOtherCharge').value) || 0);
+            const coldStorageRemarks = (document.getElementById('purchaseColdStorageRemarks') && document.getElementById('purchaseColdStorageRemarks').value) ? document.getElementById('purchaseColdStorageRemarks').value.trim() : '';
             
             if (!date || !supplierId || !itemId || !grossWeight) {
                 alert('Please select date, supplier, item and enter gross weight');
@@ -2861,7 +2876,8 @@ function deleteAllMasters() {
                 coldStorageRentPerKg: isColdStorage ? coldStorageRentPerKg : 0,
                 coldStorageInOutPerBag: isColdStorage ? coldStorageInOutPerBag : 0,
                 coldStorageOtherCharge: isColdStorage ? coldStorageOtherCharge : 0,
-                coldStorageCost: isColdStorage ? +coldStorageCost.toFixed(2) : 0
+                coldStorageCost: isColdStorage ? +coldStorageCost.toFixed(2) : 0,
+                coldStorageRemarks: isColdStorage ? coldStorageRemarks : ''
             };
             
             if (editingPurchaseItemIndex >= 0) {
@@ -2939,10 +2955,12 @@ function deleteAllMasters() {
             const coldRentEl = document.getElementById('purchaseColdStorageRentPerKg');
             const coldInOutEl = document.getElementById('purchaseColdStorageInOutPerBag');
             const coldOtherEl = document.getElementById('purchaseColdStorageOtherCharge');
+            const coldRemarksEl = document.getElementById('purchaseColdStorageRemarks');
             if (coldToggleEl) coldToggleEl.checked = !!item.isColdStorage;
             if (coldRentEl) coldRentEl.value = item.coldStorageRentPerKg || 0;
             if (coldInOutEl) coldInOutEl.value = item.coldStorageInOutPerBag || 0;
             if (coldOtherEl) coldOtherEl.value = item.coldStorageOtherCharge || 0;
+            if (coldRemarksEl) coldRemarksEl.value = item.coldStorageRemarks || '';
             togglePurchaseColdStorageFields();
             calculatePurchaseColdStorageCost();
 
@@ -2997,7 +3015,7 @@ function deleteAllMasters() {
             tbody.innerHTML = '';
             
             if (currentPurchaseItems.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="12" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="13" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
                 return;
             }
             
@@ -3030,6 +3048,7 @@ function deleteAllMasters() {
                     <td class="px-4 py-3">${escapeHtml(item.kaantaParchi || '-')}</td>
                     <td class="px-4 py-3">${item.isColdStorage ? 'Yes' : '-'}</td>
                     <td class="px-4 py-3">${item.isColdStorage ? (RU + (parseFloat(item.coldStorageCost) || 0).toFixed(2)) : '-'}</td>
+                    <td class="px-4 py-3">${item.isColdStorage ? escapeHtml(item.coldStorageRemarks || '-') : '-'}</td>
                     <td class="px-4 py-3">${actionCell}</td>
                 `;
                 const editBtn = row.querySelector('.js-edit-purchase-item');
@@ -6930,6 +6949,13 @@ function deleteAllMasters() {
     sampleSaleDate: appData.sales[0]?.date
   });
         
+            function getPurchaseColdStorageTotal(purchase) {
+                if (!purchase || !Array.isArray(purchase.items)) return 0;
+                return purchase.items.reduce(function(sum, item) {
+                    return sum + (parseFloat(item && item.coldStorageCost) || 0);
+                }, 0);
+            }
+
             // Calculate totals for P&L:
             // - EXCLUDE `truckAdvance` from sale revenue (already done earlier)
             // - EXCLUDE invoice-level `advance` from both purchase costs and sale revenue by ADDING it back.
@@ -6940,11 +6966,16 @@ function deleteAllMasters() {
                 const invoiceAdvance = parseFloat(sale.advance) || 0;
                 return sum + saleTotal - truckAdvance + invoiceAdvance; // subtract truck advance; add invoice advance back
             }, 0);
-            const totalCosts = filteredPurchases.reduce((sum, purchase) => {
+            const totalBasePurchaseCost = filteredPurchases.reduce((sum, purchase) => {
                 const purchaseTotal = (purchase.grandTotal || purchase.total || 0);
                 const invoiceAdvance = parseFloat(purchase.advance) || 0;
                 return sum + purchaseTotal + invoiceAdvance; // add invoice advance back to exclude from P&L
             }, 0);
+            const totalColdStorageCost = filteredPurchases.reduce((sum, purchase) => {
+                return sum + getPurchaseColdStorageTotal(purchase);
+            }, 0);
+            const totalEffectivePurchaseCost = totalBasePurchaseCost + totalColdStorageCost;
+            const totalCosts = totalEffectivePurchaseCost;
             const totalBrokerage = filteredBrokerage.reduce((sum, entry) => sum + (entry.amount || 0), 0);
             const totalDeductionsAmount = filteredDeductions.reduce((sum, d) => {
                 var amt = parseFloat(d.amount) || 0;
@@ -6957,6 +6988,12 @@ function deleteAllMasters() {
             document.getElementById('totalRevenue').textContent = `${RU}${totalRevenue.toFixed(2)}`;
             document.getElementById('totalCosts').textContent = `${RU}${(totalCosts + totalBrokerage).toFixed(2)}`;
             document.getElementById('netProfit').textContent = `${RU}${netProfit.toFixed(2)}`;
+            var basePurchaseCostEl = document.getElementById('pnlBasePurchaseCost');
+            var coldStorageCostEl = document.getElementById('pnlColdStorageCost');
+            var effectivePurchaseCostEl = document.getElementById('pnlEffectivePurchaseCost');
+            if (basePurchaseCostEl) basePurchaseCostEl.textContent = `${RU}${totalBasePurchaseCost.toFixed(2)}`;
+            if (coldStorageCostEl) coldStorageCostEl.textContent = `${RU}${totalColdStorageCost.toFixed(2)}`;
+            if (effectivePurchaseCostEl) effectivePurchaseCostEl.textContent = `${RU}${totalEffectivePurchaseCost.toFixed(2)}`;
             
             // Helper: deduction totals for a sale (by linkedSale.saleId or invoice match). Uses lossAmount for P&L so adjustment (supplier/broker share) is respected.
             function getDeductionsForSale(sale) {
@@ -7025,8 +7062,12 @@ function deleteAllMasters() {
                             const totalPurchaseQty = purchase.items ? purchase.items.reduce((sum, item) => sum + item.grossWeight, 0) : 1;
                             const purchaseTotalRaw = purchase.grandTotal || purchase.total || 0;
                             const purchaseInvoiceAdvance = parseFloat(purchase.advance) || 0;
-                            const purchaseTotalForPnL = purchaseTotalRaw + purchaseInvoiceAdvance; // exclude invoice advance from P&L
-                            const proportionalPurchaseCost = totalPurchaseQty > 0 ? (purchaseTotalForPnL / totalPurchaseQty) * link.quantityUsed : 0;
+                            const purchaseBaseForPnL = purchaseTotalRaw + purchaseInvoiceAdvance; // exclude invoice advance from P&L
+                            const purchaseColdStorageForPnL = getPurchaseColdStorageTotal(purchase);
+                            const purchaseTotalForPnL = purchaseBaseForPnL + purchaseColdStorageForPnL;
+                            const proportionalBasePurchaseCost = totalPurchaseQty > 0 ? (purchaseBaseForPnL / totalPurchaseQty) * link.quantityUsed : 0;
+                            const proportionalColdStorageCost = totalPurchaseQty > 0 ? (purchaseColdStorageForPnL / totalPurchaseQty) * link.quantityUsed : 0;
+                            const proportionalPurchaseCost = proportionalBasePurchaseCost + proportionalColdStorageCost;
                             const purchaseBrokerageTotal = getBrokerageForPurchase(purchase);
                             
                             // Calculate proportional sale amount
@@ -7045,6 +7086,8 @@ function deleteAllMasters() {
                                 purchaseInvoice: purchase.invoice,
                                 purchaseSupplier: purchase.supplierName,
                                 purchaseTotal: proportionalPurchaseCost,
+                                purchaseBaseAmount: proportionalBasePurchaseCost,
+                                coldStorageAmount: proportionalColdStorageCost,
                                 saleDate: sale.date,
                                 saleInvoice: sale.invoice,
                                 saleCustomer: sale.customerName,
@@ -7065,6 +7108,8 @@ function deleteAllMasters() {
                         purchaseInvoice: null,
                         purchaseSupplier: null,
                         purchaseTotal: 0,
+                        purchaseBaseAmount: 0,
+                        coldStorageAmount: 0,
                         saleDate: sale.date,
                         saleInvoice: sale.invoice,
                         saleCustomer: sale.customerName,
@@ -7090,13 +7135,17 @@ function deleteAllMasters() {
             
             filteredPurchases.forEach(purchase => {
                 if (!linkedPurchaseIds.has(String(purchase.id))) {
-                    const purchaseTotal = (purchase.grandTotal || purchase.total || 0) + (parseFloat(purchase.advance) || 0); // exclude invoice advance from P&L
+                    const purchaseBaseTotal = (purchase.grandTotal || purchase.total || 0) + (parseFloat(purchase.advance) || 0); // exclude invoice advance from P&L
+                    const coldStorageTotal = getPurchaseColdStorageTotal(purchase);
+                    const purchaseTotal = purchaseBaseTotal + coldStorageTotal;
                     const purchaseBrokerage = getBrokerageForPurchase(purchase);
                     pnlRows.push({
                         purchaseDate: purchase.date,
                         purchaseInvoice: purchase.invoice,
                         purchaseSupplier: purchase.supplierName,
                         purchaseTotal: purchaseTotal,
+                        purchaseBaseAmount: purchaseBaseTotal,
+                        coldStorageAmount: coldStorageTotal,
                         saleDate: null,
                         saleInvoice: null,
                         saleCustomer: null,
@@ -7121,6 +7170,8 @@ function deleteAllMasters() {
                     purchaseInvoice: null,
                     purchaseSupplier: null,
                     purchaseTotal: 0,
+                    purchaseBaseAmount: 0,
+                    coldStorageAmount: 0,
                     saleDate: null,
                     saleInvoice: null,
                     saleCustomer: null,
@@ -7164,12 +7215,14 @@ function deleteAllMasters() {
                         purchaseInvoice: invoice,
                         purchaseSupplier: row.purchaseSupplier || '-',
                         purchaseTotal: 0,
+                        coldStorageAmount: 0,
                         saleTotal: 0,
                         profitLoss: 0,
                         linkedSales: new Set()
                     };
                 }
                 grouped[key].purchaseTotal += (parseFloat(row.purchaseTotal) || 0);
+                grouped[key].coldStorageAmount += (parseFloat(row.coldStorageAmount) || 0);
                 grouped[key].saleTotal += (parseFloat(row.saleTotal) || 0);
                 grouped[key].profitLoss += (parseFloat(row.profitLoss) || 0);
                 if (row.saleInvoice && row.saleInvoice !== '-') grouped[key].linkedSales.add(row.saleInvoice);
@@ -7180,6 +7233,7 @@ function deleteAllMasters() {
                     purchaseInvoice: g.purchaseInvoice,
                     purchaseSupplier: g.purchaseSupplier,
                     purchaseTotal: +g.purchaseTotal.toFixed(2),
+                    coldStorageAmount: +g.coldStorageAmount.toFixed(2),
                     saleTotal: +g.saleTotal.toFixed(2),
                     profitLoss: +g.profitLoss.toFixed(2),
                     linkedSalesCount: g.linkedSales.size,
@@ -7197,7 +7251,7 @@ function deleteAllMasters() {
             if (!tbody) return;
             const rows = summaryRows || [];
             if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">Generate a report to view purchase-wise summary</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Generate a report to view purchase-wise summary</td></tr>';
                 return;
             }
             tbody.innerHTML = rows.map(function(r) {
@@ -7206,6 +7260,7 @@ function deleteAllMasters() {
                     '<td class="px-4 py-3 text-slate-700">' + escapeHtml(r.purchaseSupplier) + '</td>' +
                     '<td class="px-4 py-3 text-slate-700">' + escapeHtml(r.linkedSalesInvoices || '-') + '</td>' +
                     '<td class="px-4 py-3 text-right text-slate-700">' + RU + r.purchaseTotal.toFixed(2) + '</td>' +
+                    '<td class="px-4 py-3 text-right text-cyan-700 font-medium">' + RU + (r.coldStorageAmount || 0).toFixed(2) + '</td>' +
                     '<td class="px-4 py-3 text-right text-slate-700">' + RU + r.saleTotal.toFixed(2) + '</td>' +
                     '<td class="px-4 py-3 text-right ' + (r.profitLoss >= 0 ? 'text-green-600' : 'text-red-600') + ' font-semibold">' +
                     (r.profitLoss >= 0 ? '+' : '') + RU + r.profitLoss.toFixed(2) + '</td>' +
@@ -7238,6 +7293,8 @@ function deleteAllMasters() {
                         purchaseInvoice: g.purchaseInvoice,
                         purchaseSupplier: g.purchaseSupplier,
                         purchaseTotal: g.purchaseTotal,
+                        purchaseBaseAmount: (g.purchaseTotal || 0) - (g.coldStorageAmount || 0),
+                        coldStorageAmount: g.coldStorageAmount || 0,
                         saleDate: '-',
                         saleInvoice: g.linkedSalesInvoices || '-',
                         saleCustomer: '-',
@@ -7262,7 +7319,11 @@ function deleteAllMasters() {
                     <td class="px-4 py-3 bg-blue-50/30">${row.purchaseDate || '-'}</td>
                     <td class="px-4 py-3 bg-blue-50/30">${row.purchaseInvoice || '-'}</td>
                     <td class="px-4 py-3 bg-blue-50/30">${row.purchaseSupplier || '-'}</td>
-                    <td class="px-4 py-3 bg-blue-50/30 border-r-2 border-r-slate-300">${row.purchaseTotal > 0 ? `${RU}${row.purchaseTotal.toFixed(2)}` : '-'}</td>
+                    <td class="px-4 py-3 bg-blue-50/30 border-r-2 border-r-slate-300">
+                        ${row.purchaseTotal > 0 ? `${RU}${row.purchaseTotal.toFixed(2)}` : '-'}
+                        ${(row.coldStorageAmount || 0) > 0 ? `<br><small class="text-xs text-cyan-700">Cold: ${RU}${(row.coldStorageAmount || 0).toFixed(2)}</small>` : ''}
+                        ${(row.purchaseBaseAmount || 0) > 0 ? `<br><small class="text-xs text-slate-500">Base: ${RU}${(row.purchaseBaseAmount || 0).toFixed(2)}</small>` : ''}
+                    </td>
                     <td class="px-4 py-3 bg-green-50/30">${row.saleDate || '-'}</td>
                     <td class="px-4 py-3 bg-green-50/30">${row.saleInvoice || '-'}</td>
                     <td class="px-4 py-3 bg-green-50/30">${row.saleCustomer || '-'}</td>
@@ -7334,12 +7395,21 @@ function deleteAllMasters() {
             var totalRevenueEl = document.getElementById('totalRevenue');
             var totalCostsEl = document.getElementById('totalCosts');
             var netProfitEl = document.getElementById('netProfit');
+            var basePurchaseCostEl = document.getElementById('pnlBasePurchaseCost');
+            var coldStorageCostEl = document.getElementById('pnlColdStorageCost');
+            var effectivePurchaseCostEl = document.getElementById('pnlEffectivePurchaseCost');
             var totalRevenue = totalRevenueEl ? (totalRevenueEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
             var totalCosts = totalCostsEl ? (totalCostsEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
             var netProfit = netProfitEl ? (netProfitEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
+            var basePurchaseCost = basePurchaseCostEl ? (basePurchaseCostEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
+            var coldStorageCost = coldStorageCostEl ? (coldStorageCostEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
+            var effectivePurchaseCost = effectivePurchaseCostEl ? (effectivePurchaseCostEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
             csv += 'SUMMARY\n';
             csv += 'Total Revenue,' + totalRevenue + '\n';
             csv += 'Total Costs,' + totalCosts + '\n';
+            csv += 'Base Purchase Cost,' + basePurchaseCost + '\n';
+            csv += 'Cold Storage Cost,' + coldStorageCost + '\n';
+            csv += 'Effective Purchase Cost,' + effectivePurchaseCost + '\n';
             csv += 'Net Profit,' + netProfit + '\n\n';
             
             csv += 'DETAILED P&L STATEMENT\n';
