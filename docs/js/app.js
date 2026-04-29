@@ -3940,7 +3940,12 @@ function deleteAllMasters() {
                         return String(lp.purchaseId) === String(purchase.id);
                     });
                 });
-                var linkedBadge = linkedSales.length > 0 ? ' <span class="inline-block ml-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Linked to sale(s): ' + escapeHtml(linkedSales.map(function(s){ return s.invoice || s.id; }).join(', ')) + '">Linked</span>' : '';
+                var linkedInvoices = Array.from(new Set(linkedSales.map(function(s) {
+                    return s.invoice || ('Sale #' + s.id);
+                })));
+                var linkedBadge = linkedInvoices.length > 0
+                    ? ' <span class="inline-block ml-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Linked to sale invoice(s): ' + escapeHtml(linkedInvoices.join(', ')) + '">Linked to: ' + escapeHtml(linkedInvoices.join(', ')) + '</span>'
+                    : '';
                 
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-blue-50/50 transition-colors';
@@ -11011,39 +11016,11 @@ function onPnLFilterChange() {
                 return sale.linkedPurchases && sale.linkedPurchases.some(function(lp) { return String(lp.purchaseId) === String(purchaseId); });
             });
             if (salesLinkedToThisPurchase.length > 0) {
-                var invoiceList = salesLinkedToThisPurchase.map(function(s) { return s.invoice || ('Sale #' + s.id); }).join(', ');
-                alert('Cannot delete this purchase because it is linked to the following sale(s):\n\n' + invoiceList + '\n\nProcess: Purchase is first, then sale of that purchase. Remove this purchase from the linked list in those sales (Edit sale → Link to Purchase), or delete those sales first, then delete this purchase.');
-                return;
-            }
-            
-            // Check if any items from this purchase have been sold (extra safety for any sale using same items)
-            let soldItems = [];
-            if (purchase.items) {
-                purchase.items.forEach(purchaseItem => {
-                    // Check if this item has been sold
-                    const salesWithThisItem = appData.sales.filter(sale => {
-                        if (sale.items) {
-                            return sale.items.some(saleItem => saleItem.itemId == purchaseItem.itemId);
-                        }
-                        return sale.itemId == purchaseItem.itemId;
-                    });
-                    
-                    if (salesWithThisItem.length > 0) {
-                        soldItems.push({
-                            itemName: purchaseItem.itemName,
-                            sales: salesWithThisItem.map(s => s.invoice).join(', ')
-                        });
-                    }
-                });
-            }
-            
-            if (soldItems.length > 0) {
-                let message = 'Cannot delete this purchase because the following items have been sold:\n\n';
-                soldItems.forEach(item => {
-                    message += `${BULLET} ${item.itemName} (sold in: ${item.sales})\n`;
-                });
-                message += '\nPlease delete the related sales entries first, then try deleting this purchase.';
-                alert(message);
+                var uniqueInvoices = Array.from(new Set(salesLinkedToThisPurchase.map(function(s) {
+                    return s.invoice || ('Sale #' + s.id);
+                })));
+                var invoiceList = uniqueInvoices.join(', ');
+                alert('Cannot delete this purchase because it is linked to the following sale(s):\n\n' + invoiceList + '\n\nRemove this purchase from linked list in those sales (Edit Sale -> Link to Purchase), or delete those sales first.');
                 return;
             }
             
@@ -11075,6 +11052,7 @@ function onPnLFilterChange() {
                 
                 // Remove the purchase
                 appData.purchases = appData.purchases.filter(p => p.id !== purchaseId);
+                rebuildInventoryFromTransactions();
                 
                 saveData();
                 updatePurchaseHistory();
