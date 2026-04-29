@@ -1362,12 +1362,61 @@
                                     <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Remaining</th>
                                     <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Damaged Qty</th>
                                     <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Remarks</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="coldStorageLotsBody">
-                                <tr><td colspan="12" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>
+                                <tr><td colspan="13" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+                <div id="coldLotEditPanel" class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 hidden">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Edit Cold Lot</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Date</label>
+                            <input type="date" id="coldLotEditDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Quantity</label>
+                            <input type="number" id="coldLotEditQty" min="0" step="any" oninput="calculateColdLotEditEstimatedTotals()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Bags</label>
+                            <input type="number" id="coldLotEditBags" min="0" step="any" oninput="calculateColdLotEditEstimatedTotals()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Cold Storage Name</label>
+                            <input type="text" id="coldLotEditStorageName" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Vendor Name</label>
+                            <input type="text" id="coldLotEditVendorName" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Rent per kg</label>
+                            <input type="number" id="coldLotEditRentPerKg" min="0" step="any" oninput="calculateColdLotEditEstimatedTotals()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">In/Out per Bag</label>
+                            <input type="number" id="coldLotEditInOutPerBag" min="0" step="any" oninput="calculateColdLotEditEstimatedTotals()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Other Charge</label>
+                            <input type="number" id="coldLotEditOtherCharge" min="0" step="any" oninput="calculateColdLotEditEstimatedTotals()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div class="md:col-span-2 lg:col-span-4">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Remarks</label>
+                            <input type="text" id="coldLotEditRemarks" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                    </div>
+                    <div class="mt-3 text-sm text-slate-600">
+                        Estimated Total Charge: <span id="coldLotEditEstimatedCharge" class="font-semibold text-slate-800">&#8377;0.00</span>
+                    </div>
+                    <div class="mt-4 flex flex-wrap gap-3">
+                        <button type="button" onclick="saveColdLotEdit()" class="bg-primary text-white px-5 py-2 rounded-lg hover:bg-green-700 transition-colors">Save Changes</button>
+                        <button type="button" onclick="cancelColdLotEdit()" class="px-5 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">Cancel</button>
                     </div>
                 </div>
 
