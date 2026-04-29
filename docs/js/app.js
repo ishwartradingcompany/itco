@@ -4070,6 +4070,7 @@ function deleteAllMasters() {
 
         // Inventory functions
         let currentInventoryTab = 'general';
+        let editingColdLotId = null;
 
         function switchInventoryTab(tabName) {
             currentInventoryTab = (tabName === 'cold') ? 'cold' : 'general';
@@ -4151,6 +4152,15 @@ function deleteAllMasters() {
             const paid = Math.max(0, parseFloat(lot.paidTotal) || 0);
             const payableAdjustments = Math.max(0, parseFloat(lot.payableAdjustmentTotal) || 0);
             lot.remainingPayable = Math.max(0, estimated - paid - payableAdjustments);
+        }
+
+        function canEditOrRemoveColdLot(lot) {
+            if (!lot) return false;
+            const periodic = Math.max(0, parseFloat(lot.periodicChargeTotal) || 0);
+            const released = Math.max(0, parseFloat(lot.releaseQtyTotal) || 0);
+            const damaged = Math.max(0, parseFloat(lot.damageQtyTotal) || 0);
+            const paid = Math.max(0, parseFloat(lot.paidTotal) || 0);
+            return periodic <= 0 && released <= 0 && damaged <= 0 && paid <= 0;
         }
 
         function getPurchaseAutoColdSourceKey(purchaseId, purchaseItem, itemIndex) {
@@ -4801,6 +4811,150 @@ function deleteAllMasters() {
             alert('Cold storage damage recorded successfully.');
         }
 
+        function calculateColdLotEditEstimatedTotals() {
+            const qty = Math.max(0, parseFloat(document.getElementById('coldLotEditQty') && document.getElementById('coldLotEditQty').value) || 0);
+            const bags = Math.max(0, parseFloat(document.getElementById('coldLotEditBags') && document.getElementById('coldLotEditBags').value) || 0);
+            const rentPerKg = Math.max(0, parseFloat(document.getElementById('coldLotEditRentPerKg') && document.getElementById('coldLotEditRentPerKg').value) || 0);
+            const inOutPerBag = Math.max(0, parseFloat(document.getElementById('coldLotEditInOutPerBag') && document.getElementById('coldLotEditInOutPerBag').value) || 0);
+            const otherCharge = Math.max(0, parseFloat(document.getElementById('coldLotEditOtherCharge') && document.getElementById('coldLotEditOtherCharge').value) || 0);
+            const total = (qty * rentPerKg) + (bags * inOutPerBag) + otherCharge;
+            const displayEl = document.getElementById('coldLotEditEstimatedCharge');
+            if (displayEl) displayEl.textContent = `${RU}${total.toFixed(2)}`;
+            return total;
+        }
+
+        function editColdLot(lotId) {
+            const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(lotId); });
+            if (!lot) {
+                alert('Cold lot not found.');
+                return;
+            }
+            if (!canEditOrRemoveColdLot(lot)) {
+                alert('This lot cannot be edited now because it already has release, damage, charges, or payment activity.');
+                return;
+            }
+            editingColdLotId = lot.id;
+            const panel = document.getElementById('coldLotEditPanel');
+            if (panel) panel.classList.remove('hidden');
+            if (document.getElementById('coldLotEditDate')) document.getElementById('coldLotEditDate').value = lot.date || '';
+            if (document.getElementById('coldLotEditQty')) document.getElementById('coldLotEditQty').value = Number(lot.qtyInCold || 0).toFixed(2);
+            if (document.getElementById('coldLotEditBags')) document.getElementById('coldLotEditBags').value = Number(lot.bagsInCold || 0).toFixed(2);
+            if (document.getElementById('coldLotEditStorageName')) document.getElementById('coldLotEditStorageName').value = lot.coldStorageName || '';
+            if (document.getElementById('coldLotEditVendorName')) document.getElementById('coldLotEditVendorName').value = lot.vendorName || '';
+            if (document.getElementById('coldLotEditRentPerKg')) document.getElementById('coldLotEditRentPerKg').value = Number(lot.rentPerKg || 0).toFixed(2);
+            if (document.getElementById('coldLotEditInOutPerBag')) document.getElementById('coldLotEditInOutPerBag').value = Number(lot.inOutPerBag || 0).toFixed(2);
+            if (document.getElementById('coldLotEditOtherCharge')) document.getElementById('coldLotEditOtherCharge').value = Number(lot.otherCharge || 0).toFixed(2);
+            if (document.getElementById('coldLotEditRemarks')) document.getElementById('coldLotEditRemarks').value = lot.remarks || '';
+            calculateColdLotEditEstimatedTotals();
+            if (panel && typeof panel.scrollIntoView === 'function') {
+                panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        function cancelColdLotEdit() {
+            editingColdLotId = null;
+            const panel = document.getElementById('coldLotEditPanel');
+            if (panel) panel.classList.add('hidden');
+        }
+
+        function saveColdLotEdit() {
+            if (editingColdLotId == null) {
+                alert('No cold lot selected for edit.');
+                return;
+            }
+            const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(editingColdLotId); });
+            if (!lot) {
+                alert('Cold lot not found.');
+                return;
+            }
+            if (!canEditOrRemoveColdLot(lot)) {
+                alert('This lot cannot be edited now because it already has release, damage, charges, or payment activity.');
+                cancelColdLotEdit();
+                return;
+            }
+            const date = (document.getElementById('coldLotEditDate') && document.getElementById('coldLotEditDate').value) || '';
+            const qty = Math.max(0, parseFloat(document.getElementById('coldLotEditQty') && document.getElementById('coldLotEditQty').value) || 0);
+            const bags = Math.max(0, parseFloat(document.getElementById('coldLotEditBags') && document.getElementById('coldLotEditBags').value) || 0);
+            const storageName = ((document.getElementById('coldLotEditStorageName') && document.getElementById('coldLotEditStorageName').value) || '').trim();
+            const vendorName = ((document.getElementById('coldLotEditVendorName') && document.getElementById('coldLotEditVendorName').value) || '').trim();
+            const rentPerKg = Math.max(0, parseFloat(document.getElementById('coldLotEditRentPerKg') && document.getElementById('coldLotEditRentPerKg').value) || 0);
+            const inOutPerBag = Math.max(0, parseFloat(document.getElementById('coldLotEditInOutPerBag') && document.getElementById('coldLotEditInOutPerBag').value) || 0);
+            const otherCharge = Math.max(0, parseFloat(document.getElementById('coldLotEditOtherCharge') && document.getElementById('coldLotEditOtherCharge').value) || 0);
+            const remarks = ((document.getElementById('coldLotEditRemarks') && document.getElementById('coldLotEditRemarks').value) || '').trim();
+            if (!date || !storageName || !vendorName || qty <= 0) {
+                alert('Please fill date, quantity, cold storage name and vendor name.');
+                return;
+            }
+            const previousQty = Math.max(0, parseFloat(lot.qtyInCold) || 0);
+            const unitCost = previousQty > 0 ? ((parseFloat(lot.sourceInventoryCost) || 0) / previousQty) : 0;
+            const estimatedTotalCharge = calculateColdLotEditEstimatedTotals();
+            lot.date = date;
+            lot.qtyInCold = +qty.toFixed(2);
+            lot.bagsInCold = +bags.toFixed(2);
+            lot.coldStorageName = storageName;
+            lot.vendorName = vendorName;
+            lot.rentPerKg = rentPerKg;
+            lot.inOutPerBag = inOutPerBag;
+            lot.otherCharge = otherCharge;
+            lot.estimatedTotalCharge = +estimatedTotalCharge.toFixed(2);
+            lot.sourceInventoryCost = +Math.max(0, unitCost * qty).toFixed(2);
+            lot.remarks = remarks;
+            Object.assign(lot, getAuditMeta(false));
+            recalculateColdLotPayables(lot);
+
+            const moveEntry = (appData.coldStorageMovements || []).find(function(m) {
+                return String(m.lotId) === String(lot.id) && String(m.type || '') === 'move_in';
+            });
+            if (moveEntry) {
+                moveEntry.date = lot.date;
+                moveEntry.itemName = lot.itemName;
+                moveEntry.coldStorageName = lot.coldStorageName;
+                moveEntry.vendorName = lot.vendorName;
+                moveEntry.qty = lot.qtyInCold;
+                moveEntry.bags = lot.bagsInCold;
+                moveEntry.amount = lot.estimatedTotalCharge;
+                moveEntry.remarks = lot.remarks;
+            }
+
+            rebuildInventoryFromTransactions();
+            saveData();
+            refreshInventory();
+            updateDashboard();
+            refreshColdStoragePanel();
+            cancelColdLotEdit();
+            alert('Cold lot updated successfully.');
+        }
+
+        function removeColdLot(lotId) {
+            const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(lotId); });
+            if (!lot) {
+                alert('Cold lot not found.');
+                return;
+            }
+            if (!canEditOrRemoveColdLot(lot)) {
+                alert('This lot cannot be removed now because it already has release, damage, charges, or payment activity.');
+                return;
+            }
+            if (!confirm('Remove this cold lot? Inventory and movement history will be adjusted.')) return;
+            appData.coldStorageLots = (appData.coldStorageLots || []).filter(function(x) { return String(x.id) !== String(lotId); });
+            appData.coldStorageMovements = (appData.coldStorageMovements || []).filter(function(x) { return String(x.lotId) !== String(lotId); });
+            appData.coldStorageCharges = (appData.coldStorageCharges || []).filter(function(x) { return String(x.lotId) !== String(lotId); });
+            appData.coldStorageDamages = (appData.coldStorageDamages || []).filter(function(x) { return String(x.lotId) !== String(lotId); });
+            appData.payments = (appData.payments || []).filter(function(x) {
+                if (String(x.type || '').toLowerCase() !== 'cold_storage_payment') return true;
+                return String(x.invoiceId || '') !== String(lotId);
+            });
+            if (editingColdLotId != null && String(editingColdLotId) === String(lotId)) {
+                cancelColdLotEdit();
+            }
+            rebuildInventoryFromTransactions();
+            saveData();
+            refreshInventory();
+            updateDashboard();
+            refreshColdStoragePanel();
+            alert('Cold lot removed successfully.');
+        }
+
         function renderColdStorageLotsTable() {
             const tbody = document.getElementById('coldStorageLotsBody');
             if (!tbody) return;
@@ -4808,7 +4962,7 @@ function deleteAllMasters() {
                 return (parseFloat(lot.qtyInCold) || 0) > 0 && (lot.status || 'active') !== 'released';
             });
             if (activeLots.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="12" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="13" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>';
                 return;
             }
             tbody.innerHTML = '';
@@ -4828,6 +4982,12 @@ function deleteAllMasters() {
                     <td class="px-3 py-2 text-sm text-right">${RU}${Number(lot.remainingPayable || 0).toFixed(2)}</td>
                     <td class="px-3 py-2 text-sm text-right text-rose-700">${Number(lot.damageQtyTotal || 0).toFixed(2)}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(lot.remarks || '-')}</td>
+                    <td class="px-3 py-2 text-sm">
+                        <div class="flex gap-2">
+                            <button type="button" onclick="editColdLot(${JSON.stringify(lot.id)})" class="text-blue-600 hover:text-blue-800 font-medium">Edit</button>
+                            <button type="button" onclick="removeColdLot(${JSON.stringify(lot.id)})" class="text-red-600 hover:text-red-800 font-medium">Remove</button>
+                        </div>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
