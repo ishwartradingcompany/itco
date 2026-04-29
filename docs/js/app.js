@@ -5939,6 +5939,7 @@ function deleteAllMasters() {
             onPaymentModeChange();
             document.getElementById('paidThrough').value = '';
             document.getElementById('paymentRemarks').value = '';
+            setPaymentModalDefaultDate();
             
             document.getElementById('paymentModal').classList.remove('hidden');
         }
@@ -8304,8 +8305,6 @@ function onPnLFilterChange() {
             if (!purchase) return '';
             const company = appData.company;
             const purchaseInvoiceText = purchase.masterInvoice || purchase.invoice;
-            const purchaseDateText = collectUniqueNonEmpty(purchase.multiDates || [purchase.date]).join(', ') || (purchase.date || '-');
-            const purchaseTruckText = collectUniqueNonEmpty(purchase.multiTrucks || [purchase.truck]).join(', ') || (purchase.truck || '-');
             const purchaseLrText = collectUniqueNonEmpty(purchase.multiLrNumbers || [purchase.lrNumber]).join(', ') || (purchase.lrNumber || '-');
             
             let itemsHtml = '';
@@ -8316,6 +8315,8 @@ function onPnLFilterChange() {
                     itemsHtml += `
                         <tr>
                             <td class="inv-td">${item.itemName}</td>
+                            <td class="inv-td">${escapeHtml(item.date || purchase.date || '-')}</td>
+                            <td class="inv-td">${escapeHtml(item.truck || purchase.truck || '-')}</td>
                             <td class="inv-td text-center">${item.grossWeight}</td>
                             <td class="inv-td text-center">${bagsDisplay}</td>
                             <td class="inv-td text-center">${discountDisplay}</td>
@@ -8427,8 +8428,6 @@ function onPnLFilterChange() {
                         </div>
                         <div class="inv-meta-box">
                             <div><strong>Invoice No:</strong> ${purchaseInvoiceText}</div>
-                            <div><strong>Date:</strong> ${escapeHtml(purchaseDateText)}</div>
-                            <div><strong>Truck No:</strong> ${escapeHtml(purchaseTruckText)}</div>
                             <div><strong>LR Number:</strong> ${escapeHtml(purchaseLrText)}</div>
                         </div>
                     </div>
@@ -8436,6 +8435,8 @@ function onPnLFilterChange() {
                         <thead>
                             <tr>
                                 <th>Item</th>
+                                <th>Date</th>
+                                <th>Truck No</th>
                                 <th class="text-center">Gross Wt</th>
                                 <th class="text-center">Bag/Quantity</th>
                                 <th class="text-center">Discount</th>
@@ -8487,8 +8488,6 @@ function onPnLFilterChange() {
             if (!sale) return '';
             const company = appData.company;
             const saleInvoiceText = sale.masterInvoice || sale.invoice;
-            const saleDateText = collectUniqueNonEmpty(sale.multiDates || [sale.date]).join(', ') || (sale.date || '-');
-            const saleTruckText = collectUniqueNonEmpty(sale.multiTrucks || [sale.truck]).join(', ') || (sale.truck || '-');
             const saleLrText = collectUniqueNonEmpty(sale.multiLrNumbers || [sale.lrNumber]).join(', ') || (sale.lrNumber || '-');
             
             let itemsHtml = '';
@@ -8502,6 +8501,8 @@ function onPnLFilterChange() {
                     itemsHtml += `
                         <tr>
                             <td class="border px-2 py-1">${item.itemName}</td>
+                            <td class="border px-2 py-1">${escapeHtml(item.date || sale.date || '-')}</td>
+                            <td class="border px-2 py-1">${escapeHtml(item.truck || sale.truck || '-')}</td>
                             <td class="border px-2 py-1 text-center">${item.grossWeight}</td>
                             ${middleColumn}
                             <td class="border px-2 py-1 text-center">${item.netWeight}</td>
@@ -8604,8 +8605,6 @@ function onPnLFilterChange() {
                         <div style="display: flex; justify-content: space-between;">
                             <div>
                                 <strong>Invoice No:</strong> ${saleInvoiceText}<br>
-                                <strong>Date:</strong> ${escapeHtml(saleDateText)}<br>
-                                <strong>Truck No:</strong> ${escapeHtml(saleTruckText)}<br>
                                 <strong>LR Number:</strong> ${escapeHtml(saleLrText)}
                             </div>
                             <div>
@@ -8644,6 +8643,8 @@ function onPnLFilterChange() {
                         <thead>
                             <tr class="border">
                                 <th class="border px-2 py-1">Item</th>
+                                <th class="border px-2 py-1">Date</th>
+                                <th class="border px-2 py-1">Truck No</th>
                                 <th class="border px-2 py-1">Gross Weight</th>
                                 <th class="border px-2 py-1">Bags/Discount</th>
                                 <th class="border px-2 py-1">Net Weight</th>
@@ -9291,6 +9292,12 @@ function onPnLFilterChange() {
 
         let currentPaymentData = null;
 
+        function setPaymentModalDefaultDate() {
+            const paymentDateEl = document.getElementById('paymentDate');
+            if (!paymentDateEl) return;
+            paymentDateEl.value = new Date().toISOString().split('T')[0];
+        }
+
         function payPurchase(purchaseId) {
             const purchase = appData.purchases.find(p => p.id === purchaseId);
             if (!purchase) return;
@@ -9315,6 +9322,7 @@ function onPnLFilterChange() {
             onPaymentModeChange();
             document.getElementById('paidThrough').value = '';
             document.getElementById('paymentRemarks').value = '';
+            setPaymentModalDefaultDate();
             
             document.getElementById('paymentModal').classList.remove('hidden');
         }
@@ -9343,6 +9351,7 @@ function onPnLFilterChange() {
             onPaymentModeChange();
             document.getElementById('paidThrough').value = '';
             document.getElementById('paymentRemarks').value = '';
+            setPaymentModalDefaultDate();
             
             document.getElementById('paymentModal').classList.remove('hidden');
         }
@@ -9389,6 +9398,7 @@ function onPnLFilterChange() {
             var throughEl = document.getElementById('paidThrough');
             var bankAccountEl = document.getElementById('paymentBankAccount');
             var remarksEl = document.getElementById('paymentRemarks');
+            var paymentDateEl = document.getElementById('paymentDate');
             var party = currentPaymentData ? currentPaymentData.party : '';
             var invoice = currentPaymentData ? currentPaymentData.invoice : '';
             var amount = amountEl ? parseFloat(amountEl.value) || 0 : 0;
@@ -9402,7 +9412,8 @@ function onPnLFilterChange() {
             var remarks = remarksEl ? remarksEl.value : '';
             var companyName = (appData.company && appData.company.name) ? appData.company.name : 'ITCO';
             var d = new Date();
-            var dateStr = d.toLocaleDateString('en-IN');
+            var selectedDateValue = paymentDateEl && paymentDateEl.value ? paymentDateEl.value : new Date().toISOString().split('T')[0];
+            var dateStr = selectedDateValue;
             var timeStr = d.toLocaleTimeString('en-IN', { hour12: true });
             var win = window.open('', '_blank');
             win.document.write('<!DOCTYPE html><html><head><title>Payment Voucher</title></head><body style="font-family: Arial, sans-serif; padding: 24px; max-width: 400px;">' +
@@ -9429,6 +9440,7 @@ function onPnLFilterChange() {
             
             const amount = parseFloat(document.getElementById('paymentAmount').value);
             const mode = document.getElementById('paymentMode').value;
+            const paymentDate = (document.getElementById('paymentDate') && document.getElementById('paymentDate').value) ? document.getElementById('paymentDate').value : '';
             const bankAccountId = (document.getElementById('paymentBankAccount') && document.getElementById('paymentBankAccount').value) || '';
             const paidThrough = document.getElementById('paidThrough').value;
             const remarks = document.getElementById('paymentRemarks').value;
@@ -9440,6 +9452,10 @@ function onPnLFilterChange() {
             
             if (!mode) {
                 alert('Please select payment mode');
+                return;
+            }
+            if (!paymentDate) {
+                alert('Please select payment date');
                 return;
             }
 
@@ -9490,7 +9506,7 @@ function onPnLFilterChange() {
                 bankAccountNumber: selectedBank ? selectedBank.account : null,
                 paidThrough: paidThrough,
                 remarks: remarks,
-                date: new Date().toISOString().split('T')[0]
+                date: paymentDate
             };
             
             // Add entity information for ledger payments
@@ -9674,6 +9690,7 @@ function onPnLFilterChange() {
             onPaymentModeChange();
             document.getElementById('paidThrough').value = '';
             document.getElementById('paymentRemarks').value = '';
+            setPaymentModalDefaultDate();
             
             document.getElementById('paymentModal').classList.remove('hidden');
         }
@@ -9702,6 +9719,7 @@ function onPnLFilterChange() {
             onPaymentModeChange();
             document.getElementById('paidThrough').value = '';
             document.getElementById('paymentRemarks').value = '';
+            setPaymentModalDefaultDate();
             
             document.getElementById('paymentModal').classList.remove('hidden');
         }
