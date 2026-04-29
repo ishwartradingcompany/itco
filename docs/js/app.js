@@ -3223,6 +3223,104 @@ function deleteAllMasters() {
         // Purchase Others management
         let purchaseOthersIndex = 1;
         
+        function syncPurchaseOthersRowState(row) {
+            if (!row) return;
+            const isDone = row.dataset.done === 'true';
+            const categoryEl = row.querySelector('.purchase-others-category');
+            const reasonEl = row.querySelector('.purchase-others-reason');
+            const amountEl = row.querySelector('.purchase-others-amount');
+            const operationEl = row.querySelector('.purchase-others-operation');
+            [categoryEl, reasonEl, amountEl, operationEl].forEach(el => {
+                if (el) el.disabled = isDone;
+            });
+            const doneBtn = row.querySelector('.purchase-others-done-btn');
+            const editBtn = row.querySelector('.purchase-others-edit-btn');
+            if (doneBtn) doneBtn.classList.toggle('hidden', isDone);
+            if (editBtn) editBtn.classList.toggle('hidden', !isDone);
+        }
+        
+        function attachPurchaseOthersRowBehavior(row) {
+            if (!row) return;
+            row.classList.remove('md:grid-cols-3', 'md:grid-cols-4');
+            row.classList.add('md:grid-cols-5');
+            if (!row.dataset.index) {
+                row.dataset.index = String(purchaseOthersIndex++);
+            }
+            if (!row.dataset.done) row.dataset.done = 'false';
+            const rowIndex = row.getAttribute('data-index');
+            const catSelect = row.querySelector('.purchase-others-category');
+            const otherWrap = row.querySelector('.purchase-others-other-reason-wrap');
+            if (catSelect && otherWrap) {
+                otherWrap.style.display = catSelect.value === 'Other' ? 'block' : 'none';
+                catSelect.onchange = function() {
+                    otherWrap.style.display = this.value === 'Other' ? 'block' : 'none';
+                    row.dataset.done = 'false';
+                    syncPurchaseOthersRowState(row);
+                };
+            }
+            const inputs = row.querySelectorAll('input, select');
+            inputs.forEach(function(input) {
+                input.oninput = function() {
+                    row.dataset.done = 'false';
+                    syncPurchaseOthersRowState(row);
+                };
+                input.onchange = function() {
+                    row.dataset.done = 'false';
+                    syncPurchaseOthersRowState(row);
+                };
+            });
+            if (!row.querySelector('.purchase-others-actions')) {
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'purchase-others-actions flex items-end gap-2';
+                actionsDiv.innerHTML = `
+                    <button type="button" onclick="donePurchaseOthersRow(${rowIndex})" class="purchase-others-done-btn flex-1 p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Done</button>
+                    <button type="button" onclick="editPurchaseOthersRow(${rowIndex})" class="purchase-others-edit-btn hidden flex-1 p-3 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors">Edit</button>
+                    <button type="button" onclick="removePurchaseOthersRow(${rowIndex})" class="purchase-others-remove-btn p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">Remove</button>
+                `;
+                row.appendChild(actionsDiv);
+            }
+            syncPurchaseOthersRowState(row);
+        }
+        
+        function initializePurchaseOthersRows() {
+            const rows = document.querySelectorAll('.purchase-others-row');
+            let maxIndex = 0;
+            rows.forEach(function(row, idx) {
+                if (!row.getAttribute('data-index')) {
+                    row.setAttribute('data-index', String(idx));
+                }
+                const currentIndex = parseInt(row.getAttribute('data-index'), 10);
+                if (!isNaN(currentIndex)) maxIndex = Math.max(maxIndex, currentIndex);
+                attachPurchaseOthersRowBehavior(row);
+            });
+            purchaseOthersIndex = maxIndex + 1;
+        }
+        
+        function donePurchaseOthersRow(index) {
+            const row = document.querySelector('.purchase-others-row[data-index="' + String(index) + '"]');
+            if (!row) return;
+            const catEl = row.querySelector('.purchase-others-category');
+            const reasonEl = row.querySelector('.purchase-others-reason');
+            const amountEl = row.querySelector('.purchase-others-amount');
+            const reason = catEl ? (catEl.value === 'Other' ? ((reasonEl && reasonEl.value) || '').trim() : catEl.value) : ((reasonEl && reasonEl.value) || '').trim();
+            const amount = parseFloat((amountEl && amountEl.value) || 0) || 0;
+            if (!reason || amount <= 0) {
+                alert('Please enter a valid reason/category and amount before clicking Done.');
+                return;
+            }
+            row.dataset.done = 'true';
+            syncPurchaseOthersRowState(row);
+            calculatePurchaseTotals();
+        }
+        
+        function editPurchaseOthersRow(index) {
+            const row = document.querySelector('.purchase-others-row[data-index="' + String(index) + '"]');
+            if (!row) return;
+            row.dataset.done = 'false';
+            syncPurchaseOthersRowState(row);
+            calculatePurchaseTotals();
+        }
+        
         function addPurchaseOthersRow() {
             const container = document.getElementById('purchaseOthersContainer');
             const newRow = document.createElement('div');
@@ -3260,19 +3358,7 @@ function deleteAllMasters() {
                 </div>
             `;
             container.appendChild(newRow);
-            const catSelect = newRow.querySelector('.purchase-others-category');
-            const otherWrap = newRow.querySelector('.purchase-others-other-reason-wrap');
-            if (catSelect && otherWrap) {
-                catSelect.addEventListener('change', function() {
-                    otherWrap.style.display = this.value === 'Other' ? 'block' : 'none';
-                    calculatePurchaseTotals();
-                });
-            }
-            const inputs = newRow.querySelectorAll('input, select');
-            inputs.forEach(input => {
-                input.addEventListener('input', calculatePurchaseTotals);
-                input.addEventListener('change', calculatePurchaseTotals);
-            });
+            attachPurchaseOthersRowBehavior(newRow);
             purchaseOthersIndex++;
         }
         
@@ -3289,6 +3375,7 @@ function deleteAllMasters() {
             const entries = [];
             
             rows.forEach(row => {
+                if (row.dataset.done !== 'true') return;
                 const catEl = row.querySelector('.purchase-others-category');
                 const reasonEl = row.querySelector('.purchase-others-reason');
                 const reason = catEl ? (catEl.value === 'Other' ? (reasonEl && reasonEl.value) || '' : catEl.value) : (reasonEl && reasonEl.value) || '';
@@ -3672,10 +3759,21 @@ function deleteAllMasters() {
             // Clear all Others rows except the first one
             const container = document.getElementById('purchaseOthersContainer');
             container.innerHTML = `
-                <div class="purchase-others-row grid grid-cols-1 md:grid-cols-3 gap-4 mb-3" data-index="0">
+                <div class="purchase-others-row grid grid-cols-1 md:grid-cols-4 gap-4 mb-3" data-index="0">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Reason/Description</label>
-                        <input type="text" class="purchase-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason (e.g., Transport, Commission)">
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Category</label>
+                        <select class="purchase-others-category w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="Cold Storage Rent">Cold Storage Rent</option>
+                            <option value="Labour">Labour</option>
+                            <option value="Transport">Transport</option>
+                            <option value="Stocking">Stocking</option>
+                            <option value="Seed Investment">Seed Investment</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="purchase-others-other-reason-wrap" style="display: none;">
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Specify (Other)</label>
+                        <input type="text" class="purchase-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
@@ -3690,7 +3788,7 @@ function deleteAllMasters() {
                     </div>
                 </div>
             `;
-            purchaseOthersIndex = 1;
+            initializePurchaseOthersRows();
             
             currentPurchaseItems = [];
             editingPurchaseItemIndex = -1;
@@ -5963,6 +6061,90 @@ function deleteAllMasters() {
         // Sales Others management
         let saleOthersIndex = 1;
         
+        function syncSaleOthersRowState(row) {
+            if (!row) return;
+            const isDone = row.dataset.done === 'true';
+            const reasonEl = row.querySelector('.sale-others-reason');
+            const amountEl = row.querySelector('.sale-others-amount');
+            const operationEl = row.querySelector('.sale-others-operation');
+            [reasonEl, amountEl, operationEl].forEach(el => {
+                if (el) el.disabled = isDone;
+            });
+            const doneBtn = row.querySelector('.sale-others-done-btn');
+            const editBtn = row.querySelector('.sale-others-edit-btn');
+            if (doneBtn) doneBtn.classList.toggle('hidden', isDone);
+            if (editBtn) editBtn.classList.toggle('hidden', !isDone);
+        }
+        
+        function attachSaleOthersRowBehavior(row) {
+            if (!row) return;
+            row.classList.remove('md:grid-cols-3');
+            row.classList.add('md:grid-cols-4');
+            if (!row.dataset.index) {
+                row.dataset.index = String(saleOthersIndex++);
+            }
+            if (!row.dataset.done) row.dataset.done = 'false';
+            const rowIndex = row.getAttribute('data-index');
+            const inputs = row.querySelectorAll('input, select');
+            inputs.forEach(function(input) {
+                input.oninput = function() {
+                    row.dataset.done = 'false';
+                    syncSaleOthersRowState(row);
+                };
+                input.onchange = function() {
+                    row.dataset.done = 'false';
+                    syncSaleOthersRowState(row);
+                };
+            });
+            if (!row.querySelector('.sale-others-actions')) {
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'sale-others-actions flex items-end gap-2';
+                actionsDiv.innerHTML = `
+                    <button type="button" onclick="doneSaleOthersRow(${rowIndex})" class="sale-others-done-btn flex-1 p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Done</button>
+                    <button type="button" onclick="editSaleOthersRow(${rowIndex})" class="sale-others-edit-btn hidden flex-1 p-3 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors">Edit</button>
+                    <button type="button" onclick="removeSaleOthersRow(${rowIndex})" class="sale-others-remove-btn p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">Remove</button>
+                `;
+                row.appendChild(actionsDiv);
+            }
+            syncSaleOthersRowState(row);
+        }
+        
+        function initializeSaleOthersRows() {
+            const rows = document.querySelectorAll('.sale-others-row');
+            let maxIndex = 0;
+            rows.forEach(function(row, idx) {
+                if (!row.getAttribute('data-index')) {
+                    row.setAttribute('data-index', String(idx));
+                }
+                const currentIndex = parseInt(row.getAttribute('data-index'), 10);
+                if (!isNaN(currentIndex)) maxIndex = Math.max(maxIndex, currentIndex);
+                attachSaleOthersRowBehavior(row);
+            });
+            saleOthersIndex = maxIndex + 1;
+        }
+        
+        function doneSaleOthersRow(index) {
+            const row = document.querySelector('.sale-others-row[data-index="' + String(index) + '"]');
+            if (!row) return;
+            const reason = ((row.querySelector('.sale-others-reason') || {}).value || '').trim();
+            const amount = parseFloat(((row.querySelector('.sale-others-amount') || {}).value) || 0) || 0;
+            if (!reason || amount <= 0) {
+                alert('Please enter a valid reason and amount before clicking Done.');
+                return;
+            }
+            row.dataset.done = 'true';
+            syncSaleOthersRowState(row);
+            calculateSaleTotals();
+        }
+        
+        function editSaleOthersRow(index) {
+            const row = document.querySelector('.sale-others-row[data-index="' + String(index) + '"]');
+            if (!row) return;
+            row.dataset.done = 'false';
+            syncSaleOthersRowState(row);
+            calculateSaleTotals();
+        }
+        
         function addSaleOthersRow() {
             const container = document.getElementById('saleOthersContainer');
             const newRow = document.createElement('div');
@@ -5987,12 +6169,7 @@ function deleteAllMasters() {
             `;
             container.appendChild(newRow);
             
-            // Add event listeners for real-time calculation
-            const inputs = newRow.querySelectorAll('input, select');
-            inputs.forEach(input => {
-                input.addEventListener('input', calculateSaleTotals);
-                input.addEventListener('change', calculateSaleTotals);
-            });
+            attachSaleOthersRowBehavior(newRow);
             
             saleOthersIndex++;
         }
@@ -6010,6 +6187,7 @@ function deleteAllMasters() {
             const entries = [];
             
             rows.forEach(row => {
+                if (row.dataset.done !== 'true') return;
                 const reason = row.querySelector('.sale-others-reason').value;
                 const amount = parseFloat(row.querySelector('.sale-others-amount').value) || 0;
                 const operation = row.querySelector('.sale-others-operation').value;
@@ -6360,7 +6538,7 @@ function deleteAllMasters() {
                     </div>
                 </div>
             `;
-            saleOthersIndex = 1;
+            initializeSaleOthersRows();
             
             currentSaleItems = [];
             editingSaleId = null;
@@ -10538,6 +10716,7 @@ function onPnLFilterChange() {
                     </div>
                 `;
             }
+            initializePurchaseOthersRows();
             
             // Clear current items
             currentPurchaseItems = [];
@@ -10793,7 +10972,7 @@ function onPnLFilterChange() {
             const othersContainer = document.getElementById('saleOthersContainer');
             if (othersContainer) {
                 othersContainer.innerHTML = `
-                    <div class="sale-others-row grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div class="sale-others-row grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" data-index="0">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-2">Reason</label>
                             <input type="text" class="sale-others-reason w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter reason (e.g., Transport, Commission)">
@@ -10812,6 +10991,7 @@ function onPnLFilterChange() {
                     </div>
                 `;
             }
+            initializeSaleOthersRows();
             
             // Clear current items
             currentSaleItems = [];
@@ -11897,6 +12077,8 @@ function exportLedgerStatement() {
                 const element = document.getElementById(id);
                 if (element) element.value = today;
             });
+            initializePurchaseOthersRows();
+            initializeSaleOthersRows();
 
             // Add event listeners for real-time calculations
             const purchaseInputs = ['purchaseQuantity', 'purchaseBags', 'purchaseDiscountQty', 'purchaseRate', 'purchaseAmount', 'purchaseHammali', 'purchaseAdvance', 'purchaseOthersAmount'];
