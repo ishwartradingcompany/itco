@@ -837,84 +837,103 @@
                 <!-- Item Entry Form -->
                 <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 mb-6">
                     <h4 class="text-lg font-semibold mb-4 text-slate-700">Add Item to Invoice</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Item</label>
-                            <select id="purchaseItem" onchange="updatePurchaseInputs()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                                <option value="">Select Item</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Gross Weight (kg)</label>
-                            <input type="number" id="purchaseQuantity" placeholder="Gross Weight" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                            <small class="text-slate-500" id="purchaseUnitDisplay">Select item first</small>
-                        </div>
-                        <div id="purchaseBagsContainer">
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Number of Bags</label>
-                            <input type="number" id="purchaseBags" placeholder="Number of Bags" oninput="document.getElementById('purchaseDiscount').value=this.value; calculatePurchaseItemTotal();" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                            <small class="text-slate-500">Bags weight will be deducted</small>
-                        </div>
-                        <div id="purchaseDiscountContainer">
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Discount</label>
-                            <input type="number" id="purchaseDiscount" placeholder="Discount" value="0" step="any" oninput="calculatePurchaseItemTotal()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                            <small class="text-slate-500">Deducted from gross to get net weight (flows from Bags; editable)</small>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Net Weight</label>
-                            <input type="number" id="purchaseNetWeight" placeholder="Net Weight" step="any" oninput="recalcPurchaseItemTotalFromNetWeight()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                            <small class="text-slate-500">Auto-calculated (Gross - Discount); you can edit</small>
-                        </div>
-                        <div id="purchaseDiscountQtyContainer" style="display: none;">
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Discount Quantity (For Invoice Only)</label>
-                            <input type="number" id="purchaseDiscountQty" placeholder="Discount Quantity" value="0" class="w-full p-3 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent bg-yellow-50">
-                            <small class="text-slate-500">Deducted from invoice amount only, not from inventory</small>
-                        </div>
-                        <div id="purchaseRateContainer">
-                            <label class="block text-sm font-medium text-slate-700 mb-2" id="purchaseRateLabel">Rate per kg</label>
-                            <input type="number" id="purchaseRate" placeholder="Rate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                            <small class="text-slate-500" id="purchaseRateHelp">Enter rate per kg</small>
-                        </div>
-                        <div id="purchaseAmountContainer" style="display: none;">
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Total Amount</label>
-                            <input type="number" id="purchaseAmount" placeholder="Total Amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                            <small class="text-slate-500">Enter total amount for this quantity</small>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Item Total</label>
-                            <input type="number" id="purchaseItemTotal" placeholder="Item Total" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-gray-100">
-                            <small class="text-slate-500">Auto-calculated</small>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Kaanta Parchi</label>
-                            <input type="text" id="purchaseKaantaParchi" placeholder="Kaanta Parchi Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                            <small class="text-slate-500">Optional weighbridge slip reference</small>
-                        </div>
-                        <div class="lg:col-span-3 border border-cyan-200 bg-cyan-50 rounded-lg p-4">
-                            <label class="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
-                                <input type="checkbox" id="purchaseColdStorageToggle" onchange="togglePurchaseColdStorageFields()" class="rounded border-slate-300 text-primary focus:ring-primary">
-                                Move to Cold Storage
-                            </label>
-                            <div id="purchaseColdStorageFields" class="hidden mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">Rent per kg</label>
-                                    <input type="number" id="purchaseColdStorageRentPerKg" min="0" step="any" oninput="calculatePurchaseColdStorageCost()" placeholder="0" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">In/Out per Bag</label>
-                                    <input type="number" id="purchaseColdStorageInOutPerBag" min="0" step="any" oninput="calculatePurchaseColdStorageCost()" placeholder="0" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">Other Charges</label>
-                                    <input type="number" id="purchaseColdStorageOtherCharge" min="0" step="any" oninput="calculatePurchaseColdStorageCost()" placeholder="0" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">Cold Storage Cost</label>
-                                    <input type="number" id="purchaseColdStorageCost" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-gray-100">
-                                </div>
+                    <div id="purchaseItemTabHeader" class="mb-4 flex flex-wrap gap-2">
+                        <button type="button" id="purchaseItemTabBasicBtn" onclick="switchPurchaseItemTab('basic')" class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium">Basic Item Entry</button>
+                        <button type="button" id="purchaseItemTabColdBtn" onclick="switchPurchaseItemTab('cold')" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-medium hidden">Cold Storage Details</button>
+                    </div>
+
+                    <div id="purchaseItemTabBasic">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Item</label>
+                                <select id="purchaseItem" onchange="updatePurchaseInputs()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    <option value="">Select Item</option>
+                                </select>
                             </div>
-                            <small class="text-slate-500 mt-2 block">These charges are internal costs only; they do not change supplier bill totals.</small>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Gross Weight (kg)</label>
+                                <input type="number" id="purchaseQuantity" placeholder="Gross Weight" oninput="calculatePurchaseColdStorageCost()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <small class="text-slate-500" id="purchaseUnitDisplay">Select item first</small>
+                            </div>
+                            <div id="purchaseBagsContainer">
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Number of Bags</label>
+                                <input type="number" id="purchaseBags" placeholder="Number of Bags" oninput="document.getElementById('purchaseDiscount').value=this.value; calculatePurchaseItemTotal(); calculatePurchaseColdStorageCost();" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <small class="text-slate-500">Bags weight will be deducted</small>
+                            </div>
+                            <div id="purchaseDiscountContainer">
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Discount</label>
+                                <input type="number" id="purchaseDiscount" placeholder="Discount" value="0" step="any" oninput="calculatePurchaseItemTotal()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <small class="text-slate-500">Deducted from gross to get net weight (flows from Bags; editable)</small>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Net Weight</label>
+                                <input type="number" id="purchaseNetWeight" placeholder="Net Weight" step="any" oninput="recalcPurchaseItemTotalFromNetWeight()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <small class="text-slate-500">Auto-calculated (Gross - Discount); you can edit</small>
+                            </div>
+                            <div id="purchaseDiscountQtyContainer" style="display: none;">
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Discount Quantity (For Invoice Only)</label>
+                                <input type="number" id="purchaseDiscountQty" placeholder="Discount Quantity" value="0" class="w-full p-3 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent bg-yellow-50">
+                                <small class="text-slate-500">Deducted from invoice amount only, not from inventory</small>
+                            </div>
+                            <div id="purchaseRateContainer">
+                                <label class="block text-sm font-medium text-slate-700 mb-2" id="purchaseRateLabel">Rate per kg</label>
+                                <input type="number" id="purchaseRate" placeholder="Rate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <small class="text-slate-500" id="purchaseRateHelp">Enter rate per kg</small>
+                            </div>
+                            <div id="purchaseAmountContainer" style="display: none;">
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Total Amount</label>
+                                <input type="number" id="purchaseAmount" placeholder="Total Amount" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <small class="text-slate-500">Enter total amount for this quantity</small>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Item Total</label>
+                                <input type="number" id="purchaseItemTotal" placeholder="Item Total" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-gray-100">
+                                <small class="text-slate-500">Auto-calculated</small>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Kaanta Parchi</label>
+                                <input type="text" id="purchaseKaantaParchi" placeholder="Kaanta Parchi Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <small class="text-slate-500">Optional weighbridge slip reference</small>
+                            </div>
+                            <div class="lg:col-span-3 border border-cyan-200 bg-cyan-50 rounded-lg p-4">
+                                <label class="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                                    <input type="checkbox" id="purchaseColdStorageToggle" onchange="togglePurchaseColdStorageFields()" class="rounded border-slate-300 text-primary focus:ring-primary">
+                                    Move to Cold Storage
+                                </label>
+                                <small class="text-slate-500 mt-2 block">Enable this to open the Cold Storage Details tab.</small>
+                            </div>
                         </div>
                     </div>
+
+                    <div id="purchaseItemTabCold" class="hidden border border-cyan-200 bg-cyan-50 rounded-lg p-4">
+                        <h5 class="text-sm font-semibold text-slate-700 mb-3">Cold Storage Details (Internal Cost)</h5>
+                        <div id="purchaseColdStorageFields" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Rent per kg</label>
+                                <input type="number" id="purchaseColdStorageRentPerKg" min="0" step="any" oninput="calculatePurchaseColdStorageCost()" placeholder="0" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">In/Out per Bag</label>
+                                <input type="number" id="purchaseColdStorageInOutPerBag" min="0" step="any" oninput="calculatePurchaseColdStorageCost()" placeholder="0" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Other Charges</label>
+                                <input type="number" id="purchaseColdStorageOtherCharge" min="0" step="any" oninput="calculatePurchaseColdStorageCost()" placeholder="0" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Cold Storage Cost</label>
+                                <input type="number" id="purchaseColdStorageCost" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-gray-100">
+                            </div>
+                        </div>
+                        <div class="mt-3 p-3 bg-white border border-cyan-100 rounded-md text-sm text-slate-600">
+                            <div>Rent Cost: <span id="purchaseColdStorageRentCostDisplay">0.00</span></div>
+                            <div>In/Out Cost: <span id="purchaseColdStorageInOutCostDisplay">0.00</span></div>
+                            <div>Other Charges: <span id="purchaseColdStorageOtherDisplay">0.00</span></div>
+                            <div class="font-semibold text-slate-800 mt-1">Total: <span id="purchaseColdStorageTotalDisplay">0.00</span></div>
+                        </div>
+                        <small class="text-slate-500 mt-2 block">These charges are internal costs only; they do not change supplier bill totals.</small>
+                    </div>
+
                     <div class="mt-4">
                         <button onclick="addItemToPurchase()" class="bg-secondary text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">Add Item to Invoice</button>
                     </div>
