@@ -365,7 +365,10 @@
             deductions: [],
             payments: [],
             adjustments: [],
-            openingBalances: []
+            openingBalances: [],
+            coldStorageLots: [],
+            coldStorageCharges: [],
+            coldStorageMovements: []
         };
 
        // Current invoice items (temporary storage)
@@ -646,6 +649,21 @@ function rebuildInventoryFromTransactions() {
         });
     });
 
+    // Adjust normal inventory by active cold-storage lots so moved stock
+    // does not appear in general inventory cards after reload/recalculate.
+    (appData.coldStorageLots || []).forEach(function(lot) {
+        const itemId = lot && lot.itemId;
+        if (itemId == null || !rebuilt[itemId]) return;
+        const activeQty = Math.max(0, parseFloat(lot.qtyInCold) || 0);
+        if (activeQty <= 0) return;
+        const releasedQty = Math.max(0, parseFloat(lot.releaseQtyTotal) || 0);
+        const lotTotalQty = activeQty + releasedQty;
+        const lotSourceCost = Math.max(0, parseFloat(lot.sourceInventoryCost) || 0);
+        const activeSourceCost = lotTotalQty > 0 ? (lotSourceCost * (activeQty / lotTotalQty)) : 0;
+        rebuilt[itemId].quantity -= activeQty;
+        rebuilt[itemId].totalCost -= activeSourceCost;
+    });
+
     // Cleanup tiny floating dust / invalid negatives from historic data.
     Object.keys(rebuilt).forEach(function(itemId) {
         const q = rebuilt[itemId].quantity || 0;
@@ -677,6 +695,9 @@ function loadData() {
                 // Ensure arrays and settings exist (older Firestore docs may lack these keys)
                 appData.payments = appData.payments || [];
                 appData.openingBalances = appData.openingBalances || [];
+                appData.coldStorageLots = appData.coldStorageLots || [];
+                appData.coldStorageCharges = appData.coldStorageCharges || [];
+                appData.coldStorageMovements = appData.coldStorageMovements || [];
                 appData.settings = appData.settings || {};
                 rebuildInventoryFromTransactions();
 
@@ -1021,6 +1042,7 @@ function deleteAllMasters() {
             // Update page-specific content
             if (pageId === 'inventory') {
                 refreshInventory();
+                if (typeof switchInventoryTab === 'function') switchInventoryTab('general');
             } else if (pageId === 'purchase') {
                 populateDropdowns();
                 // Show history view by default
@@ -4005,6 +4027,431 @@ function deleteAllMasters() {
         });
 
         // Inventory functions
+        let currentInventoryTab = 'general';
+
+        function switchInventoryTab(tabName) {
+            currentInventoryTab = (tabName === 'cold') ? 'cold' : 'general';
+            const generalSections = document.querySelectorAll('.inventory-general-section');
+            const coldPanel = document.getElementById('coldStorageInventoryPanel');
+            const generalBtn = document.getElementById('inventoryTabGeneralBtn');
+            const coldBtn = document.getElementById('inventoryTabColdBtn');
+            const showCold = currentInventoryTab === 'cold';
+
+            generalSections.forEach(function(section) {
+                if (section) section.classList.toggle('hidden', showCold);
+            });
+            if (coldPanel) coldPanel.classList.toggle('hidden', !showCold);
+            if (generalBtn) {
+                generalBtn.classList.toggle('bg-primary', !showCold);
+                generalBtn.classList.toggle('text-white', !showCold);
+                generalBtn.classList.toggle('bg-slate-100', showCold);
+                generalBtn.classList.toggle('text-slate-700', showCold);
+            }
+            if (coldBtn) {
+                coldBtn.classList.toggle('bg-primary', showCold);
+                coldBtn.classList.toggle('text-white', showCold);
+                coldBtn.classList.toggle('bg-slate-100', !showCold);
+                coldBtn.classList.toggle('text-slate-700', !showCold);
+            }
+            if (showCold) {
+                refreshColdStoragePanel();
+            }
+        }
+
+        function getItemUnitById(itemId) {
+            const item = (appData.items || []).find(function(i) { return String(i.id) === String(itemId); });
+            return item ? (item.unit || 'kg') : 'kg';
+        }
+
+        function getItemNameById(itemId) {
+            const item = (appData.items || []).find(function(i) { return String(i.id) === String(itemId); });
+            return item ? item.name : String(itemId || '');
+        }
+
+        function refreshColdStoragePanel() {
+            const moveDateEl = document.getElementById('coldMoveDate');
+            if (moveDateEl && !moveDateEl.value) moveDateEl.value = new Date().toISOString().split('T')[0];
+            const chargeDateEl = document.getElementById('coldChargeDate');
+            if (chargeDateEl && !chargeDateEl.value) chargeDateEl.value = new Date().toISOString().split('T')[0];
+            const releaseDateEl = document.getElementById('coldReleaseDate');
+            if (releaseDateEl && !releaseDateEl.value) releaseDateEl.value = new Date().toISOString().split('T')[0];
+            populateColdMoveItemOptions();
+            populateColdLotSelectors();
+            renderColdStorageLotsTable();
+            renderColdVendorPayablesSummary();
+        }
+
+        function populateColdMoveItemOptions() {
+            const select = document.getElementById('coldMoveItem');
+            if (!select) return;
+            const current = select.value;
+            select.innerHTML = '<option value="">Select Item</option>';
+            Object.keys(appData.inventory || {}).forEach(function(itemId) {
+                const stock = appData.inventory[itemId];
+                const qty = parseFloat(stock && stock.quantity) || 0;
+                if (qty <= 0) return;
+                const itemName = getItemNameById(itemId);
+                const unit = getItemUnitById(itemId);
+                select.innerHTML += `<option value="${itemId}">${escapeHtml(itemName)} (${qty.toFixed(2)} ${escapeHtml(unit)} available)</option>`;
+            });
+            if (current && select.querySelector(`option[value="${current}"]`)) {
+                select.value = current;
+            }
+            onColdMoveItemChange();
+        }
+
+        function onColdMoveItemChange() {
+            const itemId = document.getElementById('coldMoveItem') ? document.getElementById('coldMoveItem').value : '';
+            const hintEl = document.getElementById('coldMoveAvailableHint');
+            if (!hintEl) return;
+            if (!itemId || !appData.inventory[itemId]) {
+                hintEl.textContent = 'Available: 0';
+                return;
+            }
+            const qty = parseFloat(appData.inventory[itemId].quantity) || 0;
+            const unit = getItemUnitById(itemId);
+            hintEl.textContent = `Available: ${qty.toFixed(2)} ${unit}`;
+        }
+
+        function calculateColdMoveEstimatedTotals() {
+            const qty = Math.max(0, parseFloat(document.getElementById('coldMoveQty') && document.getElementById('coldMoveQty').value) || 0);
+            const bags = Math.max(0, parseFloat(document.getElementById('coldMoveBags') && document.getElementById('coldMoveBags').value) || 0);
+            const rentPerKg = Math.max(0, parseFloat(document.getElementById('coldMoveRentPerKg') && document.getElementById('coldMoveRentPerKg').value) || 0);
+            const inOutPerBag = Math.max(0, parseFloat(document.getElementById('coldMoveInOutPerBag') && document.getElementById('coldMoveInOutPerBag').value) || 0);
+            const otherCharge = Math.max(0, parseFloat(document.getElementById('coldMoveOtherCharge') && document.getElementById('coldMoveOtherCharge').value) || 0);
+            const total = (qty * rentPerKg) + (bags * inOutPerBag) + otherCharge;
+            const totalEl = document.getElementById('coldMoveEstimatedCharge');
+            if (totalEl) totalEl.value = total.toFixed(2);
+            return total;
+        }
+
+        function moveToColdStorage() {
+            const date = (document.getElementById('coldMoveDate') && document.getElementById('coldMoveDate').value) || '';
+            const itemId = (document.getElementById('coldMoveItem') && document.getElementById('coldMoveItem').value) || '';
+            const qty = Math.max(0, parseFloat(document.getElementById('coldMoveQty') && document.getElementById('coldMoveQty').value) || 0);
+            const bags = Math.max(0, parseFloat(document.getElementById('coldMoveBags') && document.getElementById('coldMoveBags').value) || 0);
+            const coldStorageName = (document.getElementById('coldMoveStorageName') && document.getElementById('coldMoveStorageName').value || '').trim();
+            const vendorName = (document.getElementById('coldMoveVendorName') && document.getElementById('coldMoveVendorName').value || '').trim();
+            const rentPerKg = Math.max(0, parseFloat(document.getElementById('coldMoveRentPerKg') && document.getElementById('coldMoveRentPerKg').value) || 0);
+            const inOutPerBag = Math.max(0, parseFloat(document.getElementById('coldMoveInOutPerBag') && document.getElementById('coldMoveInOutPerBag').value) || 0);
+            const otherCharge = Math.max(0, parseFloat(document.getElementById('coldMoveOtherCharge') && document.getElementById('coldMoveOtherCharge').value) || 0);
+            const paidAtMove = Math.max(0, parseFloat(document.getElementById('coldMovePaidAtMove') && document.getElementById('coldMovePaidAtMove').value) || 0);
+            const remarks = (document.getElementById('coldMoveRemarks') && document.getElementById('coldMoveRemarks').value || '').trim();
+            if (!date || !itemId || qty <= 0 || !coldStorageName || !vendorName) {
+                alert('Please fill date, item, quantity, cold storage name, and vendor name.');
+                return;
+            }
+            const stock = appData.inventory[itemId];
+            const availableQty = parseFloat(stock && stock.quantity) || 0;
+            if (availableQty < qty) {
+                alert('Insufficient quantity in normal inventory.');
+                return;
+            }
+            const estimatedTotalCharge = calculateColdMoveEstimatedTotals();
+            if (paidAtMove > estimatedTotalCharge) {
+                alert('Paid at move cannot exceed estimated total charge.');
+                return;
+            }
+            const totalCostBefore = parseFloat(stock.totalCost) || 0;
+            const avgCost = availableQty > 0 ? (totalCostBefore / availableQty) : 0;
+            const transferredValue = avgCost * qty;
+            stock.quantity = availableQty - qty;
+            stock.totalCost = totalCostBefore - transferredValue;
+            if (stock.quantity <= 0.0001) delete appData.inventory[itemId];
+
+            const lot = {
+                id: Date.now() + Math.floor(Math.random() * 1000),
+                date: date,
+                itemId: itemId,
+                itemName: getItemNameById(itemId),
+                unit: getItemUnitById(itemId),
+                coldStorageName: coldStorageName,
+                vendorName: vendorName,
+                qtyInCold: qty,
+                bagsInCold: bags,
+                rentPerKg: rentPerKg,
+                inOutPerBag: inOutPerBag,
+                otherCharge: otherCharge,
+                periodicChargeTotal: 0,
+                estimatedTotalCharge: estimatedTotalCharge,
+                paidAtMove: paidAtMove,
+                paidAtRelease: 0,
+                paidTotal: paidAtMove,
+                remainingPayable: Math.max(0, estimatedTotalCharge - paidAtMove),
+                releaseQtyTotal: 0,
+                releaseBagsTotal: 0,
+                status: 'active',
+                remarks: remarks,
+                sourceInventoryCost: +transferredValue.toFixed(2),
+                ...getAuditMeta(true)
+            };
+            appData.coldStorageLots.push(lot);
+            appData.coldStorageMovements = appData.coldStorageMovements || [];
+            appData.coldStorageMovements.push({
+                id: Date.now() + Math.floor(Math.random() * 1000),
+                date: date,
+                type: 'move_in',
+                lotId: lot.id,
+                itemId: itemId,
+                itemName: lot.itemName,
+                coldStorageName: coldStorageName,
+                vendorName: vendorName,
+                qty: qty,
+                bags: bags,
+                amount: estimatedTotalCharge,
+                paidAmount: paidAtMove,
+                remarks: remarks
+            });
+
+            if (paidAtMove > 0) {
+                appData.payments = appData.payments || [];
+                appData.payments.push({
+                    id: Date.now() + Math.floor(Math.random() * 1000),
+                    type: 'cold_storage_payment',
+                    invoiceId: lot.id,
+                    invoice: `COLD-${lot.id}`,
+                    party: vendorName,
+                    amount: paidAtMove,
+                    mode: 'cash',
+                    paidThrough: 'Cold Storage Move',
+                    remarks: `Move payment | ${coldStorageName}`,
+                    date: date
+                });
+            }
+
+            saveData();
+            refreshInventory();
+            updateDashboard();
+            refreshColdStoragePanel();
+            alert('Moved to cold storage successfully.');
+        }
+
+        function populateColdLotSelectors() {
+            const chargeSelect = document.getElementById('coldChargeLotId');
+            const releaseSelect = document.getElementById('coldReleaseLotId');
+            const currentCharge = chargeSelect ? chargeSelect.value : '';
+            const currentRelease = releaseSelect ? releaseSelect.value : '';
+            const activeLots = (appData.coldStorageLots || []).filter(function(lot) { return (lot.status || 'active') !== 'released' && (parseFloat(lot.qtyInCold) || 0) > 0; });
+
+            if (chargeSelect) {
+                chargeSelect.innerHTML = '<option value="">Select Lot</option>';
+                activeLots.forEach(function(lot) {
+                    chargeSelect.innerHTML += `<option value="${lot.id}">${escapeHtml(lot.itemName)} | ${escapeHtml(lot.coldStorageName)} | Qty ${Number(lot.qtyInCold || 0).toFixed(2)}</option>`;
+                });
+                if (currentCharge && chargeSelect.querySelector(`option[value="${currentCharge}"]`)) chargeSelect.value = currentCharge;
+            }
+
+            if (releaseSelect) {
+                releaseSelect.innerHTML = '<option value="">Select Lot</option>';
+                activeLots.forEach(function(lot) {
+                    releaseSelect.innerHTML += `<option value="${lot.id}">${escapeHtml(lot.itemName)} | ${escapeHtml(lot.coldStorageName)} | Qty ${Number(lot.qtyInCold || 0).toFixed(2)}</option>`;
+                });
+                if (currentRelease && releaseSelect.querySelector(`option[value="${currentRelease}"]`)) releaseSelect.value = currentRelease;
+            }
+            onColdReleaseLotChange();
+        }
+
+        function onColdReleaseLotChange() {
+            const lotId = (document.getElementById('coldReleaseLotId') && document.getElementById('coldReleaseLotId').value) || '';
+            const hintEl = document.getElementById('coldReleaseAvailableHint');
+            if (!hintEl) return;
+            if (!lotId) {
+                hintEl.textContent = 'Available in lot: 0';
+                return;
+            }
+            const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(lotId); });
+            if (!lot) {
+                hintEl.textContent = 'Available in lot: 0';
+                return;
+            }
+            hintEl.textContent = `Available in lot: ${Number(lot.qtyInCold || 0).toFixed(2)} ${lot.unit || 'kg'} | Remaining Payable: ${RU}${Number(lot.remainingPayable || 0).toFixed(2)}`;
+        }
+
+        function addColdPeriodicCharge() {
+            const date = (document.getElementById('coldChargeDate') && document.getElementById('coldChargeDate').value) || '';
+            const lotId = (document.getElementById('coldChargeLotId') && document.getElementById('coldChargeLotId').value) || '';
+            const amount = Math.max(0, parseFloat(document.getElementById('coldChargeAmount') && document.getElementById('coldChargeAmount').value) || 0);
+            const remarks = (document.getElementById('coldChargeRemarks') && document.getElementById('coldChargeRemarks').value || '').trim();
+            if (!date || !lotId || amount <= 0) {
+                alert('Please select date, lot, and enter a valid amount.');
+                return;
+            }
+            const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(lotId); });
+            if (!lot) {
+                alert('Selected lot not found.');
+                return;
+            }
+            lot.periodicChargeTotal = (parseFloat(lot.periodicChargeTotal) || 0) + amount;
+            lot.estimatedTotalCharge = (parseFloat(lot.estimatedTotalCharge) || 0) + amount;
+            lot.remainingPayable = Math.max(0, (parseFloat(lot.estimatedTotalCharge) || 0) - (parseFloat(lot.paidTotal) || 0));
+            appData.coldStorageCharges = appData.coldStorageCharges || [];
+            appData.coldStorageCharges.push({
+                id: Date.now() + Math.floor(Math.random() * 1000),
+                date: date,
+                lotId: lot.id,
+                itemId: lot.itemId,
+                itemName: lot.itemName,
+                coldStorageName: lot.coldStorageName,
+                vendorName: lot.vendorName,
+                amount: amount,
+                remarks: remarks
+            });
+            appData.coldStorageMovements = appData.coldStorageMovements || [];
+            appData.coldStorageMovements.push({
+                id: Date.now() + Math.floor(Math.random() * 1000),
+                date: date,
+                type: 'charge_add',
+                lotId: lot.id,
+                itemId: lot.itemId,
+                itemName: lot.itemName,
+                coldStorageName: lot.coldStorageName,
+                vendorName: lot.vendorName,
+                amount: amount,
+                remarks: remarks
+            });
+            saveData();
+            refreshColdStoragePanel();
+            alert('Periodic cold storage charge added.');
+        }
+
+        function releaseFromColdStorage() {
+            const date = (document.getElementById('coldReleaseDate') && document.getElementById('coldReleaseDate').value) || '';
+            const lotId = (document.getElementById('coldReleaseLotId') && document.getElementById('coldReleaseLotId').value) || '';
+            const releaseQty = Math.max(0, parseFloat(document.getElementById('coldReleaseQty') && document.getElementById('coldReleaseQty').value) || 0);
+            const paidAtRelease = Math.max(0, parseFloat(document.getElementById('coldReleasePaidAmount') && document.getElementById('coldReleasePaidAmount').value) || 0);
+            const remarks = (document.getElementById('coldReleaseRemarks') && document.getElementById('coldReleaseRemarks').value || '').trim();
+            if (!date || !lotId || releaseQty <= 0) {
+                alert('Please select date, lot, and release quantity.');
+                return;
+            }
+            const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(lotId); });
+            if (!lot) {
+                alert('Selected lot not found.');
+                return;
+            }
+            const qtyInLot = parseFloat(lot.qtyInCold) || 0;
+            if (releaseQty > qtyInLot) {
+                alert('Release quantity cannot exceed lot quantity.');
+                return;
+            }
+            if (paidAtRelease > (parseFloat(lot.remainingPayable) || 0)) {
+                alert('Paid at release cannot exceed remaining payable.');
+                return;
+            }
+            lot.qtyInCold = qtyInLot - releaseQty;
+            lot.releaseQtyTotal = (parseFloat(lot.releaseQtyTotal) || 0) + releaseQty;
+            lot.paidAtRelease = (parseFloat(lot.paidAtRelease) || 0) + paidAtRelease;
+            lot.paidTotal = (parseFloat(lot.paidTotal) || 0) + paidAtRelease;
+            lot.remainingPayable = Math.max(0, (parseFloat(lot.estimatedTotalCharge) || 0) - (parseFloat(lot.paidTotal) || 0));
+            lot.status = (lot.qtyInCold <= 0.0001) ? 'released' : 'partiallyReleased';
+            if (lot.qtyInCold <= 0.0001) lot.qtyInCold = 0;
+
+            if (!appData.inventory[lot.itemId]) appData.inventory[lot.itemId] = { quantity: 0, totalCost: 0 };
+            const sourceCost = parseFloat(lot.sourceInventoryCost) || 0;
+            const originalQty = (parseFloat(lot.releaseQtyTotal) || 0) + (parseFloat(lot.qtyInCold) || 0);
+            const avgInventoryCost = originalQty > 0 ? (sourceCost / originalQty) : 0;
+            appData.inventory[lot.itemId].quantity += releaseQty;
+            appData.inventory[lot.itemId].totalCost += (avgInventoryCost * releaseQty);
+
+            appData.coldStorageMovements = appData.coldStorageMovements || [];
+            appData.coldStorageMovements.push({
+                id: Date.now() + Math.floor(Math.random() * 1000),
+                date: date,
+                type: 'release_out',
+                lotId: lot.id,
+                itemId: lot.itemId,
+                itemName: lot.itemName,
+                coldStorageName: lot.coldStorageName,
+                vendorName: lot.vendorName,
+                qty: releaseQty,
+                amount: paidAtRelease,
+                remarks: remarks
+            });
+
+            if (paidAtRelease > 0) {
+                appData.payments = appData.payments || [];
+                appData.payments.push({
+                    id: Date.now() + Math.floor(Math.random() * 1000),
+                    type: 'cold_storage_payment',
+                    invoiceId: lot.id,
+                    invoice: `COLD-${lot.id}`,
+                    party: lot.vendorName,
+                    amount: paidAtRelease,
+                    mode: 'cash',
+                    paidThrough: 'Cold Storage Release',
+                    remarks: `Release payment | ${lot.coldStorageName}`,
+                    date: date
+                });
+            }
+
+            saveData();
+            refreshInventory();
+            updateDashboard();
+            refreshColdStoragePanel();
+            alert('Released from cold storage successfully.');
+        }
+
+        function renderColdStorageLotsTable() {
+            const tbody = document.getElementById('coldStorageLotsBody');
+            if (!tbody) return;
+            const activeLots = (appData.coldStorageLots || []).filter(function(lot) {
+                return (parseFloat(lot.qtyInCold) || 0) > 0 && (lot.status || 'active') !== 'released';
+            });
+            if (activeLots.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>';
+                return;
+            }
+            tbody.innerHTML = '';
+            activeLots.forEach(function(lot) {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-200';
+                tr.innerHTML = `
+                    <td class="px-3 py-2 text-sm">${lot.date || '-'}</td>
+                    <td class="px-3 py-2 text-sm">${escapeHtml(lot.itemName || '-')}</td>
+                    <td class="px-3 py-2 text-sm">${escapeHtml(lot.coldStorageName || '-')}</td>
+                    <td class="px-3 py-2 text-sm">${escapeHtml(lot.vendorName || '-')}</td>
+                    <td class="px-3 py-2 text-sm text-right">${Number(lot.qtyInCold || 0).toFixed(2)}</td>
+                    <td class="px-3 py-2 text-sm text-right">${Number(lot.bagsInCold || 0).toFixed(2)}</td>
+                    <td class="px-3 py-2 text-sm text-right">${RU}${Number(lot.estimatedTotalCharge || 0).toFixed(2)}</td>
+                    <td class="px-3 py-2 text-sm text-right">${RU}${Number(lot.paidTotal || 0).toFixed(2)}</td>
+                    <td class="px-3 py-2 text-sm text-right">${RU}${Number(lot.remainingPayable || 0).toFixed(2)}</td>
+                    <td class="px-3 py-2 text-sm">${escapeHtml(lot.remarks || '-')}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderColdVendorPayablesSummary() {
+            const tbody = document.getElementById('coldVendorPayablesBody');
+            if (!tbody) return;
+            const grouped = {};
+            (appData.coldStorageLots || []).forEach(function(lot) {
+                const vendor = String(lot.vendorName || '').trim() || 'Unknown Vendor';
+                const storage = String(lot.coldStorageName || '').trim() || 'Unknown Storage';
+                const key = `${vendor}|${storage}`;
+                if (!grouped[key]) {
+                    grouped[key] = { vendorName: vendor, coldStorageName: storage, totalCharge: 0, totalPaid: 0, remaining: 0 };
+                }
+                grouped[key].totalCharge += parseFloat(lot.estimatedTotalCharge) || 0;
+                grouped[key].totalPaid += parseFloat(lot.paidTotal) || 0;
+                grouped[key].remaining += parseFloat(lot.remainingPayable) || 0;
+            });
+            const rows = Object.values(grouped);
+            if (rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No cold storage payables yet</td></tr>';
+                return;
+            }
+            tbody.innerHTML = rows.map(function(row) {
+                return `<tr class="border-b border-slate-200">
+                    <td class="px-3 py-2 text-sm">${escapeHtml(row.vendorName)}</td>
+                    <td class="px-3 py-2 text-sm">${escapeHtml(row.coldStorageName)}</td>
+                    <td class="px-3 py-2 text-sm text-right">${RU}${row.totalCharge.toFixed(2)}</td>
+                    <td class="px-3 py-2 text-sm text-right">${RU}${row.totalPaid.toFixed(2)}</td>
+                    <td class="px-3 py-2 text-sm text-right">${RU}${row.remaining.toFixed(2)}</td>
+                </tr>`;
+            }).join('');
+        }
+
         // Stock movement filtered data
         let filteredStockMovements = [];
         let allStockMovements = [];
@@ -6974,6 +7421,9 @@ function deleteAllMasters() {
             const totalColdStorageCost = filteredPurchases.reduce((sum, purchase) => {
                 return sum + getPurchaseColdStorageTotal(purchase);
             }, 0);
+            const totalLotColdStorageCost = (appData.coldStorageLots || []).reduce((sum, lot) => {
+                return sum + (parseFloat(lot.estimatedTotalCharge) || 0);
+            }, 0);
             const totalEffectivePurchaseCost = totalBasePurchaseCost + totalColdStorageCost;
             const totalCosts = totalEffectivePurchaseCost;
             const totalBrokerage = filteredBrokerage.reduce((sum, entry) => sum + (entry.amount || 0), 0);
@@ -6992,7 +7442,7 @@ function deleteAllMasters() {
             var coldStorageCostEl = document.getElementById('pnlColdStorageCost');
             var effectivePurchaseCostEl = document.getElementById('pnlEffectivePurchaseCost');
             if (basePurchaseCostEl) basePurchaseCostEl.textContent = `${RU}${totalBasePurchaseCost.toFixed(2)}`;
-            if (coldStorageCostEl) coldStorageCostEl.textContent = `${RU}${totalColdStorageCost.toFixed(2)}`;
+            if (coldStorageCostEl) coldStorageCostEl.textContent = `${RU}${(totalColdStorageCost + totalLotColdStorageCost).toFixed(2)}`;
             if (effectivePurchaseCostEl) effectivePurchaseCostEl.textContent = `${RU}${totalEffectivePurchaseCost.toFixed(2)}`;
             
             // Helper: deduction totals for a sale (by linkedSale.saleId or invoice match). Uses lossAmount for P&L so adjustment (supplier/broker share) is respected.
