@@ -624,7 +624,9 @@ function rebuildInventoryFromTransactions() {
             const itemId = item.itemId;
             if (itemId == null) return;
             const qty = parseFloat(item.grossWeight ?? item.quantity ?? 0) || 0;
-            const val = parseFloat(item.total ?? 0) || 0;
+            const baseCost = parseFloat(item.total ?? 0) || 0;
+            const coldStorageCost = parseFloat(item.coldStorageCost ?? 0) || 0;
+            const val = baseCost + coldStorageCost;
             if (!rebuilt[itemId]) rebuilt[itemId] = { quantity: 0, totalCost: 0 };
             rebuilt[itemId].quantity += qty;
             rebuilt[itemId].totalCost += val;
@@ -2674,6 +2676,66 @@ function deleteAllMasters() {
             }
         }
 
+        function calculatePurchaseColdStorageCost() {
+            const costEl = document.getElementById('purchaseColdStorageCost');
+            const toggleEl = document.getElementById('purchaseColdStorageToggle');
+            if (!costEl || !toggleEl || !toggleEl.checked) {
+                if (costEl) costEl.value = '';
+                return 0;
+            }
+            const grossWeight = Math.max(0, parseFloat(document.getElementById('purchaseQuantity') && document.getElementById('purchaseQuantity').value) || 0);
+            const bags = Math.max(0, parseFloat(document.getElementById('purchaseBags') && document.getElementById('purchaseBags').value) || 0);
+            const rentPerKg = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageRentPerKg') && document.getElementById('purchaseColdStorageRentPerKg').value) || 0);
+            const inOutPerBag = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageInOutPerBag') && document.getElementById('purchaseColdStorageInOutPerBag').value) || 0);
+            const otherCharge = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageOtherCharge') && document.getElementById('purchaseColdStorageOtherCharge').value) || 0);
+            const totalCost = (grossWeight * rentPerKg) + (bags * inOutPerBag) + otherCharge;
+            costEl.value = totalCost.toFixed(2);
+            return totalCost;
+        }
+
+        function resetPurchaseColdStorageInputs() {
+            const toggleEl = document.getElementById('purchaseColdStorageToggle');
+            const fieldsEl = document.getElementById('purchaseColdStorageFields');
+            const rentEl = document.getElementById('purchaseColdStorageRentPerKg');
+            const inOutEl = document.getElementById('purchaseColdStorageInOutPerBag');
+            const otherEl = document.getElementById('purchaseColdStorageOtherCharge');
+            const costEl = document.getElementById('purchaseColdStorageCost');
+            if (toggleEl) toggleEl.checked = false;
+            if (fieldsEl) {
+                fieldsEl.classList.add('hidden');
+                fieldsEl.style.display = 'none';
+            }
+            if (rentEl) rentEl.value = '';
+            if (inOutEl) inOutEl.value = '';
+            if (otherEl) otherEl.value = '';
+            if (costEl) costEl.value = '';
+        }
+
+        function togglePurchaseColdStorageFields() {
+            const toggleEl = document.getElementById('purchaseColdStorageToggle');
+            const fieldsEl = document.getElementById('purchaseColdStorageFields');
+            if (!toggleEl || !fieldsEl) return;
+            if (toggleEl.checked) {
+                fieldsEl.classList.remove('hidden');
+                fieldsEl.style.display = 'grid';
+            } else {
+                fieldsEl.classList.add('hidden');
+                fieldsEl.style.display = 'none';
+            }
+            if (!toggleEl.checked) {
+                const rentEl = document.getElementById('purchaseColdStorageRentPerKg');
+                const inOutEl = document.getElementById('purchaseColdStorageInOutPerBag');
+                const otherEl = document.getElementById('purchaseColdStorageOtherCharge');
+                const costEl = document.getElementById('purchaseColdStorageCost');
+                if (rentEl) rentEl.value = '';
+                if (inOutEl) inOutEl.value = '';
+                if (otherEl) otherEl.value = '';
+                if (costEl) costEl.value = '';
+                return;
+            }
+            calculatePurchaseColdStorageCost();
+        }
+
         let editingPurchaseItemIndex = -1;
 
         function addItemToPurchase() {
@@ -2688,6 +2750,10 @@ function deleteAllMasters() {
             const discountQty = parseFloat(document.getElementById('purchaseDiscountQty').value) || 0;
             const rate = parseFloat(document.getElementById('purchaseRate').value) || 0;
             const amount = parseFloat(document.getElementById('purchaseAmount').value) || 0;
+            const isColdStorage = !!(document.getElementById('purchaseColdStorageToggle') && document.getElementById('purchaseColdStorageToggle').checked);
+            const coldStorageRentPerKg = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageRentPerKg') && document.getElementById('purchaseColdStorageRentPerKg').value) || 0);
+            const coldStorageInOutPerBag = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageInOutPerBag') && document.getElementById('purchaseColdStorageInOutPerBag').value) || 0);
+            const coldStorageOtherCharge = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageOtherCharge') && document.getElementById('purchaseColdStorageOtherCharge').value) || 0);
             
             if (!date || !supplierId || !itemId || !grossWeight) {
                 alert('Please select date, supplier, item and enter gross weight');
@@ -2734,6 +2800,9 @@ function deleteAllMasters() {
                 if (item.name.toLowerCase().includes('coconut')) total = netWeight * rate;
                 else if (item.unit.toLowerCase() !== 'qty' && item.unit.toLowerCase() !== 'quantity') total = netWeight * rate;
             }
+            const coldStorageCost = isColdStorage
+                ? ((Math.max(0, grossWeight) * coldStorageRentPerKg) + (Math.max(0, bags) * coldStorageInOutPerBag) + coldStorageOtherCharge)
+                : 0;
             
             const purchaseItem = {
                 id: (editingPurchaseItemIndex >= 0 && currentPurchaseItems[editingPurchaseItemIndex])
@@ -2753,7 +2822,12 @@ function deleteAllMasters() {
                 discountQty: discountQty, // Store discount for reference
                 rate: rate,
                 total: total, // Invoice amount = rate x net quantity
-                isCoconut: item.name.toLowerCase().includes('coconut') // Flag for special handling
+                isCoconut: item.name.toLowerCase().includes('coconut'), // Flag for special handling
+                isColdStorage: isColdStorage,
+                coldStorageRentPerKg: isColdStorage ? coldStorageRentPerKg : 0,
+                coldStorageInOutPerBag: isColdStorage ? coldStorageInOutPerBag : 0,
+                coldStorageOtherCharge: isColdStorage ? coldStorageOtherCharge : 0,
+                coldStorageCost: isColdStorage ? +coldStorageCost.toFixed(2) : 0
             };
             
             if (editingPurchaseItemIndex >= 0) {
@@ -2780,6 +2854,7 @@ function deleteAllMasters() {
             if (pkp) pkp.value = '';
             document.getElementById('purchaseDiscountQtyContainer').style.display = 'none';
             document.getElementById('purchaseBagsContainer').style.display = 'block';
+            resetPurchaseColdStorageInputs();
         }
 
         function editItemInPurchase(index) {
@@ -2826,6 +2901,16 @@ function deleteAllMasters() {
             document.getElementById('purchaseTruck').value = item.truck || '';
             var plrEdit = document.getElementById('purchaseLRNumber');
             if (plrEdit) plrEdit.value = item.lrNumber || '';
+            const coldToggleEl = document.getElementById('purchaseColdStorageToggle');
+            const coldRentEl = document.getElementById('purchaseColdStorageRentPerKg');
+            const coldInOutEl = document.getElementById('purchaseColdStorageInOutPerBag');
+            const coldOtherEl = document.getElementById('purchaseColdStorageOtherCharge');
+            if (coldToggleEl) coldToggleEl.checked = !!item.isColdStorage;
+            if (coldRentEl) coldRentEl.value = item.coldStorageRentPerKg || 0;
+            if (coldInOutEl) coldInOutEl.value = item.coldStorageInOutPerBag || 0;
+            if (coldOtherEl) coldOtherEl.value = item.coldStorageOtherCharge || 0;
+            togglePurchaseColdStorageFields();
+            calculatePurchaseColdStorageCost();
 
             calculatePurchaseItemTotal();
             document.getElementById('purchaseNetWeight').value = item.netWeight || '';
@@ -2859,6 +2944,7 @@ function deleteAllMasters() {
             document.getElementById('purchaseItemTotal').value = '';
             var pkp = document.getElementById('purchaseKaantaParchi');
             if (pkp) pkp.value = '';
+            resetPurchaseColdStorageInputs();
             if (typeof updatePurchaseInputs === 'function') updatePurchaseInputs();
             updateCurrentPurchaseItemsDisplay();
         }
@@ -2877,7 +2963,7 @@ function deleteAllMasters() {
             tbody.innerHTML = '';
             
             if (currentPurchaseItems.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="12" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
                 return;
             }
             
@@ -2908,6 +2994,8 @@ function deleteAllMasters() {
                     <td class="px-4 py-3">${RU}${item.rate}</td>
                     <td class="px-4 py-3">${RU}${item.total.toFixed(2)}</td>
                     <td class="px-4 py-3">${escapeHtml(item.kaantaParchi || '-')}</td>
+                    <td class="px-4 py-3">${item.isColdStorage ? 'Yes' : '-'}</td>
+                    <td class="px-4 py-3">${item.isColdStorage ? (RU + (parseFloat(item.coldStorageCost) || 0).toFixed(2)) : '-'}</td>
                     <td class="px-4 py-3">${actionCell}</td>
                 `;
                 const editBtn = row.querySelector('.js-edit-purchase-item');
@@ -3217,7 +3305,7 @@ function deleteAllMasters() {
                         existingPurchase.items.forEach(item => {
                             if (appData.inventory[item.itemId]) {
                                 appData.inventory[item.itemId].quantity -= item.grossWeight;
-                                appData.inventory[item.itemId].totalCost -= item.total;
+                                appData.inventory[item.itemId].totalCost -= ((parseFloat(item.total) || 0) + (parseFloat(item.coldStorageCost) || 0));
                                 if (appData.inventory[item.itemId].quantity <= 0) {
                                     delete appData.inventory[item.itemId];
                                 }
@@ -3254,7 +3342,7 @@ function deleteAllMasters() {
                             appData.inventory[item.itemId] = { quantity: 0, totalCost: 0 };
                         }
                         appData.inventory[item.itemId].quantity += item.grossWeight;
-                        appData.inventory[item.itemId].totalCost += item.total;
+                        appData.inventory[item.itemId].totalCost += ((parseFloat(item.total) || 0) + (parseFloat(item.coldStorageCost) || 0));
                     });
                     removeInlineBrokerageBySource('inline_purchase', existingPurchase.id);
                     if (postInlineBrokerage) {
@@ -3394,7 +3482,7 @@ function deleteAllMasters() {
                         appData.inventory[item.itemId] = { quantity: 0, totalCost: 0 };
                     }
                     appData.inventory[item.itemId].quantity += item.grossWeight;
-                    appData.inventory[item.itemId].totalCost += item.total;
+                    appData.inventory[item.itemId].totalCost += ((parseFloat(item.total) || 0) + (parseFloat(item.coldStorageCost) || 0));
                 });
 
                 if (postInlineBrokerage) {
@@ -3462,6 +3550,7 @@ function deleteAllMasters() {
             document.getElementById('purchaseAdvance').value = '';
             var pdEl = document.getElementById('purchaseDiscount');
             if (pdEl) pdEl.value = '0';
+            resetPurchaseColdStorageInputs();
             
             // Clear all Others rows except the first one
             const container = document.getElementById('purchaseOthersContainer');
@@ -8966,6 +9055,7 @@ function onPnLFilterChange() {
             document.getElementById('purchaseAdvance').value = '';
             var pdEl = document.getElementById('purchaseDiscount');
             if (pdEl) pdEl.value = '0';
+            resetPurchaseColdStorageInputs();
             
             // Clear Others fields (same structure as index.html: category + optional reason)
             const othersContainer = document.getElementById('purchaseOthersContainer');
@@ -9587,7 +9677,7 @@ function onPnLFilterChange() {
                     purchase.items.forEach(item => {
                         if (appData.inventory[item.itemId]) {
                             appData.inventory[item.itemId].quantity -= item.grossWeight;
-                            appData.inventory[item.itemId].totalCost -= item.total;
+                            appData.inventory[item.itemId].totalCost -= ((parseFloat(item.total) || 0) + (parseFloat(item.coldStorageCost) || 0));
                             
                             // Remove inventory entry if quantity becomes 0 or negative
                             if (appData.inventory[item.itemId].quantity <= 0) {
