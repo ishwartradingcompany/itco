@@ -907,14 +907,18 @@
 
                     <div id="purchaseItemTabCold" class="hidden border border-cyan-200 bg-cyan-50 rounded-lg p-4">
                         <h5 class="text-sm font-semibold text-slate-700 mb-3">Cold Storage Details (Internal Cost)</h5>
-                        <div id="purchaseColdStorageFields" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div id="purchaseColdStorageFields" class="grid grid-cols-1 md:grid-cols-5 gap-3">
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-2">Rent per kg</label>
                                 <input type="number" id="purchaseColdStorageRentPerKg" min="0" step="any" oninput="calculatePurchaseColdStorageCost()" placeholder="0" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-2">In/Out per Bag</label>
-                                <input type="number" id="purchaseColdStorageInOutPerBag" min="0" step="any" oninput="calculatePurchaseColdStorageCost()" placeholder="0" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <label class="block text-sm font-medium text-slate-700 mb-2">In per Bag</label>
+                                <input type="number" id="purchaseColdStorageInPerBag" min="0" step="any" oninput="calculatePurchaseColdStorageCost()" placeholder="0" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Out per Bag</label>
+                                <input type="number" id="purchaseColdStorageOutPerBag" min="0" step="any" oninput="calculatePurchaseColdStorageCost()" placeholder="0" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-2">Other Charges</label>
@@ -935,7 +939,8 @@
                         </div>
                         <div class="mt-3 p-3 bg-white border border-cyan-100 rounded-md text-sm text-slate-600">
                             <div>Rent: <span id="purchaseColdStorageRentRateDisplay">0.00</span> x <span id="purchaseColdStorageWeightDisplay">0.00</span> kg = <strong id="purchaseColdStorageRentCostDisplay">0.00</strong></div>
-                            <div>In/Out: <span id="purchaseColdStorageInOutRateDisplay">0.00</span> x <span id="purchaseColdStorageBagsDisplay">0.00</span> bags = <strong id="purchaseColdStorageInOutCostDisplay">0.00</strong></div>
+                            <div>In: <span id="purchaseColdStorageInRateDisplay">0.00</span> x <span id="purchaseColdStorageBagsDisplay">0.00</span> bags = <strong id="purchaseColdStorageInCostDisplay">0.00</strong></div>
+                            <div>Out: <span id="purchaseColdStorageOutRateDisplay">0.00</span> x <span id="purchaseColdStorageBagsDisplay">0.00</span> bags = <strong id="purchaseColdStorageOutCostDisplay">0.00</strong></div>
                             <div>Other Charges (flat): <strong id="purchaseColdStorageOtherDisplay">0.00</strong></div>
                             <div class="font-semibold text-slate-800 mt-1">Total Cold Storage Cost: <span id="purchaseColdStorageTotalDisplay">0.00</span></div>
                         </div>
