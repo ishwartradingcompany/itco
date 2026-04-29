@@ -1126,8 +1126,15 @@
                 </div>
             </div>
 
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-3">
+                <div class="flex items-center gap-2">
+                    <button type="button" id="inventoryTabGeneralBtn" onclick="switchInventoryTab('general')" class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium">General Inventory</button>
+                    <button type="button" id="inventoryTabColdBtn" onclick="switchInventoryTab('cold')" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-medium">Cold Storage Inventory Management</button>
+                </div>
+            </div>
+
             <!-- Primary KPI Strip -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="inventory-general-section grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                     <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Total Items</p>
                     <p id="invTotalItems" class="text-2xl font-bold text-slate-800 mt-1">0</p>
@@ -1151,7 +1158,7 @@
             </div>
 
             <!-- Secondary Summary -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="inventory-general-section grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
                     <p class="text-xs uppercase tracking-wider text-amber-700 font-semibold">Stock Value</p>
                     <p id="invTotalValue" class="text-2xl font-bold text-amber-700 mt-1">&#8377;0</p>
@@ -1165,7 +1172,7 @@
             </div>
             
             <!-- Current Stock Section -->
-            <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+            <div class="inventory-general-section bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -1189,7 +1196,7 @@
             </div>
 
             <!-- Stock Movement Section -->
-            <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+            <div class="inventory-general-section bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
                 <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -1266,6 +1273,170 @@
                     </div>
                 </div>
                 <div id="stockMovementPagination" class="pagination-container"></div>
+            </div>
+
+            <div id="coldStorageInventoryPanel" class="hidden space-y-6">
+                <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Move to Cold Storage</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Date</label>
+                            <input type="date" id="coldMoveDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Item</label>
+                            <select id="coldMoveItem" onchange="onColdMoveItemChange()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <option value="">Select Item</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Qty to Move</label>
+                            <input type="number" id="coldMoveQty" min="0" step="any" oninput="calculateColdMoveEstimatedTotals()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small id="coldMoveAvailableHint" class="text-xs text-slate-500">Available: 0</small>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Bags</label>
+                            <input type="number" id="coldMoveBags" min="0" step="any" oninput="calculateColdMoveEstimatedTotals()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Cold Storage Name</label>
+                            <input type="text" id="coldMoveStorageName" placeholder="Storage name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Vendor Name</label>
+                            <input type="text" id="coldMoveVendorName" placeholder="Vendor name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Rent per kg</label>
+                            <input type="number" id="coldMoveRentPerKg" min="0" step="any" oninput="calculateColdMoveEstimatedTotals()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">In/Out per Bag</label>
+                            <input type="number" id="coldMoveInOutPerBag" min="0" step="any" oninput="calculateColdMoveEstimatedTotals()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Other Charges</label>
+                            <input type="number" id="coldMoveOtherCharge" min="0" step="any" oninput="calculateColdMoveEstimatedTotals()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Estimated Total Charge</label>
+                            <input type="number" id="coldMoveEstimatedCharge" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-slate-100">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Paid at Move</label>
+                            <input type="number" id="coldMovePaidAtMove" min="0" step="any" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div class="md:col-span-3 lg:col-span-2">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Remarks</label>
+                            <input type="text" id="coldMoveRemarks" placeholder="Notes / lot details" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <button type="button" onclick="moveToColdStorage()" class="bg-primary text-white px-5 py-2 rounded-lg hover:bg-green-700 transition-colors">Move to Cold</button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Active Cold Lots</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-auto border border-slate-200 rounded-lg">
+                            <thead>
+                                <tr class="bg-slate-50">
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Date</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Item</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Cold Storage</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Vendor</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Qty</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Bags</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Total Charge</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Paid</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Remaining</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Remarks</th>
+                                </tr>
+                            </thead>
+                            <tbody id="coldStorageLotsBody">
+                                <tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4">Add Periodic Charge</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Date</label>
+                                <input type="date" id="coldChargeDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Lot</label>
+                                <select id="coldChargeLotId" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"><option value="">Select Lot</option></select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
+                                <input type="number" id="coldChargeAmount" min="0" step="any" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Remarks</label>
+                                <input type="text" id="coldChargeRemarks" placeholder="Monthly rent / handling / misc" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <button type="button" onclick="addColdPeriodicCharge()" class="bg-indigo-600 text-white px-5 py-2 rounded-lg hover:bg-indigo-700 transition-colors">Add Charge</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4">Release from Cold</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Date</label>
+                                <input type="date" id="coldReleaseDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Lot</label>
+                                <select id="coldReleaseLotId" onchange="onColdReleaseLotChange()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"><option value="">Select Lot</option></select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Release Qty</label>
+                                <input type="number" id="coldReleaseQty" min="0" step="any" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <small id="coldReleaseAvailableHint" class="text-xs text-slate-500">Available in lot: 0</small>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Paid at Release</label>
+                                <input type="number" id="coldReleasePaidAmount" min="0" step="any" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Remarks</label>
+                                <input type="text" id="coldReleaseRemarks" placeholder="Release notes" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <button type="button" onclick="releaseFromColdStorage()" class="bg-orange-600 text-white px-5 py-2 rounded-lg hover:bg-orange-700 transition-colors">Release Lot Qty</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Cold Storage Vendor Payables</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-auto border border-slate-200 rounded-lg">
+                            <thead>
+                                <tr class="bg-slate-50">
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Vendor</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Cold Storage</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Total Charge</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Paid</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Remaining</th>
+                                </tr>
+                            </thead>
+                            <tbody id="coldVendorPayablesBody">
+                                <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No cold storage payables yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
