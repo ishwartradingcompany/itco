@@ -924,6 +924,14 @@
                                 <label class="block text-sm font-medium text-slate-700 mb-2">Cold Storage Cost</label>
                                 <input type="number" id="purchaseColdStorageCost" readonly class="w-full p-3 border border-slate-300 rounded-lg bg-gray-100">
                             </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Cold Storage Name <span class="text-rose-600">*</span></label>
+                                <input type="text" id="purchaseColdStorageName" placeholder="Enter cold storage name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Cold Storage Vendor Name <span class="text-rose-600">*</span></label>
+                                <input type="text" id="purchaseColdStorageVendorName" placeholder="Enter cold storage vendor" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
                         </div>
                         <div class="mt-3 p-3 bg-white border border-cyan-100 rounded-md text-sm text-slate-600">
                             <div>Rent: <span id="purchaseColdStorageRentRateDisplay">0.00</span> x <span id="purchaseColdStorageWeightDisplay">0.00</span> kg = <strong id="purchaseColdStorageRentCostDisplay">0.00</strong></div>
@@ -1350,12 +1358,14 @@
                                     <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Bags</th>
                                     <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Total Charge</th>
                                     <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Paid</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Payable Adj.</th>
                                     <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Remaining</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Damaged Qty</th>
                                     <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Remarks</th>
                                 </tr>
                             </thead>
                             <tbody id="coldStorageLotsBody">
-                                <tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>
+                                <tr><td colspan="12" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1419,6 +1429,56 @@
                 </div>
 
                 <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Record Damage in Cold Lot</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Date</label>
+                            <input type="date" id="coldDamageDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Lot</label>
+                            <select id="coldDamageLotId" onchange="onColdDamageLotChange()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"><option value="">Select Lot</option></select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Damage Qty</label>
+                            <input type="number" id="coldDamageQty" min="0" step="any" oninput="updateColdDamageEstimate()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small id="coldDamageAvailableHint" class="text-xs text-slate-500">Available in lot: 0</small>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Loss Bearer</label>
+                            <select id="coldDamageBearer" onchange="updateColdDamageEstimate()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <option value="us">Us</option>
+                                <option value="cold">Cold Storage</option>
+                                <option value="split">Both (Split)</option>
+                            </select>
+                        </div>
+                        <div id="coldDamageSplitWrap" class="hidden">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Cold Storage Share %</label>
+                            <input type="number" id="coldDamageSplitPercent" min="0" max="100" value="50" oninput="updateColdDamageEstimate()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div class="lg:col-span-2">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Remarks</label>
+                            <input type="text" id="coldDamageRemarks" placeholder="Damage details / reason" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div class="bg-rose-50 border border-rose-100 rounded-lg p-3">
+                            <p class="text-xs text-slate-600">Total Damage Loss</p>
+                            <p id="coldDamageTotalLossPreview" class="font-semibold text-rose-700">&#8377;0.00</p>
+                        </div>
+                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                            <p class="text-xs text-slate-600">Our Share (P&L Loss)</p>
+                            <p id="coldDamageUsLossPreview" class="font-semibold text-slate-700">&#8377;0.00</p>
+                        </div>
+                        <div class="bg-emerald-50 border border-emerald-100 rounded-lg p-3">
+                            <p class="text-xs text-slate-600">Cold Storage Share</p>
+                            <p id="coldDamageVendorLossPreview" class="font-semibold text-emerald-700">&#8377;0.00</p>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <button type="button" onclick="recordColdStorageDamage()" class="bg-rose-600 text-white px-5 py-2 rounded-lg hover:bg-rose-700 transition-colors">Record Damage</button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Cold Storage Vendor Payables</h3>
                     <div class="overflow-x-auto">
                         <table class="w-full table-auto border border-slate-200 rounded-lg">
@@ -1428,11 +1488,96 @@
                                     <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Cold Storage</th>
                                     <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Total Charge</th>
                                     <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Paid</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Damage Adj.</th>
                                     <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Remaining</th>
                                 </tr>
                             </thead>
                             <tbody id="coldVendorPayablesBody">
-                                <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No cold storage payables yet</td></tr>
+                                <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No cold storage payables yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Cold Storage Damage History</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-auto border border-slate-200 rounded-lg">
+                            <thead>
+                                <tr class="bg-slate-50">
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Date</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Item</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Cold Storage</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Damage Qty</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Bearer</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Our Loss</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Vendor Share</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Payable Adj.</th>
+                                </tr>
+                            </thead>
+                            <tbody id="coldDamageSummaryBody">
+                                <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No damage records yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Cold Storage Movement Timeline</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">From</label>
+                            <input type="date" id="coldMovementFilterFrom" onchange="renderColdStorageMovementsHistory()" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">To</label>
+                            <input type="date" id="coldMovementFilterTo" onchange="renderColdStorageMovementsHistory()" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Type</label>
+                            <select id="coldMovementFilterType" onchange="renderColdStorageMovementsHistory()" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <option value="">All Types</option>
+                                <option value="move_in">Move In</option>
+                                <option value="charge_add">Periodic Charge</option>
+                                <option value="release_out">Release</option>
+                                <option value="damage">Damage</option>
+                                <option value="cold_payment">Payment</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Lot</label>
+                            <select id="coldMovementFilterLotId" onchange="renderColdStorageMovementsHistory()" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <option value="">All Lots</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Vendor</label>
+                            <input type="text" id="coldMovementFilterVendor" placeholder="Search vendor" oninput="renderColdStorageMovementsHistory()" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div class="flex items-end">
+                            <div class="w-full grid grid-cols-1 gap-2">
+                                <button type="button" onclick="clearColdMovementFilters()" class="w-full px-3 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium">Clear Filters</button>
+                                <button type="button" onclick="exportColdMovementTimelineCsv()" class="w-full px-3 py-2 bg-primary text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium">Export CSV</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-auto border border-slate-200 rounded-lg">
+                            <thead>
+                                <tr class="bg-slate-50">
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Date</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Type</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Item</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Cold Storage</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Vendor</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Qty</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Amount</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Reference</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Remarks</th>
+                                </tr>
+                            </thead>
+                            <tbody id="coldMovementHistoryBody">
+                                <tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No cold storage movements yet</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -2259,7 +2404,7 @@
                     <p class="text-2xl font-bold text-blue-500" id="netProfit">&#8377;0</p>
                 </div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
                 <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-slate-400">
                     <h4 class="text-lg font-semibold text-slate-700 mb-2">Base Purchase Cost</h4>
                     <p class="text-2xl font-bold text-slate-700" id="pnlBasePurchaseCost">&#8377;0</p>
@@ -2271,6 +2416,14 @@
                 <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-indigo-500">
                     <h4 class="text-lg font-semibold text-slate-700 mb-2">Effective Purchase Cost</h4>
                     <p class="text-2xl font-bold text-indigo-600" id="pnlEffectivePurchaseCost">&#8377;0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-rose-500">
+                    <h4 class="text-lg font-semibold text-slate-700 mb-2">Cold Damage Loss (Our Share)</h4>
+                    <p class="text-2xl font-bold text-rose-600" id="pnlColdDamageLoss">&#8377;0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-emerald-500">
+                    <h4 class="text-lg font-semibold text-slate-700 mb-2">Cold Damage Recovery</h4>
+                    <p class="text-2xl font-bold text-emerald-600" id="pnlColdDamageRecovery">&#8377;0</p>
                 </div>
             </div>
 
