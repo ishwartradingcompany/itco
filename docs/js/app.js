@@ -10450,9 +10450,9 @@ function onPnLFilterChange() {
                             <tbody>
                                 ${purchase.othersEntries.map(entry => `
                                     <tr>
-                                        <td class="border border-slate-300 px-3 py-2 text-sm">${entry.description}</td>
-                                        <td class="border border-slate-300 px-3 py-2 text-center text-sm">${entry.operation}</td>
-                                        <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${entry.amount.toFixed(2)}</td>
+                                        <td class="border border-slate-300 px-3 py-2 text-sm">${escapeHtml((entry.reason || entry.description || 'Other Charge'))}</td>
+                                        <td class="border border-slate-300 px-3 py-2 text-center text-sm">${escapeHtml(entry.operation || '-')}</td>
+                                        <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${(parseFloat(entry.amount) || 0).toFixed(2)}</td>
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -10719,9 +10719,9 @@ function onPnLFilterChange() {
                             <tbody>
                                 ${sale.othersEntries.map(entry => `
                                     <tr>
-                                        <td class="border border-slate-300 px-3 py-2 text-sm">${entry.description}</td>
-                                        <td class="border border-slate-300 px-3 py-2 text-center text-sm">${entry.operation}</td>
-                                        <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${entry.amount.toFixed(2)}</td>
+                                        <td class="border border-slate-300 px-3 py-2 text-sm">${escapeHtml((entry.reason || entry.description || 'Other Charge'))}</td>
+                                        <td class="border border-slate-300 px-3 py-2 text-center text-sm">${escapeHtml(entry.operation || '-')}</td>
+                                        <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${(parseFloat(entry.amount) || 0).toFixed(2)}</td>
                                     </tr>
                                 `).join('')}
                             </tbody>
