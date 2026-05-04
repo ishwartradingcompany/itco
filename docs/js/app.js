@@ -3664,7 +3664,6 @@ function deleteAllMasters() {
                     purchaseMessageTargets.push(existingPurchase.id);
                     affectedPurchaseIds.push(existingPurchase.id);
                 }
-                editingPurchaseId = null;
             } else {
                 const manualCharges = getManualSupplierCharges();
                 const totalHammali = parseFloat(document.getElementById('purchaseHammali').value) || 0;
@@ -3849,8 +3848,8 @@ function deleteAllMasters() {
             document.getElementById('cancelPurchaseEdit').classList.add('hidden');
             
             // Clear form and return to history view
+            const wasEditing = editingPurchaseId !== null && editingPurchaseId !== undefined;
             clearPurchaseForm();
-            const wasEditing = editingPurchaseId !== null;
             editingPurchaseId = null;
             alert(wasEditing ? 'Purchase updated successfully!' : 'Purchase invoice(s) saved successfully!');
 
@@ -4424,6 +4423,7 @@ function deleteAllMasters() {
             const rentPerKg = Math.max(0, parseFloat(purchaseItem.coldStorageRentPerKg) || 0);
             const inPerBag = Math.max(0, parseFloat(purchaseItem.coldStorageInPerBag) || Math.max(0, parseFloat(purchaseItem.coldStorageInOutPerBag) || 0));
             const outPerBag = Math.max(0, parseFloat(purchaseItem.coldStorageOutPerBag) || 0);
+            const inOutPerBag = inPerBag + outPerBag;
             const otherCharge = Math.max(0, parseFloat(purchaseItem.coldStorageOtherCharge) || 0);
             const estimatedTotalCharge = Math.max(
                 0,
@@ -5419,9 +5419,9 @@ function deleteAllMasters() {
             });
 
             if (typeof limitCount === 'number' && limitCount > 0) {
-                return filteredRows.slice(0, limitCount);
+                return rows.slice(0, limitCount);
             }
-            return filteredRows;
+            return rows;
         }
 
         function renderColdStorageMovementsHistory() {
