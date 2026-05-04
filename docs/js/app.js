@@ -5125,8 +5125,9 @@ function deleteAllMasters() {
             appData.inventory[lot.itemId].totalCost += (avgInventoryCost * releaseQty);
 
             appData.coldStorageMovements = appData.coldStorageMovements || [];
-            appData.coldStorageMovements.push({
-                id: Date.now() + Math.floor(Math.random() * 1000),
+            const movementId = Date.now() + Math.floor(Math.random() * 1000);
+            const movementEntry = {
+                id: movementId,
                 date: date,
                 type: 'release_out',
                 lotId: lot.id,
@@ -5138,11 +5139,12 @@ function deleteAllMasters() {
                 bags: releaseBags,
                 amount: paidAtRelease,
                 remarks: remarks
-            });
+            };
+            appData.coldStorageMovements.push(movementEntry);
 
             if (paidAtRelease > 0) {
                 appData.payments = appData.payments || [];
-                appData.payments.push({
+                const paymentEntry = {
                     id: Date.now() + Math.floor(Math.random() * 1000),
                     type: 'cold_storage_payment',
                     invoiceId: lot.id,
@@ -5153,7 +5155,9 @@ function deleteAllMasters() {
                     paidThrough: 'Cold Storage Release',
                     remarks: `Release payment | ${lot.coldStorageName}`,
                     date: date
-                });
+                };
+                appData.payments.push(paymentEntry);
+                movementEntry.paymentId = paymentEntry.id;
             }
 
             saveData();
@@ -5189,6 +5193,161 @@ function deleteAllMasters() {
             if (applyColdLotRelease({ date: date, lotId: lotId, releaseQty: releaseQty, releaseBags: releaseBags, paidAtRelease: paidAtRelease, remarks: remarks })) {
                 alert('Released from cold storage successfully.');
             }
+        }
+
+        function findReleasePaymentByMovement(movement, lot) {
+            if (!movement) return null;
+            const paymentId = movement.paymentId != null ? String(movement.paymentId) : '';
+            if (paymentId) {
+                const direct = (appData.payments || []).find(function(p) { return String(p.id) === paymentId; });
+                if (direct) return direct;
+            }
+            const lotIdStr = String((movement.lotId != null ? movement.lotId : (lot && lot.id)) || '');
+            return (appData.payments || []).find(function(p) {
+                if (String(p.type || '').toLowerCase() !== 'cold_storage_payment') return false;
+                if (String(p.paidThrough || '') !== 'Cold Storage Release') return false;
+                if (String(p.invoiceId || '') !== lotIdStr) return false;
+                const sameDate = String(p.date || '') === String(movement.date || '');
+                const sameAmount = Math.abs((parseFloat(p.amount) || 0) - (parseFloat(movement.amount) || 0)) <= 0.01;
+                return sameDate && sameAmount;
+            }) || null;
+        }
+
+        function editColdReleaseMovement(movementId) {
+            const move = (appData.coldStorageMovements || []).find(function(m) {
+                return String(m.id) === String(movementId) && String(m.type || '') === 'release_out';
+            });
+            if (!move) {
+                alert('Release movement entry not found.');
+                return;
+            }
+            const lot = (appData.coldStorageLots || []).find(function(l) { return String(l.id) === String(move.lotId || ''); });
+            if (!lot) {
+                alert('Related lot not found for this release.');
+                return;
+            }
+
+            const oldQty = Math.max(0, parseFloat(move.qty) || 0);
+            const oldBags = Math.max(0, parseFloat(move.bags) || 0);
+            const oldPaid = Math.max(0, parseFloat(move.amount) || 0);
+
+            const baseQtyInLot = Math.max(0, (parseFloat(lot.qtyInCold) || 0) + oldQty);
+            const baseBagsInLot = Math.max(0, (parseFloat(lot.bagsInCold) || 0) + oldBags);
+            const baseReleaseQtyTotal = Math.max(0, (parseFloat(lot.releaseQtyTotal) || 0) - oldQty);
+            const baseReleaseBagsTotal = Math.max(0, (parseFloat(lot.releaseBagsTotal) || 0) - oldBags);
+            const basePaidAtRelease = Math.max(0, (parseFloat(lot.paidAtRelease) || 0) - oldPaid);
+            const basePaidTotal = Math.max(0, (parseFloat(lot.paidTotal) || 0) - oldPaid);
+            const estimated = Math.max(0, parseFloat(lot.estimatedTotalCharge) || 0);
+            const payableAdjustments = Math.max(0, parseFloat(lot.payableAdjustmentTotal) || 0);
+            const maxEditablePaid = Math.max(0, estimated - payableAdjustments - basePaidTotal);
+
+            const nextDate = prompt('Edit release date (YYYY-MM-DD):', String(move.date || ''));
+            if (nextDate === null) return;
+            const nextQtyRaw = prompt('Edit release quantity:', String(oldQty));
+            if (nextQtyRaw === null) return;
+            const nextBagsRaw = prompt('Edit release bags:', String(oldBags));
+            if (nextBagsRaw === null) return;
+            const nextPaidRaw = prompt('Edit paid at release amount:', String(oldPaid));
+            if (nextPaidRaw === null) return;
+            const nextRemarks = prompt('Edit remarks:', String(move.remarks || '')) || '';
+
+            const newDate = String(nextDate || '').trim();
+            const newQty = Math.max(0, parseFloat(nextQtyRaw) || 0);
+            const newBags = Math.max(0, parseFloat(nextBagsRaw) || 0);
+            const newPaid = Math.max(0, parseFloat(nextPaidRaw) || 0);
+
+            if (!newDate || newQty <= 0) {
+                alert('Please enter valid date and release quantity.');
+                return;
+            }
+            if (newQty > baseQtyInLot + 0.0001) {
+                alert('Release quantity cannot exceed available lot quantity for this edit.');
+                return;
+            }
+            if (newBags > baseBagsInLot + 0.0001) {
+                alert('Release bags cannot exceed available lot bags for this edit.');
+                return;
+            }
+            if (newPaid > maxEditablePaid + 0.0001) {
+                alert('Paid at release cannot exceed remaining payable for this edit.');
+                return;
+            }
+
+            const qtyReduction = Math.max(0, oldQty - newQty);
+            if (qtyReduction > 0) {
+                const currentNormalQty = Math.max(0, parseFloat(appData.inventory[lot.itemId] && appData.inventory[lot.itemId].quantity) || 0);
+                if (currentNormalQty + 0.0001 < qtyReduction) {
+                    alert('Cannot reduce this release quantity because corresponding stock is no longer available in normal inventory.');
+                    return;
+                }
+            }
+
+            if (!appData.inventory[lot.itemId]) appData.inventory[lot.itemId] = { quantity: 0, totalCost: 0 };
+            const sourceCost = Math.max(0, parseFloat(lot.sourceInventoryCost) || 0);
+            const originalQty = Math.max(0.0001, baseReleaseQtyTotal + baseQtyInLot);
+            const avgInventoryCost = sourceCost / originalQty;
+            const qtyDelta = newQty - oldQty;
+            appData.inventory[lot.itemId].quantity = (parseFloat(appData.inventory[lot.itemId].quantity) || 0) + qtyDelta;
+            appData.inventory[lot.itemId].totalCost = (parseFloat(appData.inventory[lot.itemId].totalCost) || 0) + (avgInventoryCost * qtyDelta);
+            if ((parseFloat(appData.inventory[lot.itemId].quantity) || 0) <= 0.0001) {
+                delete appData.inventory[lot.itemId];
+            }
+
+            lot.qtyInCold = +(baseQtyInLot - newQty).toFixed(2);
+            lot.bagsInCold = +(baseBagsInLot - newBags).toFixed(2);
+            lot.releaseQtyTotal = +(baseReleaseQtyTotal + newQty).toFixed(2);
+            lot.releaseBagsTotal = +(baseReleaseBagsTotal + newBags).toFixed(2);
+            lot.paidAtRelease = +(basePaidAtRelease + newPaid).toFixed(2);
+            lot.paidTotal = +(basePaidTotal + newPaid).toFixed(2);
+            recalculateColdLotPayables(lot);
+            lot.status = (lot.qtyInCold <= 0.0001) ? 'released' : 'partiallyReleased';
+            Object.assign(lot, getAuditMeta(false));
+
+            const payment = findReleasePaymentByMovement(move, lot);
+            if (payment && newPaid <= 0.0001) {
+                appData.payments = (appData.payments || []).filter(function(p) { return String(p.id) !== String(payment.id); });
+                delete move.paymentId;
+            } else if (payment && newPaid > 0.0001) {
+                payment.date = newDate;
+                payment.amount = +newPaid.toFixed(2);
+                payment.party = lot.vendorName || payment.party;
+                payment.invoiceId = lot.id;
+                payment.invoice = `COLD-${lot.id}`;
+                payment.paidThrough = 'Cold Storage Release';
+                payment.remarks = `Release payment | ${lot.coldStorageName || '-'}`;
+                move.paymentId = payment.id;
+            } else if (!payment && newPaid > 0.0001) {
+                appData.payments = appData.payments || [];
+                const newPayment = {
+                    id: Date.now() + Math.floor(Math.random() * 1000),
+                    type: 'cold_storage_payment',
+                    invoiceId: lot.id,
+                    invoice: `COLD-${lot.id}`,
+                    party: lot.vendorName || '-',
+                    amount: +newPaid.toFixed(2),
+                    mode: 'cash',
+                    paidThrough: 'Cold Storage Release',
+                    remarks: `Release payment | ${lot.coldStorageName || '-'}`,
+                    date: newDate
+                };
+                appData.payments.push(newPayment);
+                move.paymentId = newPayment.id;
+            }
+
+            move.date = newDate;
+            move.qty = +newQty.toFixed(2);
+            move.bags = +newBags.toFixed(2);
+            move.amount = +newPaid.toFixed(2);
+            move.remarks = String(nextRemarks || '').trim();
+            move.vendorName = lot.vendorName || move.vendorName;
+            move.itemName = lot.itemName || move.itemName;
+            move.coldStorageName = lot.coldStorageName || move.coldStorageName;
+
+            saveData();
+            refreshInventory();
+            updateDashboard();
+            refreshColdStoragePanel();
+            alert('Release movement updated successfully.');
         }
 
         function recordColdStorageDamage() {
@@ -5527,6 +5686,7 @@ function deleteAllMasters() {
                     damage: 'Damage'
                 };
                 return {
+                    movementId: m.id || '',
                     date: m.date || '',
                     lotId: m.lotId || '',
                     rawType: m.type || '',
@@ -5537,7 +5697,8 @@ function deleteAllMasters() {
                     qty: parseFloat(m.qty) || 0,
                     amount: parseFloat(m.amount) || 0,
                     reference: m.lotId ? `Lot ${m.lotId}` : '-',
-                    remarks: m.remarks || '-'
+                    remarks: m.remarks || '-',
+                    canEdit: String(m.type || '') === 'release_out'
                 };
             });
 
@@ -5547,6 +5708,7 @@ function deleteAllMasters() {
                     const lotId = p.invoiceId || '';
                     const lot = (appData.coldStorageLots || []).find(function(l) { return String(l.id) === String(lotId); });
                     return {
+                        movementId: '',
                         date: p.date || '',
                         lotId: lotId,
                         rawType: 'cold_payment',
@@ -5557,7 +5719,8 @@ function deleteAllMasters() {
                         qty: 0,
                         amount: parseFloat(p.amount) || 0,
                         reference: lotId ? `COLD-${lotId}` : (p.invoice || '-'),
-                        remarks: p.remarks || (p.paidThrough ? `Via ${p.paidThrough}` : '-')
+                        remarks: p.remarks || (p.paidThrough ? `Via ${p.paidThrough}` : '-'),
+                        canEdit: false
                     };
                 });
 
@@ -5593,7 +5756,7 @@ function deleteAllMasters() {
             const rows = getFilteredColdStorageMovementRows(100);
 
             if (!rows.length) {
-                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No matching cold storage movements found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No matching cold storage movements found</td></tr>';
                 return;
             }
 
@@ -5610,6 +5773,7 @@ function deleteAllMasters() {
                     <td class="px-3 py-2 text-sm text-right">${amountCell}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.reference || '-')}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.remarks || '-')}</td>
+                    <td class="px-3 py-2 text-sm">${row.canEdit && row.movementId ? `<button type="button" onclick="editColdReleaseMovement(${JSON.stringify(row.movementId)})" class="text-blue-600 hover:text-blue-800 font-medium">Edit</button>` : '-'}</td>
                 </tr>`;
             }).join('');
         }
@@ -7173,9 +7337,9 @@ function deleteAllMasters() {
                         </div>
                         <div class="md:col-span-2">
                             <label class="block text-xs text-slate-600 mb-1">Weight to be added (kg)</label>
-                            <input type="number" id="${inputId}" data-purchase-id="${purchase.id}" data-item-id="${lineRow.itemId}" data-purchase-item-id="${lineRow.purchaseItemId || ''}" data-line-key="${lineRow.lineKey}" value="${existingQty > 0 ? existingQty.toFixed(2) : ''}" max="${availableQty.toFixed(2)}" step="0.01" class="link-item-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">
+                            <input type="number" id="${inputId}" data-purchase-id="${purchase.id}" data-item-id="${lineRow.itemId}" data-purchase-item-id="${lineRow.purchaseItemId || ''}" data-line-key="${lineRow.lineKey}" value="${existingQty > 0 ? existingQty.toFixed(2) : ''}" min="0" max="${availableQty.toFixed(2)}" step="0.01" oninput="enforcePurchaseLinkInputLimit(this)" class="link-item-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">
                             <label class="block text-xs text-slate-600 mt-2 mb-1">Bags to use from this purchase line</label>
-                            <input type="number" id="${inputId}_bags" data-line-key="${lineRow.lineKey}" value="${existingBags > 0 ? existingBags.toFixed(2) : ''}" max="${availableBags.toFixed(2)}" step="0.01" class="link-bags-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">
+                            <input type="number" id="${inputId}_bags" data-line-key="${lineRow.lineKey}" value="${existingBags > 0 ? existingBags.toFixed(2) : ''}" min="0" max="${availableBags.toFixed(2)}" step="0.01" oninput="enforcePurchaseLinkInputLimit(this)" class="link-bags-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">
                         </div>
                     </div>
                 `;
@@ -7229,6 +7393,22 @@ function deleteAllMasters() {
                 container.appendChild(wrapper);
             });
             document.getElementById('purchaseLinkingModal').classList.remove('hidden');
+        }
+
+        function enforcePurchaseLinkInputLimit(inputEl) {
+            if (!inputEl) return;
+            const raw = (inputEl.value || '').trim();
+            if (raw === '') return;
+            let val = parseFloat(raw);
+            if (isNaN(val)) {
+                inputEl.value = '';
+                return;
+            }
+            const min = parseFloat(inputEl.min);
+            const max = parseFloat(inputEl.max);
+            if (!isNaN(min) && val < min) val = min;
+            if (!isNaN(max) && val > max) val = max;
+            inputEl.value = String(val);
         }
 
         function applyLinkedQuantitiesToSaleItems(links) {
@@ -7344,15 +7524,30 @@ function deleteAllMasters() {
         function confirmPurchaseLinking() {
             const inputs = Array.from(document.querySelectorAll('#availablePurchasesList .link-item-input'));
             const validatedLinks = [];
+            let hasValidationError = false;
             inputs.forEach(function(input) {
+                if (hasValidationError) return;
                 const qty = parseFloat(input.value) || 0;
-                if (qty <= 0) return;
                 const max = parseFloat(input.max) || 0;
-                if (max > 0 && qty - max > 0.0001) return;
                 const bagsInput = document.getElementById(input.id + '_bags');
                 const bagsVal = bagsInput ? (parseFloat(bagsInput.value) || 0) : 0;
                 const bagsMax = bagsInput ? (parseFloat(bagsInput.max) || 0) : 0;
-                if (bagsVal < 0 || (bagsMax > 0 && bagsVal - bagsMax > 0.0001)) return;
+                if (qty <= 0 && bagsVal <= 0) return;
+                if (qty <= 0 && bagsVal > 0) {
+                    alert('Please enter weight greater than zero when bags are entered.');
+                    hasValidationError = true;
+                    return;
+                }
+                if (qty < 0 || (max > 0 && qty - max > 0.0001)) {
+                    alert('Entered weight cannot be more than available quantity.');
+                    hasValidationError = true;
+                    return;
+                }
+                if (bagsVal < 0 || (bagsMax > 0 && bagsVal - bagsMax > 0.0001)) {
+                    alert('Entered bags cannot be more than available bags.');
+                    hasValidationError = true;
+                    return;
+                }
                 validatedLinks.push({
                     purchaseId: input.getAttribute('data-purchase-id'),
                     itemId: input.getAttribute('data-item-id'),
@@ -7361,6 +7556,7 @@ function deleteAllMasters() {
                     bagsUsed: +bagsVal.toFixed(2)
                 });
             });
+            if (hasValidationError) return;
 
             if (!currentSaleItems || currentSaleItems.length === 0) {
                 if (!validatedLinks.length) {
