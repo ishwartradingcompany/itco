@@ -3575,7 +3575,8 @@ function deleteAllMasters() {
                 return;
             }
 
-            if (editingPurchaseId) {
+            const isEditingPurchase = editingPurchaseId !== null && editingPurchaseId !== undefined;
+            if (isEditingPurchase) {
                 const hammali = parseFloat(document.getElementById('purchaseHammali').value) || 0;
                 const advance = parseFloat(document.getElementById('purchaseAdvance').value) || 0;
                 const othersEntries = getPurchaseOthersEntries();
@@ -3593,14 +3594,18 @@ function deleteAllMasters() {
                 }
 
                 // Editing existing purchase
-                const existingPurchase = appData.purchases.find(p => p.id === editingPurchaseId);
+                const existingPurchase = appData.purchases.find(function(p) { return String(p.id) === String(editingPurchaseId); });
+                if (!existingPurchase) {
+                    alert('Original purchase entry not found for editing. Please reopen it and try again.');
+                    return;
+                }
                 if (existingPurchase) {
                     const invoiceTrim = (invoice || '').trim().toUpperCase();
                     const existingInvoiceTrim = String(existingPurchase.invoice || '').trim().toUpperCase();
                     const invoiceChanged = invoiceTrim !== existingInvoiceTrim;
                     if (invoiceChanged) {
                         const duplicatePurchase = appData.purchases.find(function(p) {
-                            return (p.invoice || '').trim().toUpperCase() === invoiceTrim && p.id !== editingPurchaseId;
+                            return (p.invoice || '').trim().toUpperCase() === invoiceTrim && String(p.id) !== String(existingPurchase.id);
                         });
                         if (duplicatePurchase) {
                             alert('This Purchase invoice number is already used. Please use a unique invoice number.');
@@ -3746,7 +3751,7 @@ function deleteAllMasters() {
 
                 if (singleSupplierEntry) {
                     const rootTrim = String(invoice || '').trim().toUpperCase();
-                    if (rootTrim && existingInvoiceSet.has(rootTrim)) {
+                    if (!isEditingPurchase && rootTrim && existingInvoiceSet.has(rootTrim)) {
                         alert('This Purchase invoice number is already used. Please use a unique invoice number.');
                         return;
                     }
@@ -3946,7 +3951,13 @@ function deleteAllMasters() {
             }
 
             const invoiceTrim = (invoice || '').trim().toUpperCase();
-            if (appData.purchases.some(p => (p.invoice || '').trim().toUpperCase() === invoiceTrim)) {
+            const isEditingPurchase = editingPurchaseId !== null && editingPurchaseId !== undefined;
+            const editingIdStr = isEditingPurchase ? String(editingPurchaseId) : '';
+            if (appData.purchases.some(function(p) {
+                if ((p.invoice || '').trim().toUpperCase() !== invoiceTrim) return false;
+                if (isEditingPurchase && String(p.id) === editingIdStr) return false;
+                return true;
+            })) {
                 alert('This Purchase invoice number is already used. Please use a unique invoice number.');
                 return;
             }
