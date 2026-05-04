@@ -2625,18 +2625,18 @@
                     <table class="w-full table-auto">
                         <thead>
                             <tr class="bg-slate-50">
-                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Date</th>
-                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Description</th>
-                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Invoice</th>
-                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Debit</th>
-                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Credit</th>
-                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Balance</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 cursor-pointer select-none hover:bg-slate-100" onclick="setLedgerSort('date')" title="Sort by date">Date<span id="ledgerSortInd_date"></span></th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 cursor-pointer select-none hover:bg-slate-100" onclick="setLedgerSort('description')" title="Sort by description">Description<span id="ledgerSortInd_description"></span></th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 cursor-pointer select-none hover:bg-slate-100" onclick="setLedgerSort('invoice')" title="Sort by invoice">Invoice<span id="ledgerSortInd_invoice"></span></th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 cursor-pointer select-none hover:bg-slate-100" onclick="setLedgerSort('debit')" title="Sort by debit">Debit<span id="ledgerSortInd_debit"></span></th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 cursor-pointer select-none hover:bg-slate-100" onclick="setLedgerSort('credit')" title="Sort by credit">Credit<span id="ledgerSortInd_credit"></span></th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 cursor-pointer select-none hover:bg-slate-100" onclick="setLedgerSort('balance')" title="Sort by balance">Balance<span id="ledgerSortInd_balance"></span></th>
                                 <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="ledgerEntries">
                             <tr>
-                                <td colspan="6" class="px-4 py-8 text-center text-slate-500">Select filters and generate ledger to view entries</td>
+                                <td colspan="7" class="px-4 py-8 text-center text-slate-500">Select filters and generate ledger to view entries</td>
                             </tr>
                         </tbody>
                     </table>
