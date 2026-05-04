@@ -6711,7 +6711,7 @@ function deleteAllMasters() {
                     const itemId = String(pItem.itemId || '');
                     if (!itemId) return;
                     if (hasFilter && itemId !== targetItemId) return;
-                    const qty = Math.max(0, parseFloat(pItem.grossWeight ?? pItem.quantity ?? pItem.netWeight ?? 0) || 0);
+                    const qty = Math.max(0, parseFloat(pItem.netWeight ?? pItem.grossWeight ?? pItem.quantity ?? 0) || 0);
                     rows.push({
                         purchase: purchase,
                         purchaseId: String(purchase.id),
