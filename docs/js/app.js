@@ -4307,6 +4307,7 @@ function deleteAllMasters() {
         // Inventory functions
         let currentInventoryTab = 'general';
         let editingColdLotId = null;
+        let activeInlineReleaseLotId = null;
 
         function switchInventoryTab(tabName) {
             currentInventoryTab = (tabName === 'cold') ? 'cold' : 'general';
@@ -4578,6 +4579,29 @@ function deleteAllMasters() {
             renderColdVendorPayablesSummary();
             renderColdStorageDamageSummary();
             renderColdStorageMovementsHistory();
+        }
+
+        function openInlineColdRelease(lotId) {
+            activeInlineReleaseLotId = String(lotId || '');
+            renderColdStorageLotsTable();
+        }
+
+        function cancelInlineColdRelease() {
+            activeInlineReleaseLotId = null;
+            renderColdStorageLotsTable();
+        }
+
+        function updateInlineColdReleaseHint(lotId) {
+            const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(lotId); });
+            const hintEl = document.getElementById('inlineColdReleaseHint_' + String(lotId));
+            if (!hintEl) return;
+            if (!lot) {
+                hintEl.textContent = 'Available in lot: 0';
+                return;
+            }
+            hintEl.textContent = 'Available in lot: ' + Number(lot.qtyInCold || 0).toFixed(2) + ' ' + (lot.unit || 'kg') +
+                ' | Available bags: ' + Number(lot.bagsInCold || 0).toFixed(2) +
+                ' | Remaining Payable: ' + RU + Number(lot.remainingPayable || 0).toFixed(2);
         }
 
         function populateColdMoveItemOptions() {
@@ -5001,37 +5025,46 @@ function deleteAllMasters() {
             alert('Periodic cold storage charge added.');
         }
 
-        function releaseFromColdStorage() {
-            const date = (document.getElementById('coldReleaseDate') && document.getElementById('coldReleaseDate').value) || '';
-            const lotId = (document.getElementById('coldReleaseLotId') && document.getElementById('coldReleaseLotId').value) || '';
-            const releaseQty = Math.max(0, parseFloat(document.getElementById('coldReleaseQty') && document.getElementById('coldReleaseQty').value) || 0);
-            const paidAtRelease = Math.max(0, parseFloat(document.getElementById('coldReleasePaidAmount') && document.getElementById('coldReleasePaidAmount').value) || 0);
-            const remarks = (document.getElementById('coldReleaseRemarks') && document.getElementById('coldReleaseRemarks').value || '').trim();
+        function applyColdLotRelease(payload) {
+            const date = String(payload && payload.date || '');
+            const lotId = String(payload && payload.lotId || '');
+            const releaseQty = Math.max(0, parseFloat(payload && payload.releaseQty) || 0);
+            const releaseBags = Math.max(0, parseFloat(payload && payload.releaseBags) || 0);
+            const paidAtRelease = Math.max(0, parseFloat(payload && payload.paidAtRelease) || 0);
+            const remarks = String(payload && payload.remarks || '').trim();
             if (!date || !lotId || releaseQty <= 0) {
                 alert('Please select date, lot, and release quantity.');
-                return;
+                return false;
             }
             const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(lotId); });
             if (!lot) {
                 alert('Selected lot not found.');
-                return;
+                return false;
             }
-            const qtyInLot = parseFloat(lot.qtyInCold) || 0;
+            const qtyInLot = Math.max(0, parseFloat(lot.qtyInCold) || 0);
+            const bagsInLot = Math.max(0, parseFloat(lot.bagsInCold) || 0);
             if (releaseQty > qtyInLot) {
                 alert('Release quantity cannot exceed lot quantity.');
-                return;
+                return false;
+            }
+            if (releaseBags > bagsInLot) {
+                alert('Release bags cannot exceed lot bags.');
+                return false;
             }
             if (paidAtRelease > (parseFloat(lot.remainingPayable) || 0)) {
                 alert('Paid at release cannot exceed remaining payable.');
-                return;
+                return false;
             }
-            lot.qtyInCold = qtyInLot - releaseQty;
+            lot.qtyInCold = +(qtyInLot - releaseQty).toFixed(2);
+            if (lot.qtyInCold <= 0.0001) lot.qtyInCold = 0;
+            lot.bagsInCold = +(bagsInLot - releaseBags).toFixed(2);
+            if (lot.bagsInCold <= 0.0001) lot.bagsInCold = 0;
             lot.releaseQtyTotal = (parseFloat(lot.releaseQtyTotal) || 0) + releaseQty;
+            lot.releaseBagsTotal = (parseFloat(lot.releaseBagsTotal) || 0) + releaseBags;
             lot.paidAtRelease = (parseFloat(lot.paidAtRelease) || 0) + paidAtRelease;
             lot.paidTotal = (parseFloat(lot.paidTotal) || 0) + paidAtRelease;
             recalculateColdLotPayables(lot);
             lot.status = (lot.qtyInCold <= 0.0001) ? 'released' : 'partiallyReleased';
-            if (lot.qtyInCold <= 0.0001) lot.qtyInCold = 0;
 
             if (!appData.inventory[lot.itemId]) appData.inventory[lot.itemId] = { quantity: 0, totalCost: 0 };
             const sourceCost = parseFloat(lot.sourceInventoryCost) || 0;
@@ -5051,6 +5084,7 @@ function deleteAllMasters() {
                 coldStorageName: lot.coldStorageName,
                 vendorName: lot.vendorName,
                 qty: releaseQty,
+                bags: releaseBags,
                 amount: paidAtRelease,
                 remarks: remarks
             });
@@ -5075,7 +5109,35 @@ function deleteAllMasters() {
             refreshInventory();
             updateDashboard();
             refreshColdStoragePanel();
-            alert('Released from cold storage successfully.');
+            return true;
+        }
+
+        function submitInlineColdRelease(lotId) {
+            const idStr = String(lotId || '');
+            const date = (document.getElementById('inlineColdReleaseDate_' + idStr) && document.getElementById('inlineColdReleaseDate_' + idStr).value) || '';
+            const releaseQty = Math.max(0, parseFloat(document.getElementById('inlineColdReleaseQty_' + idStr) && document.getElementById('inlineColdReleaseQty_' + idStr).value) || 0);
+            const releaseBags = Math.max(0, parseFloat(document.getElementById('inlineColdReleaseBags_' + idStr) && document.getElementById('inlineColdReleaseBags_' + idStr).value) || 0);
+            const paidAtRelease = Math.max(0, parseFloat(document.getElementById('inlineColdReleasePaid_' + idStr) && document.getElementById('inlineColdReleasePaid_' + idStr).value) || 0);
+            const remarks = (document.getElementById('inlineColdReleaseRemarks_' + idStr) && document.getElementById('inlineColdReleaseRemarks_' + idStr).value || '').trim();
+            if (applyColdLotRelease({ date: date, lotId: idStr, releaseQty: releaseQty, releaseBags: releaseBags, paidAtRelease: paidAtRelease, remarks: remarks })) {
+                activeInlineReleaseLotId = null;
+                alert('Released from cold storage successfully.');
+            }
+        }
+
+        function releaseFromColdStorage() {
+            const date = (document.getElementById('coldReleaseDate') && document.getElementById('coldReleaseDate').value) || '';
+            const lotId = (document.getElementById('coldReleaseLotId') && document.getElementById('coldReleaseLotId').value) || '';
+            const releaseQty = Math.max(0, parseFloat(document.getElementById('coldReleaseQty') && document.getElementById('coldReleaseQty').value) || 0);
+            const paidAtRelease = Math.max(0, parseFloat(document.getElementById('coldReleasePaidAmount') && document.getElementById('coldReleasePaidAmount').value) || 0);
+            const remarks = (document.getElementById('coldReleaseRemarks') && document.getElementById('coldReleaseRemarks').value || '').trim();
+            const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(lotId); });
+            const qtyInLot = Math.max(0, parseFloat(lot && lot.qtyInCold) || 0);
+            const bagsInLot = Math.max(0, parseFloat(lot && lot.bagsInCold) || 0);
+            const releaseBags = qtyInLot > 0 ? +((bagsInLot * (releaseQty / qtyInLot))).toFixed(2) : 0;
+            if (applyColdLotRelease({ date: date, lotId: lotId, releaseQty: releaseQty, releaseBags: releaseBags, paidAtRelease: paidAtRelease, remarks: remarks })) {
+                alert('Released from cold storage successfully.');
+            }
         }
 
         function recordColdStorageDamage() {
@@ -5265,6 +5327,10 @@ function deleteAllMasters() {
             const activeLots = (appData.coldStorageLots || []).filter(function(lot) {
                 return (parseFloat(lot.qtyInCold) || 0) > 0 && (lot.status || 'active') !== 'released';
             });
+            if (activeInlineReleaseLotId) {
+                const stillVisible = activeLots.some(function(lot) { return String(lot.id) === String(activeInlineReleaseLotId); });
+                if (!stillVisible) activeInlineReleaseLotId = null;
+            }
             if (activeLots.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="13" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>';
                 return;
@@ -5288,12 +5354,57 @@ function deleteAllMasters() {
                     <td class="px-3 py-2 text-sm">${escapeHtml(lot.remarks || '-')}</td>
                     <td class="px-3 py-2 text-sm">
                         <div class="flex gap-2">
+                            <button type="button" onclick="openInlineColdRelease(${JSON.stringify(lot.id)})" class="text-orange-600 hover:text-orange-800 font-medium">Release</button>
                             <button type="button" onclick="editColdLot(${JSON.stringify(lot.id)})" class="text-blue-600 hover:text-blue-800 font-medium">Edit</button>
                             <button type="button" onclick="removeColdLot(${JSON.stringify(lot.id)})" class="text-red-600 hover:text-red-800 font-medium">Remove</button>
                         </div>
                     </td>
                 `;
                 tbody.appendChild(tr);
+
+                if (String(activeInlineReleaseLotId || '') === String(lot.id)) {
+                    const detailTr = document.createElement('tr');
+                    detailTr.className = 'border-b border-orange-200 bg-orange-50/40';
+                    const inlineDate = new Date().toISOString().split('T')[0];
+                    detailTr.innerHTML = `
+                        <td colspan="13" class="px-3 py-3">
+                            <div class="rounded-lg border border-orange-200 bg-white p-4">
+                                <div class="flex items-center justify-between mb-3">
+                                    <p class="font-semibold text-slate-800">Release Lot: ${escapeHtml(lot.itemName || '-')} | ${escapeHtml(lot.coldStorageName || '-')}</p>
+                                    <button type="button" onclick="cancelInlineColdRelease()" class="text-slate-500 hover:text-slate-700 text-sm">Close</button>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-600 mb-1">Date</label>
+                                        <input type="date" id="inlineColdReleaseDate_${lot.id}" value="${inlineDate}" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-600 mb-1">Release Qty</label>
+                                        <input type="number" id="inlineColdReleaseQty_${lot.id}" min="0" step="any" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-600 mb-1">Release Bags</label>
+                                        <input type="number" id="inlineColdReleaseBags_${lot.id}" min="0" step="any" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-600 mb-1">Paid at Release</label>
+                                        <input type="number" id="inlineColdReleasePaid_${lot.id}" min="0" step="any" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-600 mb-1">Remarks</label>
+                                        <input type="text" id="inlineColdReleaseRemarks_${lot.id}" placeholder="Release notes" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    </div>
+                                </div>
+                                <p id="inlineColdReleaseHint_${lot.id}" class="text-xs text-slate-500 mt-2">Available in lot: ${Number(lot.qtyInCold || 0).toFixed(2)} ${escapeHtml(lot.unit || 'kg')} | Available bags: ${Number(lot.bagsInCold || 0).toFixed(2)} | Remaining Payable: ${RU}${Number(lot.remainingPayable || 0).toFixed(2)}</p>
+                                <div class="mt-3 flex gap-2">
+                                    <button type="button" onclick="submitInlineColdRelease(${JSON.stringify(lot.id)})" class="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium">Release Lot</button>
+                                    <button type="button" onclick="cancelInlineColdRelease()" class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium">Cancel</button>
+                                </div>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(detailTr);
+                }
             });
         }
 
