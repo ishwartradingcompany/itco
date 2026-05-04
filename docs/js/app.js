@@ -7172,7 +7172,7 @@ function deleteAllMasters() {
                             <div class="text-sm ${availableQty > 0 ? 'text-green-600' : 'text-red-600'}">Available Quantity: ${availableQty.toFixed(2)} kg | Available Bags: ${availableBags.toFixed(2)}</div>
                         </div>
                         <div class="md:col-span-2">
-                            <label class="block text-xs text-slate-600 mb-1">Qty to use from this purchase line (kg)</label>
+                            <label class="block text-xs text-slate-600 mb-1">Weight to be added (kg)</label>
                             <input type="number" id="${inputId}" data-purchase-id="${purchase.id}" data-item-id="${lineRow.itemId}" data-purchase-item-id="${lineRow.purchaseItemId || ''}" data-line-key="${lineRow.lineKey}" value="${existingQty > 0 ? existingQty.toFixed(2) : ''}" max="${availableQty.toFixed(2)}" step="0.01" class="link-item-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">
                             <label class="block text-xs text-slate-600 mt-2 mb-1">Bags to use from this purchase line</label>
                             <input type="number" id="${inputId}_bags" data-line-key="${lineRow.lineKey}" value="${existingBags > 0 ? existingBags.toFixed(2) : ''}" max="${availableBags.toFixed(2)}" step="0.01" class="link-bags-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">
