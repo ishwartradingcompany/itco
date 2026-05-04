@@ -393,6 +393,94 @@ const paginationState = {
     openingBalance: { currentPage: 1, pageSize: 10 }
 };
 
+const ledgerTableSort = { column: 'date', direction: 'desc' };
+
+function ledgerEntryChronoCompare(a, b) {
+    const ta = new Date(a.date).getTime();
+    const tb = new Date(b.date).getTime();
+    if (ta !== tb) return (isNaN(ta) ? 0 : ta) - (isNaN(tb) ? 0 : tb);
+    return String(a.id).localeCompare(String(b.id));
+}
+
+function finalizeLedgerEntriesInChronologicalOrder(entries) {
+    if (!entries || !entries.length) return;
+    entries.sort(ledgerEntryChronoCompare);
+    let balance = 0;
+    entries.forEach(function(entry, idx) {
+        balance += (parseFloat(entry.debit) || 0) - (parseFloat(entry.credit) || 0);
+        entry.balance = balance;
+        entry._chronoIdx = idx;
+    });
+}
+
+function applyLedgerTableSort(entries) {
+    if (!entries || !entries.length) return;
+    const col = ledgerTableSort.column;
+    const asc = ledgerTableSort.direction === 'asc';
+    entries.sort(function(a, b) {
+        let base = 0;
+        switch (col) {
+            case 'date':
+                base = new Date(a.date).getTime() - new Date(b.date).getTime();
+                if (base === 0) base = (a._chronoIdx - b._chronoIdx);
+                break;
+            case 'description':
+                base = String(a.description || '').localeCompare(String(b.description || ''));
+                break;
+            case 'invoice':
+                base = String(a.invoice || '').localeCompare(String(b.invoice || ''));
+                break;
+            case 'debit':
+                base = (parseFloat(a.debit) || 0) - (parseFloat(b.debit) || 0);
+                if (base === 0) base = (a._chronoIdx - b._chronoIdx);
+                break;
+            case 'credit':
+                base = (parseFloat(a.credit) || 0) - (parseFloat(b.credit) || 0);
+                if (base === 0) base = (a._chronoIdx - b._chronoIdx);
+                break;
+            case 'balance':
+                base = (parseFloat(a.balance) || 0) - (parseFloat(b.balance) || 0);
+                if (base === 0) base = (a._chronoIdx - b._chronoIdx);
+                break;
+            default:
+                base = new Date(a.date).getTime() - new Date(b.date).getTime();
+                if (base === 0) base = (a._chronoIdx - b._chronoIdx);
+        }
+        if (!asc) base = -base;
+        if (base !== 0) return base > 0 ? 1 : -1;
+        return a._chronoIdx - b._chronoIdx;
+    });
+}
+
+function setLedgerSort(column) {
+    if (ledgerTableSort.column === column) {
+        ledgerTableSort.direction = ledgerTableSort.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        ledgerTableSort.column = column;
+        ledgerTableSort.direction = column === 'date' ? 'desc' : 'asc';
+    }
+    if (Array.isArray(currentLedgerData) && currentLedgerData.length) {
+        applyLedgerTableSort(currentLedgerData);
+        paginationState.ledger.currentPage = 1;
+        renderLedgerTable(currentLedgerData);
+    }
+}
+
+function updateLedgerSortIndicators() {
+    const keys = ['date', 'description', 'invoice', 'debit', 'credit', 'balance'];
+    keys.forEach(function(key) {
+        const el = document.getElementById('ledgerSortInd_' + key);
+        if (!el) return;
+        if (ledgerTableSort.column === key) {
+            el.textContent = ledgerTableSort.direction === 'asc' ? '\u25B2' : '\u25BC';
+            el.className = 'text-primary font-semibold ml-1';
+        } else {
+            el.textContent = '';
+            el.className = 'ml-1';
+        }
+    });
+}
+
 // Generic Pagination Functions
 function renderPagination(containerId, totalItems, currentPage, pageSize, onPageChange, onPageSizeChange) {
     const container = document.getElementById(containerId);
@@ -6657,8 +6745,33 @@ function deleteAllMasters() {
         function getPurchaseItemColdReservedQty(purchaseId, itemId) {
             const targetPurchaseId = String(purchaseId);
             const targetItemId = String(itemId);
+
+            function activeQtyInColdLot(lot) {
+                if (!lot || String(lot.itemId) !== targetItemId) return 0;
+                if ((lot.status || 'active') === 'released') return 0;
+                return Math.max(0, parseFloat(lot.qtyInCold) || 0);
+            }
+
+            let fromLots = 0;
+            let explicitColdOnItem = 0;
+            (appData.coldStorageLots || []).forEach(function(lot) {
+                const q = activeQtyInColdLot(lot);
+                if (q <= 0) return;
+                const pid = lot.purchaseId;
+                if (pid != null && String(pid) !== '') {
+                    explicitColdOnItem += q;
+                    if (String(pid) === targetPurchaseId) {
+                        fromLots += q;
+                    }
+                }
+            });
+
             const activeColdQty = getActiveColdQtyByItem(targetItemId);
-            if (activeColdQty <= 0) return 0;
+            const unattributedCold = Math.max(0, activeColdQty - explicitColdOnItem);
+
+            if (unattributedCold <= 0.0001) {
+                return Math.max(0, fromLots);
+            }
 
             const purchaseItemRows = [];
             (appData.purchases || []).forEach(function(purchase) {
@@ -6677,7 +6790,7 @@ function deleteAllMasters() {
                 return String(a.purchaseId).localeCompare(String(b.purchaseId));
             });
 
-            let remaining = activeColdQty;
+            let remaining = unattributedCold;
             const reservedByPurchase = {};
             purchaseItemRows.forEach(function(row) {
                 if (remaining <= 0 || row.qty <= 0) return;
@@ -6685,7 +6798,7 @@ function deleteAllMasters() {
                 remaining -= used;
                 reservedByPurchase[row.purchaseId] = (reservedByPurchase[row.purchaseId] || 0) + used;
             });
-            return Math.max(0, reservedByPurchase[targetPurchaseId] || 0);
+            return Math.max(0, fromLots + (reservedByPurchase[targetPurchaseId] || 0));
         }
 
         function showPurchaseLinkingModal() {
@@ -6706,6 +6819,7 @@ function deleteAllMasters() {
                             if (String(lp.purchaseId) === String(purchase.id) && String(lp.itemId) === String(itemId)) return sum + getLinkedQtyValue(lp);
                             return sum;
                         }, 0);
+                        if (availableQty <= 0.0001 && existingQty <= 0.0001) return;
                         const inputId = 'link_pre_' + purchase.id + '_' + itemId + '_' + pIdx;
                         const div = document.createElement('div');
                         div.className = 'border border-slate-300 rounded-lg p-4 bg-white';
@@ -6751,7 +6865,6 @@ function deleteAllMasters() {
                     const pItems = purchase.items || [];
                     const hasMatch = pItems.some(function(pi) { return String(pi.itemId) === saleItemId; });
                     if (!hasMatch) return;
-                    matchedRows++;
                     const availableQty = getPurchaseItemAvailableQty(purchase.id, saleItemId, currentEditingSaleId, tempLinkedPurchases);
                     const existingQty = tempLinkedPurchases.reduce(function(sum, lp) {
                         if (String(lp.purchaseId) === String(purchase.id) && String(lp.itemId) === saleItemId) {
@@ -6759,6 +6872,8 @@ function deleteAllMasters() {
                         }
                         return sum;
                     }, 0);
+                    if (availableQty <= 0.0001 && existingQty <= 0.0001) return;
+                    matchedRows++;
                     const inputId = 'link_qty_' + saleIdx + '_' + purchase.id + '_' + saleItemId;
                     lines.push('<div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end py-2 border-b border-slate-100">');
                     lines.push('<div class="md:col-span-2">');
@@ -6771,7 +6886,7 @@ function deleteAllMasters() {
                     lines.push('</div>');
                     lines.push('</div>');
                 });
-                if (matchedRows === 0) lines.push('<div class="text-sm text-red-600">No purchase item found for this sale item.</div>');
+                if (matchedRows === 0) lines.push('<div class="text-sm text-red-600">No purchase with available quantity for this sale item.</div>');
                 wrapper.innerHTML = lines.join('');
                 container.appendChild(wrapper);
             });
@@ -9294,15 +9409,8 @@ function onPnLFilterChange() {
                     });
             }
             
-            // Sort entries by date
-            entries.sort((a, b) => new Date(a.date) - new Date(b.date));
-            
-            // Calculate running balance after sorting
-            balance = 0;
-            entries.forEach(entry => {
-                balance += entry.debit - entry.credit;
-                entry.balance = balance;
-            });
+            finalizeLedgerEntriesInChronologicalOrder(entries);
+            balance = entries.length ? entries[entries.length - 1].balance : 0;
             
             // Date range filter
             const fromDateEl = document.getElementById('ledgerFromDate');
@@ -9358,6 +9466,10 @@ function onPnLFilterChange() {
                 balance: balance
             };
             
+            ledgerTableSort.column = 'date';
+            ledgerTableSort.direction = 'desc';
+            applyLedgerTableSort(entries);
+
             // Store entries for pagination
             currentLedgerData = entries;
             paginationState.ledger.currentPage = 1; // Reset to first page
@@ -9444,6 +9556,7 @@ function onPnLFilterChange() {
             if (entries.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No entries found for selected entity</td></tr>';
                 document.getElementById('ledgerPagination').innerHTML = '';
+                updateLedgerSortIndicators();
                 return;
             }
             
@@ -9478,6 +9591,7 @@ function onPnLFilterChange() {
                 'changeLedgerPage',
                 'changeLedgerPageSize'
             );
+            updateLedgerSortIndicators();
         }
 
         // Reports functions
