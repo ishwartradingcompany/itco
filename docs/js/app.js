@@ -3586,12 +3586,6 @@ function deleteAllMasters() {
                     else grandTotal -= entry.amount;
                 });
 
-                const invoiceTrim = (invoice || '').trim().toUpperCase();
-                const duplicatePurchase = appData.purchases.find(p => (p.invoice || '').trim().toUpperCase() === invoiceTrim && p.id !== editingPurchaseId);
-                if (duplicatePurchase) {
-                    alert('This Purchase invoice number is already used. Please use a unique invoice number.');
-                    return;
-                }
                 const supplier = appData.suppliers.find(s => s.id == supplierId);
                 if (!supplier) {
                     alert('Selected supplier not found');
@@ -3601,6 +3595,18 @@ function deleteAllMasters() {
                 // Editing existing purchase
                 const existingPurchase = appData.purchases.find(p => p.id === editingPurchaseId);
                 if (existingPurchase) {
+                    const invoiceTrim = (invoice || '').trim().toUpperCase();
+                    const existingInvoiceTrim = String(existingPurchase.invoice || '').trim().toUpperCase();
+                    const invoiceChanged = invoiceTrim !== existingInvoiceTrim;
+                    if (invoiceChanged) {
+                        const duplicatePurchase = appData.purchases.find(function(p) {
+                            return (p.invoice || '').trim().toUpperCase() === invoiceTrim && p.id !== editingPurchaseId;
+                        });
+                        if (duplicatePurchase) {
+                            alert('This Purchase invoice number is already used. Please use a unique invoice number.');
+                            return;
+                        }
+                    }
                     const itemDates = collectUniqueNonEmpty(currentPurchaseItems.map(function(item) { return item.date || date; }));
                     const itemTrucks = collectUniqueNonEmpty(currentPurchaseItems.map(function(item) { return item.truck || truck; }));
                     const itemLrNumbers = collectUniqueNonEmpty(currentPurchaseItems.map(function(item) { return item.lrNumber || lrNumber; }));
@@ -3727,20 +3733,49 @@ function deleteAllMasters() {
                     }
                 }
 
-                const reservedInvoices = new Set();
                 const singleSupplierEntry = allocatedGroups.length === 1;
                 const brokerageAllocations = postInlineBrokerage ? allocateBrokerageEntriesByGroups(inlineBrokerageEntries, allocatedGroups) : [];
                 const createdPurchases = [];
-                let createdCount = 0;
-                allocatedGroups.forEach((group, idx) => {
-                    const groupInvoice = singleSupplierEntry && idx === 0
-                        ? invoice
-                        : (invoice + '-' + (idx + 1));
-                    const invoiceTrim = (groupInvoice || '').trim().toUpperCase();
-                    const duplicatePurchase = appData.purchases.find(p => (p.invoice || '').trim().toUpperCase() === invoiceTrim);
-                    if (duplicatePurchase) return;
-                    reservedInvoices.add(groupInvoice);
+                const existingInvoiceSet = new Set(
+                    (appData.purchases || []).map(function(p) {
+                        return String((p && p.invoice) || '').trim().toUpperCase();
+                    }).filter(Boolean)
+                );
+                const reservedInvoiceSet = new Set();
+                const groupInvoices = [];
 
+                if (singleSupplierEntry) {
+                    const rootTrim = String(invoice || '').trim().toUpperCase();
+                    if (rootTrim && existingInvoiceSet.has(rootTrim)) {
+                        alert('This Purchase invoice number is already used. Please use a unique invoice number.');
+                        return;
+                    }
+                    groupInvoices.push(invoice);
+                } else {
+                    allocatedGroups.forEach(function(_group, idx) {
+                        let suffix = idx + 1;
+                        let selectedInvoice = '';
+                        while (suffix < 10000 && !selectedInvoice) {
+                            const candidate = invoice + '-' + suffix;
+                            const candidateTrim = String(candidate || '').trim().toUpperCase();
+                            if (candidateTrim && !existingInvoiceSet.has(candidateTrim) && !reservedInvoiceSet.has(candidateTrim)) {
+                                selectedInvoice = candidate;
+                                reservedInvoiceSet.add(candidateTrim);
+                            }
+                            suffix++;
+                        }
+                        if (!selectedInvoice) {
+                            alert('Could not generate a unique invoice number. Please change the invoice and try again.');
+                            return;
+                        }
+                        groupInvoices.push(selectedInvoice);
+                    });
+                }
+
+                if (groupInvoices.length !== allocatedGroups.length) return;
+
+                allocatedGroups.forEach((group, idx) => {
+                    const groupInvoice = groupInvoices[idx];
                     const groupDates = collectUniqueNonEmpty(group.items.map(function(item) { return item.date || date; }));
                     const groupTrucks = collectUniqueNonEmpty(group.items.map(function(item) { return item.truck || truck; }));
                     const groupLrNumbers = collectUniqueNonEmpty(group.items.map(function(item) { return item.lrNumber || lrNumber; }));
@@ -3774,15 +3809,9 @@ function deleteAllMasters() {
                     };
                     appData.purchases.push(purchase);
                     createdPurchases.push(purchase);
-                    createdCount++;
                     purchaseMessageTargets.push(purchase.id);
                     affectedPurchaseIds.push(purchase.id);
                 });
-
-                if (createdCount === 0) {
-                    alert('Could not save purchase invoices due to invoice number conflicts. Please try again.');
-                    return;
-                }
 
                 currentPurchaseItems.forEach(item => {
                     if (!appData.inventory[item.itemId]) {
@@ -6810,35 +6839,49 @@ function deleteAllMasters() {
             // Allow linking before adding sale items: show all purchase items.
             if (!currentSaleItems || currentSaleItems.length === 0) {
                 let rows = 0;
+                const uniquePurchaseItemMap = {};
                 (appData.purchases || []).forEach(function(purchase) {
                     (purchase.items || []).forEach(function(pItem, pIdx) {
                         const itemId = String(pItem.itemId);
-                        const itemName = pItem.itemName || ((appData.items || []).find(function(i){ return String(i.id) === itemId; }) || {}).name || itemId;
-                        const availableQty = getPurchaseItemAvailableQty(purchase.id, itemId, currentEditingSaleId, tempLinkedPurchases);
-                        const existingQty = tempLinkedPurchases.reduce(function(sum, lp) {
-                            if (String(lp.purchaseId) === String(purchase.id) && String(lp.itemId) === String(itemId)) return sum + getLinkedQtyValue(lp);
-                            return sum;
-                        }, 0);
-                        if (availableQty <= 0.0001 && existingQty <= 0.0001) return;
-                        const inputId = 'link_pre_' + purchase.id + '_' + itemId + '_' + pIdx;
-                        const div = document.createElement('div');
-                        div.className = 'border border-slate-300 rounded-lg p-4 bg-white';
-                        div.innerHTML = `
-                            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                                <div class="md:col-span-2">
-                                    <div class="font-medium text-slate-800">Invoice: ${escapeHtml(purchase.invoice)} | Supplier: ${escapeHtml(purchase.supplierName)}</div>
-                                    <div class="text-sm text-slate-600">Item: ${escapeHtml(itemName)}</div>
-                                    <div class="text-sm ${availableQty > 0 ? 'text-green-600' : 'text-red-600'}">Available Quantity: ${availableQty.toFixed(2)} kg</div>
-                                </div>
-                                <div class="md:col-span-2">
-                                    <label class="block text-xs text-slate-600 mb-1">Qty to use from this purchase item (kg)</label>
-                                    <input type="number" id="${inputId}" data-purchase-id="${purchase.id}" data-item-id="${itemId}" value="${existingQty > 0 ? existingQty.toFixed(2) : ''}" max="${availableQty.toFixed(2)}" step="0.01" class="link-item-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">
-                                </div>
-                            </div>
-                        `;
-                        container.appendChild(div);
-                        rows++;
+                        const key = String(purchase.id) + '|' + itemId;
+                        if (uniquePurchaseItemMap[key]) return;
+                        uniquePurchaseItemMap[key] = {
+                            purchase: purchase,
+                            itemId: itemId,
+                            itemName: pItem.itemName || ((appData.items || []).find(function(i){ return String(i.id) === itemId; }) || {}).name || itemId,
+                            rowIdx: pIdx
+                        };
                     });
+                });
+                Object.keys(uniquePurchaseItemMap).forEach(function(key) {
+                    const row = uniquePurchaseItemMap[key];
+                    const purchase = row.purchase;
+                    const itemId = row.itemId;
+                    const itemName = row.itemName;
+                    const availableQty = getPurchaseItemAvailableQty(purchase.id, itemId, currentEditingSaleId, tempLinkedPurchases);
+                    const existingQty = tempLinkedPurchases.reduce(function(sum, lp) {
+                        if (String(lp.purchaseId) === String(purchase.id) && String(lp.itemId) === String(itemId)) return sum + getLinkedQtyValue(lp);
+                        return sum;
+                    }, 0);
+                    if (availableQty <= 0.0001 && existingQty <= 0.0001) return;
+                    const inputId = 'link_pre_' + purchase.id + '_' + itemId + '_' + row.rowIdx;
+                    const div = document.createElement('div');
+                    div.className = 'border border-slate-300 rounded-lg p-4 bg-white';
+                    div.innerHTML = `
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                            <div class="md:col-span-2">
+                                <div class="font-medium text-slate-800">Invoice: ${escapeHtml(purchase.invoice)} | Supplier: ${escapeHtml(purchase.supplierName)}</div>
+                                <div class="text-sm text-slate-600">Item: ${escapeHtml(itemName)}</div>
+                                <div class="text-sm ${availableQty > 0 ? 'text-green-600' : 'text-red-600'}">Available Quantity: ${availableQty.toFixed(2)} kg</div>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs text-slate-600 mb-1">Qty to use from this purchase item (kg)</label>
+                                <input type="number" id="${inputId}" data-purchase-id="${purchase.id}" data-item-id="${itemId}" value="${existingQty > 0 ? existingQty.toFixed(2) : ''}" max="${availableQty.toFixed(2)}" step="0.01" class="link-item-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                    rows++;
                 });
                 if (rows === 0) {
                     container.innerHTML = '<p class="text-slate-500 text-center py-4">No purchase items available for linking.</p>';
