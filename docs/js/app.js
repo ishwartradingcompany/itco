@@ -7493,6 +7493,7 @@ function deleteAllMasters() {
                     container.innerHTML = '<p class="text-slate-500 text-center py-4">No purchase items available for linking.</p>';
                 }
                 document.getElementById('purchaseLinkingModal').classList.remove('hidden');
+                refreshPurchaseLinkingLiveTotals();
                 return;
             }
 
@@ -7523,15 +7524,70 @@ function deleteAllMasters() {
                 container.appendChild(wrapper);
             });
             document.getElementById('purchaseLinkingModal').classList.remove('hidden');
+            refreshPurchaseLinkingLiveTotals();
+        }
+
+        function refreshPurchaseLinkingLiveTotals() {
+            const qtyEl = document.getElementById('purchaseLinkingLiveTotalQty');
+            const bagsEl = document.getElementById('purchaseLinkingLiveTotalBags');
+            const itemsSummaryEl = document.getElementById('purchaseLinkingLiveItemsSummary');
+            if (!qtyEl || !bagsEl) return;
+            let totalQty = 0;
+            let totalBags = 0;
+            const byItem = {};
+            const itemOrder = [];
+            const qtyInputs = Array.from(document.querySelectorAll('#availablePurchasesList .link-item-input'));
+            qtyInputs.forEach(function(input) {
+                const qtyVal = Math.max(0, parseFloat(input.value) || 0);
+                const bagsInput = document.getElementById(input.id + '_bags');
+                const bagsVal = Math.max(0, parseFloat(bagsInput && bagsInput.value) || 0);
+                totalQty += qtyVal;
+                totalBags += bagsVal;
+                const itemId = String(input.getAttribute('data-item-id') || '');
+                if (!itemId) return;
+                if (!byItem[itemId]) {
+                    byItem[itemId] = { qty: 0, bags: 0 };
+                    itemOrder.push(itemId);
+                }
+                byItem[itemId].qty += qtyVal;
+                byItem[itemId].bags += bagsVal;
+            });
+            qtyEl.textContent = totalQty.toFixed(2);
+            bagsEl.textContent = totalBags.toFixed(2);
+            if (itemsSummaryEl) {
+                const parts = itemOrder.map(function(itemId) {
+                    const vals = byItem[itemId];
+                    const qty = Math.max(0, vals && vals.qty || 0);
+                    const bags = Math.max(0, vals && vals.bags || 0);
+                    if (qty <= 0.0001 && bags <= 0.0001) return '';
+                    const itemObj = (appData.items || []).find(function(i) { return String(i.id) === String(itemId); });
+                    const itemName = itemObj ? itemObj.name : itemId;
+                    return itemName + ': ' + qty.toFixed(2) + ' kg, ' + bags.toFixed(2) + ' bags';
+                }).filter(Boolean);
+                itemsSummaryEl.textContent = parts.length ? ('Items: ' + parts.join(' | ')) : 'Items: -';
+            }
+        }
+
+        function resetPurchaseLinkingLiveTotals() {
+            const qtyEl = document.getElementById('purchaseLinkingLiveTotalQty');
+            const bagsEl = document.getElementById('purchaseLinkingLiveTotalBags');
+            const itemsSummaryEl = document.getElementById('purchaseLinkingLiveItemsSummary');
+            if (qtyEl) qtyEl.textContent = '0.00';
+            if (bagsEl) bagsEl.textContent = '0.00';
+            if (itemsSummaryEl) itemsSummaryEl.textContent = 'Items: -';
         }
 
         function enforcePurchaseLinkInputLimit(inputEl) {
             if (!inputEl) return;
             const raw = (inputEl.value || '').trim();
-            if (raw === '') return;
+            if (raw === '') {
+                refreshPurchaseLinkingLiveTotals();
+                return;
+            }
             let val = parseFloat(raw);
             if (isNaN(val)) {
                 inputEl.value = '';
+                refreshPurchaseLinkingLiveTotals();
                 return;
             }
             const min = parseFloat(inputEl.min);
@@ -7539,6 +7595,7 @@ function deleteAllMasters() {
             if (!isNaN(min) && val < min) val = min;
             if (!isNaN(max) && val > max) val = max;
             inputEl.value = String(val);
+            refreshPurchaseLinkingLiveTotals();
         }
 
         function applyLinkedQuantitiesToSaleItems(links) {
@@ -7779,6 +7836,7 @@ function deleteAllMasters() {
 
         function closePurchaseLinkingModal() {
             document.getElementById('purchaseLinkingModal').classList.add('hidden');
+            resetPurchaseLinkingLiveTotals();
         }
 
         // Deduction Transaction Linking Functions
