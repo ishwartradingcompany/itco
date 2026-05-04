@@ -3600,18 +3600,6 @@ function deleteAllMasters() {
                     return;
                 }
                 if (existingPurchase) {
-                    const invoiceTrim = (invoice || '').trim().toUpperCase();
-                    const existingInvoiceTrim = String(existingPurchase.invoice || '').trim().toUpperCase();
-                    const invoiceChanged = invoiceTrim !== existingInvoiceTrim;
-                    if (invoiceChanged) {
-                        const duplicatePurchase = appData.purchases.find(function(p) {
-                            return (p.invoice || '').trim().toUpperCase() === invoiceTrim && String(p.id) !== String(existingPurchase.id);
-                        });
-                        if (duplicatePurchase) {
-                            alert('This Purchase invoice number is already used. Please use a unique invoice number.');
-                            return;
-                        }
-                    }
                     const itemDates = collectUniqueNonEmpty(currentPurchaseItems.map(function(item) { return item.date || date; }));
                     const itemTrucks = collectUniqueNonEmpty(currentPurchaseItems.map(function(item) { return item.truck || truck; }));
                     const itemLrNumbers = collectUniqueNonEmpty(currentPurchaseItems.map(function(item) { return item.lrNumber || lrNumber; }));
