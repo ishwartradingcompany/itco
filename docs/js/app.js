@@ -4349,6 +4349,7 @@ function deleteAllMasters() {
         let currentInventoryTab = 'general';
         let editingColdLotId = null;
         let activeInlineReleaseLotId = null;
+        let activeInlineMovementReleaseEditId = null;
 
         function switchInventoryTab(tabName) {
             currentInventoryTab = (tabName === 'cold') ? 'cold' : 'general';
@@ -4395,6 +4396,15 @@ function deleteAllMasters() {
                 if (!lot || String(lot.itemId) !== String(itemId)) return sum;
                 if ((lot.status || 'active') === 'released') return sum;
                 return sum + Math.max(0, parseFloat(lot.qtyInCold) || 0);
+            }, 0);
+        }
+
+        function getActiveColdBagsByItem(itemId) {
+            if (itemId == null) return 0;
+            return (appData.coldStorageLots || []).reduce(function(sum, lot) {
+                if (!lot || String(lot.itemId) !== String(itemId)) return sum;
+                if ((lot.status || 'active') === 'released') return sum;
+                return sum + Math.max(0, parseFloat(lot.bagsInCold) || 0);
             }, 0);
         }
 
@@ -5213,24 +5223,16 @@ function deleteAllMasters() {
             }) || null;
         }
 
-        function editColdReleaseMovement(movementId) {
+        function getColdReleaseMovementEditContext(movementId) {
             const move = (appData.coldStorageMovements || []).find(function(m) {
                 return String(m.id) === String(movementId) && String(m.type || '') === 'release_out';
             });
-            if (!move) {
-                alert('Release movement entry not found.');
-                return;
-            }
+            if (!move) return null;
             const lot = (appData.coldStorageLots || []).find(function(l) { return String(l.id) === String(move.lotId || ''); });
-            if (!lot) {
-                alert('Related lot not found for this release.');
-                return;
-            }
-
+            if (!lot) return null;
             const oldQty = Math.max(0, parseFloat(move.qty) || 0);
             const oldBags = Math.max(0, parseFloat(move.bags) || 0);
             const oldPaid = Math.max(0, parseFloat(move.amount) || 0);
-
             const baseQtyInLot = Math.max(0, (parseFloat(lot.qtyInCold) || 0) + oldQty);
             const baseBagsInLot = Math.max(0, (parseFloat(lot.bagsInCold) || 0) + oldBags);
             const baseReleaseQtyTotal = Math.max(0, (parseFloat(lot.releaseQtyTotal) || 0) - oldQty);
@@ -5240,109 +5242,138 @@ function deleteAllMasters() {
             const estimated = Math.max(0, parseFloat(lot.estimatedTotalCharge) || 0);
             const payableAdjustments = Math.max(0, parseFloat(lot.payableAdjustmentTotal) || 0);
             const maxEditablePaid = Math.max(0, estimated - payableAdjustments - basePaidTotal);
+            return {
+                move: move,
+                lot: lot,
+                oldQty: oldQty,
+                oldBags: oldBags,
+                oldPaid: oldPaid,
+                baseQtyInLot: baseQtyInLot,
+                baseBagsInLot: baseBagsInLot,
+                baseReleaseQtyTotal: baseReleaseQtyTotal,
+                baseReleaseBagsTotal: baseReleaseBagsTotal,
+                basePaidAtRelease: basePaidAtRelease,
+                basePaidTotal: basePaidTotal,
+                maxEditablePaid: maxEditablePaid
+            };
+        }
 
-            const nextDate = prompt('Edit release date (YYYY-MM-DD):', String(move.date || ''));
-            if (nextDate === null) return;
-            const nextQtyRaw = prompt('Edit release quantity:', String(oldQty));
-            if (nextQtyRaw === null) return;
-            const nextBagsRaw = prompt('Edit release bags:', String(oldBags));
-            if (nextBagsRaw === null) return;
-            const nextPaidRaw = prompt('Edit paid at release amount:', String(oldPaid));
-            if (nextPaidRaw === null) return;
-            const nextRemarks = prompt('Edit remarks:', String(move.remarks || '')) || '';
+        function editColdReleaseMovement(movementId) {
+            const ctx = getColdReleaseMovementEditContext(movementId);
+            if (!ctx) {
+                alert('Release movement entry not found.');
+                return;
+            }
+            activeInlineMovementReleaseEditId = String(movementId);
+            renderColdStorageMovementsHistory();
+        }
 
-            const newDate = String(nextDate || '').trim();
-            const newQty = Math.max(0, parseFloat(nextQtyRaw) || 0);
-            const newBags = Math.max(0, parseFloat(nextBagsRaw) || 0);
-            const newPaid = Math.max(0, parseFloat(nextPaidRaw) || 0);
+        function cancelEditColdReleaseMovement() {
+            activeInlineMovementReleaseEditId = null;
+            renderColdStorageMovementsHistory();
+        }
+
+        function submitEditColdReleaseMovement(movementId) {
+            const ctx = getColdReleaseMovementEditContext(movementId);
+            if (!ctx) {
+                alert('Release movement entry not found.');
+                return;
+            }
+            const idStr = String(movementId || '');
+            const newDate = String((document.getElementById('movementReleaseEditDate_' + idStr) && document.getElementById('movementReleaseEditDate_' + idStr).value) || '').trim();
+            const newQty = Math.max(0, parseFloat(document.getElementById('movementReleaseEditQty_' + idStr) && document.getElementById('movementReleaseEditQty_' + idStr).value) || 0);
+            const newBags = Math.max(0, parseFloat(document.getElementById('movementReleaseEditBags_' + idStr) && document.getElementById('movementReleaseEditBags_' + idStr).value) || 0);
+            const newPaid = Math.max(0, parseFloat(document.getElementById('movementReleaseEditPaid_' + idStr) && document.getElementById('movementReleaseEditPaid_' + idStr).value) || 0);
+            const nextRemarks = String((document.getElementById('movementReleaseEditRemarks_' + idStr) && document.getElementById('movementReleaseEditRemarks_' + idStr).value) || '').trim();
 
             if (!newDate || newQty <= 0) {
                 alert('Please enter valid date and release quantity.');
                 return;
             }
-            if (newQty > baseQtyInLot + 0.0001) {
+            if (newQty > ctx.baseQtyInLot + 0.0001) {
                 alert('Release quantity cannot exceed available lot quantity for this edit.');
                 return;
             }
-            if (newBags > baseBagsInLot + 0.0001) {
+            if (newBags > ctx.baseBagsInLot + 0.0001) {
                 alert('Release bags cannot exceed available lot bags for this edit.');
                 return;
             }
-            if (newPaid > maxEditablePaid + 0.0001) {
+            if (newPaid > ctx.maxEditablePaid + 0.0001) {
                 alert('Paid at release cannot exceed remaining payable for this edit.');
                 return;
             }
 
-            const qtyReduction = Math.max(0, oldQty - newQty);
+            const qtyReduction = Math.max(0, ctx.oldQty - newQty);
             if (qtyReduction > 0) {
-                const currentNormalQty = Math.max(0, parseFloat(appData.inventory[lot.itemId] && appData.inventory[lot.itemId].quantity) || 0);
+                const currentNormalQty = Math.max(0, parseFloat(appData.inventory[ctx.lot.itemId] && appData.inventory[ctx.lot.itemId].quantity) || 0);
                 if (currentNormalQty + 0.0001 < qtyReduction) {
                     alert('Cannot reduce this release quantity because corresponding stock is no longer available in normal inventory.');
                     return;
                 }
             }
 
-            if (!appData.inventory[lot.itemId]) appData.inventory[lot.itemId] = { quantity: 0, totalCost: 0 };
-            const sourceCost = Math.max(0, parseFloat(lot.sourceInventoryCost) || 0);
-            const originalQty = Math.max(0.0001, baseReleaseQtyTotal + baseQtyInLot);
+            if (!appData.inventory[ctx.lot.itemId]) appData.inventory[ctx.lot.itemId] = { quantity: 0, totalCost: 0 };
+            const sourceCost = Math.max(0, parseFloat(ctx.lot.sourceInventoryCost) || 0);
+            const originalQty = Math.max(0.0001, ctx.baseReleaseQtyTotal + ctx.baseQtyInLot);
             const avgInventoryCost = sourceCost / originalQty;
-            const qtyDelta = newQty - oldQty;
-            appData.inventory[lot.itemId].quantity = (parseFloat(appData.inventory[lot.itemId].quantity) || 0) + qtyDelta;
-            appData.inventory[lot.itemId].totalCost = (parseFloat(appData.inventory[lot.itemId].totalCost) || 0) + (avgInventoryCost * qtyDelta);
-            if ((parseFloat(appData.inventory[lot.itemId].quantity) || 0) <= 0.0001) {
-                delete appData.inventory[lot.itemId];
+            const qtyDelta = newQty - ctx.oldQty;
+            appData.inventory[ctx.lot.itemId].quantity = (parseFloat(appData.inventory[ctx.lot.itemId].quantity) || 0) + qtyDelta;
+            appData.inventory[ctx.lot.itemId].totalCost = (parseFloat(appData.inventory[ctx.lot.itemId].totalCost) || 0) + (avgInventoryCost * qtyDelta);
+            if ((parseFloat(appData.inventory[ctx.lot.itemId].quantity) || 0) <= 0.0001) {
+                delete appData.inventory[ctx.lot.itemId];
             }
 
-            lot.qtyInCold = +(baseQtyInLot - newQty).toFixed(2);
-            lot.bagsInCold = +(baseBagsInLot - newBags).toFixed(2);
-            lot.releaseQtyTotal = +(baseReleaseQtyTotal + newQty).toFixed(2);
-            lot.releaseBagsTotal = +(baseReleaseBagsTotal + newBags).toFixed(2);
-            lot.paidAtRelease = +(basePaidAtRelease + newPaid).toFixed(2);
-            lot.paidTotal = +(basePaidTotal + newPaid).toFixed(2);
-            recalculateColdLotPayables(lot);
-            lot.status = (lot.qtyInCold <= 0.0001) ? 'released' : 'partiallyReleased';
-            Object.assign(lot, getAuditMeta(false));
+            ctx.lot.qtyInCold = +(ctx.baseQtyInLot - newQty).toFixed(2);
+            ctx.lot.bagsInCold = +(ctx.baseBagsInLot - newBags).toFixed(2);
+            ctx.lot.releaseQtyTotal = +(ctx.baseReleaseQtyTotal + newQty).toFixed(2);
+            ctx.lot.releaseBagsTotal = +(ctx.baseReleaseBagsTotal + newBags).toFixed(2);
+            ctx.lot.paidAtRelease = +(ctx.basePaidAtRelease + newPaid).toFixed(2);
+            ctx.lot.paidTotal = +(ctx.basePaidTotal + newPaid).toFixed(2);
+            recalculateColdLotPayables(ctx.lot);
+            ctx.lot.status = (ctx.lot.qtyInCold <= 0.0001) ? 'released' : 'partiallyReleased';
+            Object.assign(ctx.lot, getAuditMeta(false));
 
-            const payment = findReleasePaymentByMovement(move, lot);
+            const payment = findReleasePaymentByMovement(ctx.move, ctx.lot);
             if (payment && newPaid <= 0.0001) {
                 appData.payments = (appData.payments || []).filter(function(p) { return String(p.id) !== String(payment.id); });
-                delete move.paymentId;
+                delete ctx.move.paymentId;
             } else if (payment && newPaid > 0.0001) {
                 payment.date = newDate;
                 payment.amount = +newPaid.toFixed(2);
-                payment.party = lot.vendorName || payment.party;
-                payment.invoiceId = lot.id;
-                payment.invoice = `COLD-${lot.id}`;
+                payment.party = ctx.lot.vendorName || payment.party;
+                payment.invoiceId = ctx.lot.id;
+                payment.invoice = `COLD-${ctx.lot.id}`;
                 payment.paidThrough = 'Cold Storage Release';
-                payment.remarks = `Release payment | ${lot.coldStorageName || '-'}`;
-                move.paymentId = payment.id;
+                payment.remarks = `Release payment | ${ctx.lot.coldStorageName || '-'}`;
+                ctx.move.paymentId = payment.id;
             } else if (!payment && newPaid > 0.0001) {
                 appData.payments = appData.payments || [];
                 const newPayment = {
                     id: Date.now() + Math.floor(Math.random() * 1000),
                     type: 'cold_storage_payment',
-                    invoiceId: lot.id,
-                    invoice: `COLD-${lot.id}`,
-                    party: lot.vendorName || '-',
+                    invoiceId: ctx.lot.id,
+                    invoice: `COLD-${ctx.lot.id}`,
+                    party: ctx.lot.vendorName || '-',
                     amount: +newPaid.toFixed(2),
                     mode: 'cash',
                     paidThrough: 'Cold Storage Release',
-                    remarks: `Release payment | ${lot.coldStorageName || '-'}`,
+                    remarks: `Release payment | ${ctx.lot.coldStorageName || '-'}`,
                     date: newDate
                 };
                 appData.payments.push(newPayment);
-                move.paymentId = newPayment.id;
+                ctx.move.paymentId = newPayment.id;
             }
 
-            move.date = newDate;
-            move.qty = +newQty.toFixed(2);
-            move.bags = +newBags.toFixed(2);
-            move.amount = +newPaid.toFixed(2);
-            move.remarks = String(nextRemarks || '').trim();
-            move.vendorName = lot.vendorName || move.vendorName;
-            move.itemName = lot.itemName || move.itemName;
-            move.coldStorageName = lot.coldStorageName || move.coldStorageName;
+            ctx.move.date = newDate;
+            ctx.move.qty = +newQty.toFixed(2);
+            ctx.move.bags = +newBags.toFixed(2);
+            ctx.move.amount = +newPaid.toFixed(2);
+            ctx.move.remarks = nextRemarks;
+            ctx.move.vendorName = ctx.lot.vendorName || ctx.move.vendorName;
+            ctx.move.itemName = ctx.lot.itemName || ctx.move.itemName;
+            ctx.move.coldStorageName = ctx.lot.coldStorageName || ctx.move.coldStorageName;
 
+            activeInlineMovementReleaseEditId = null;
             saveData();
             refreshInventory();
             updateDashboard();
@@ -5759,11 +5790,13 @@ function deleteAllMasters() {
                 tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No matching cold storage movements found</td></tr>';
                 return;
             }
-
-            tbody.innerHTML = rows.map(function(row) {
+            tbody.innerHTML = '';
+            rows.forEach(function(row) {
                 const qtyCell = row.qty > 0 ? Number(row.qty).toFixed(2) : '-';
                 const amountCell = row.amount > 0 ? `${RU}${Number(row.amount).toFixed(2)}` : '-';
-                return `<tr class="border-b border-slate-200">
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-200';
+                tr.innerHTML = `
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.date || '-')}</td>
                     <td class="px-3 py-2 text-sm font-medium text-slate-700">${escapeHtml(row.type || '-')}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.itemName || '-')}</td>
@@ -5774,8 +5807,56 @@ function deleteAllMasters() {
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.reference || '-')}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.remarks || '-')}</td>
                     <td class="px-3 py-2 text-sm">${row.canEdit && row.movementId ? `<button type="button" onclick="editColdReleaseMovement(${JSON.stringify(row.movementId)})" class="text-blue-600 hover:text-blue-800 font-medium">Edit</button>` : '-'}</td>
-                </tr>`;
-            }).join('');
+                `;
+                tbody.appendChild(tr);
+
+                if (row.canEdit && row.movementId && String(activeInlineMovementReleaseEditId || '') === String(row.movementId)) {
+                    const ctx = getColdReleaseMovementEditContext(row.movementId);
+                    if (!ctx) return;
+                    const detailTr = document.createElement('tr');
+                    detailTr.className = 'border-b border-blue-200 bg-blue-50/40';
+                    detailTr.innerHTML = `
+                        <td colspan="10" class="px-3 py-3">
+                            <div class="rounded-lg border border-blue-200 bg-white p-4">
+                                <div class="flex items-center justify-between mb-3">
+                                    <p class="font-semibold text-slate-800">Edit Release Movement: ${escapeHtml(ctx.lot.itemName || '-')} | Lot ${escapeHtml(String(ctx.lot.id || '-'))}</p>
+                                    <button type="button" onclick="cancelEditColdReleaseMovement()" class="text-slate-500 hover:text-slate-700 text-sm">Close</button>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-600 mb-1">Date</label>
+                                        <input type="date" id="movementReleaseEditDate_${row.movementId}" value="${escapeHtml(String(ctx.move.date || ''))}" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-600 mb-1">Release Qty</label>
+                                        <input type="number" id="movementReleaseEditQty_${row.movementId}" min="0" max="${ctx.baseQtyInLot.toFixed(2)}" step="any" value="${ctx.oldQty.toFixed(2)}" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-600 mb-1">Release Bags</label>
+                                        <input type="number" id="movementReleaseEditBags_${row.movementId}" min="0" max="${ctx.baseBagsInLot.toFixed(2)}" step="any" value="${ctx.oldBags.toFixed(2)}" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-600 mb-1">Paid at Release</label>
+                                        <input type="number" id="movementReleaseEditPaid_${row.movementId}" min="0" max="${ctx.maxEditablePaid.toFixed(2)}" step="any" value="${ctx.oldPaid.toFixed(2)}" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-600 mb-1">Remarks</label>
+                                        <input type="text" id="movementReleaseEditRemarks_${row.movementId}" value="${escapeHtml(String(ctx.move.remarks || ''))}" placeholder="Release notes" class="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-2">
+                                    Editable availability: ${ctx.baseQtyInLot.toFixed(2)} ${escapeHtml(ctx.lot.unit || 'kg')} | Bags: ${ctx.baseBagsInLot.toFixed(2)} | Max paid: ${RU}${ctx.maxEditablePaid.toFixed(2)}
+                                </p>
+                                <div class="mt-3 flex gap-2">
+                                    <button type="button" onclick="submitEditColdReleaseMovement(${JSON.stringify(row.movementId)})" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">Save Changes</button>
+                                    <button type="button" onclick="cancelEditColdReleaseMovement()" class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium">Cancel</button>
+                                </div>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(detailTr);
+                }
+            });
         }
 
         function exportColdMovementTimelineCsv() {
@@ -7164,6 +7245,59 @@ function deleteAllMasters() {
             return Math.max(0, fromExplicitLots + (reservedByLine[lineRow.lineKey] || 0));
         }
 
+        function getPurchaseLineColdReservedBags(lineRow) {
+            if (!lineRow) return 0;
+            const targetPurchaseId = String(lineRow.purchaseId);
+            const targetItemId = String(lineRow.itemId);
+            const targetPurchaseItemId = String(lineRow.purchaseItemId || '');
+
+            function activeBagsInColdLot(lot) {
+                if (!lot || String(lot.itemId) !== targetItemId) return 0;
+                if ((lot.status || 'active') === 'released') return 0;
+                return Math.max(0, parseFloat(lot.bagsInCold) || 0);
+            }
+
+            let fromExplicitLots = 0;
+            let explicitColdBagsOnItem = 0;
+            (appData.coldStorageLots || []).forEach(function(lot) {
+                const b = activeBagsInColdLot(lot);
+                if (b <= 0) return;
+                const pid = lot.purchaseId;
+                if (pid != null && String(pid) !== '') {
+                    explicitColdBagsOnItem += b;
+                    const lotPurchaseId = String(pid);
+                    const lotPurchaseItemId = (lot.purchaseItemId != null && lot.purchaseItemId !== '') ? String(lot.purchaseItemId) : '';
+                    if (lotPurchaseId === targetPurchaseId && lotPurchaseItemId && targetPurchaseItemId && lotPurchaseItemId === targetPurchaseItemId) {
+                        fromExplicitLots += b;
+                    }
+                }
+            });
+
+            const activeColdBags = getActiveColdBagsByItem(targetItemId);
+            const unattributedColdBags = Math.max(0, activeColdBags - explicitColdBagsOnItem);
+            if (unattributedColdBags <= 0.0001) return Math.max(0, fromExplicitLots);
+
+            const purchaseLineRows = getPurchaseLineRows(targetItemId);
+            purchaseLineRows.sort(function(a, b) {
+                const cmp = String(a.date).localeCompare(String(b.date));
+                if (cmp !== 0) return cmp;
+                const pidCmp = String(a.purchaseId).localeCompare(String(b.purchaseId));
+                if (pidCmp !== 0) return pidCmp;
+                return a.lineIdx - b.lineIdx;
+            });
+
+            let remaining = unattributedColdBags;
+            const reservedByLine = {};
+            purchaseLineRows.forEach(function(row) {
+                const rowBags = Math.max(0, parseFloat(row.bags) || 0);
+                if (remaining <= 0 || rowBags <= 0) return;
+                const used = Math.min(rowBags, remaining);
+                remaining -= used;
+                reservedByLine[row.lineKey] = (reservedByLine[row.lineKey] || 0) + used;
+            });
+            return Math.max(0, fromExplicitLots + (reservedByLine[lineRow.lineKey] || 0));
+        }
+
         function getPurchaseLineAvailableQty(lineRow, currentEditingSaleId, currentTempLinks) {
             if (!lineRow) return 0;
             const rowPurchaseId = String(lineRow.purchaseId);
@@ -7199,12 +7333,8 @@ function deleteAllMasters() {
             const rowPurchaseId = String(lineRow.purchaseId);
             const rowItemId = String(lineRow.itemId);
             const rowPurchaseItemId = String(lineRow.purchaseItemId || '');
-            const lineQty = Math.max(0, parseFloat(lineRow.qty) || 0);
             const lineBags = Math.max(0, parseFloat(lineRow.bags) || 0);
-            const coldReservedQty = Math.max(0, getPurchaseLineColdReservedQty(lineRow));
-            const coldReservedBags = (lineQty > 0)
-                ? Math.min(lineBags, lineBags * Math.min(1, coldReservedQty / lineQty))
-                : 0;
+            const coldReservedBags = Math.max(0, getPurchaseLineColdReservedBags(lineRow));
             const alreadyLinkedBags = (appData.sales || []).reduce(function(sum, sale) {
                 const saleIdStr = (sale && sale.id !== undefined && sale.id !== null) ? String(sale.id) : null;
                 if (sale.linkedPurchases && (!currentEditingSaleId || saleIdStr !== currentEditingSaleId)) {
