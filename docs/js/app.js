@@ -6694,6 +6694,44 @@ function deleteAllMasters() {
             return parseFloat(link.quantityUsed ?? link.quantity ?? link.qtyUsed ?? link.qty ?? 0) || 0;
         }
 
+        function getPurchaseLineKey(purchaseId, itemId, purchaseItemId, lineIdx) {
+            const pid = String(purchaseId || '');
+            const iid = String(itemId || '');
+            if (purchaseItemId != null && String(purchaseItemId) !== '') {
+                return pid + '|' + iid + '|id:' + String(purchaseItemId);
+            }
+            return pid + '|' + iid + '|idx:' + String(lineIdx || 0);
+        }
+
+        function getPurchaseLineRows(filterItemId) {
+            const hasFilter = filterItemId != null && String(filterItemId) !== '';
+            const targetItemId = hasFilter ? String(filterItemId) : '';
+            const rows = [];
+            (appData.purchases || []).forEach(function(purchase) {
+                (purchase.items || []).forEach(function(pItem, pIdx) {
+                    const itemId = String(pItem.itemId || '');
+                    if (!itemId) return;
+                    if (hasFilter && itemId !== targetItemId) return;
+                    const qty = Math.max(0, parseFloat(pItem.grossWeight ?? pItem.quantity ?? pItem.netWeight ?? 0) || 0);
+                    rows.push({
+                        purchase: purchase,
+                        purchaseId: String(purchase.id),
+                        itemId: itemId,
+                        purchaseItemId: (pItem.id != null && pItem.id !== '') ? String(pItem.id) : '',
+                        lineIdx: pIdx,
+                        lineKey: getPurchaseLineKey(purchase.id, itemId, pItem.id, pIdx),
+                        date: pItem.date || purchase.date || '',
+                        itemName: pItem.itemName || ((appData.items || []).find(function(i) { return String(i.id) === itemId; }) || {}).name || itemId,
+                        kaantaParchi: pItem.kaantaParchi || '',
+                        qty: qty,
+                        bags: Math.max(0, parseFloat(pItem.bags) || 0),
+                        netWeight: Math.max(0, parseFloat(pItem.netWeight ?? pItem.quantity ?? 0) || 0)
+                    });
+                });
+            });
+            return rows;
+        }
+
         function normalizeLinkedPurchasesForItems(rawLinks, saleItems) {
             const safeLinks = Array.isArray(rawLinks) ? rawLinks : [];
             const safeSaleItems = Array.isArray(saleItems) ? saleItems : [];
@@ -6712,25 +6750,26 @@ function deleteAllMasters() {
                 const qty = getLinkedQtyValue(link);
                 if (qty <= 0) return;
                 const purchaseId = link.purchaseId;
+                const purchaseItemId = (link.purchaseItemId != null && link.purchaseItemId !== '') ? String(link.purchaseItemId) : '';
                 if (link.itemId != null && link.itemId !== '') {
-                    normalized.push({ purchaseId: purchaseId, itemId: String(link.itemId), quantityUsed: qty });
+                    normalized.push({ purchaseId: purchaseId, itemId: String(link.itemId), purchaseItemId: purchaseItemId, quantityUsed: qty });
                     return;
                 }
                 if (itemIds.length === 0) return;
                 if (itemIds.length === 1 || totalSaleQty <= 0) {
-                    normalized.push({ purchaseId: purchaseId, itemId: itemIds[0], quantityUsed: qty });
+                    normalized.push({ purchaseId: purchaseId, itemId: itemIds[0], purchaseItemId: purchaseItemId, quantityUsed: qty });
                     return;
                 }
                 itemIds.forEach(function(itemId) {
                     const ratio = requiredByItem[itemId] / totalSaleQty;
-                    normalized.push({ purchaseId: purchaseId, itemId: itemId, quantityUsed: qty * ratio });
+                    normalized.push({ purchaseId: purchaseId, itemId: itemId, purchaseItemId: purchaseItemId, quantityUsed: qty * ratio });
                 });
             });
             const map = {};
             normalized.forEach(function(l) {
-                const key = String(l.purchaseId) + '|' + String(l.itemId);
-                if (!map[key]) map[key] = { purchaseId: l.purchaseId, itemId: String(l.itemId), quantityUsed: 0 };
-                map[key].quantityUsed += (parseFloat(l.quantityUsed) || 0);
+                const lineKey = getPurchaseLineKey(l.purchaseId, l.itemId, l.purchaseItemId, 0);
+                if (!map[lineKey]) map[lineKey] = { purchaseId: l.purchaseId, itemId: String(l.itemId), purchaseItemId: String(l.purchaseItemId || ''), quantityUsed: 0 };
+                map[lineKey].quantityUsed += (parseFloat(l.quantityUsed) || 0);
             });
             return Object.keys(map).map(function(k) {
                 const v = map[k];
@@ -6739,23 +6778,73 @@ function deleteAllMasters() {
             });
         }
 
-        function getPurchaseItemAvailableQty(purchaseId, itemId, currentEditingSaleId, currentTempLinks) {
-            const purchase = (appData.purchases || []).find(function(p) { return String(p.id) === String(purchaseId); });
-            const totalPurchased = purchase && purchase.items
-                ? purchase.items.reduce(function(sum, item) {
-                    if (String(item.itemId) !== String(itemId)) return sum;
-                    return sum + (parseFloat(item.grossWeight ?? item.quantity ?? item.netWeight ?? 0) || 0);
-                }, 0)
-                : 0;
-            const coldReservedQty = getPurchaseItemColdReservedQty(purchaseId, itemId);
+        function getPurchaseLineColdReservedQty(lineRow) {
+            if (!lineRow) return 0;
+            const targetPurchaseId = String(lineRow.purchaseId);
+            const targetItemId = String(lineRow.itemId);
+            const targetPurchaseItemId = String(lineRow.purchaseItemId || '');
+
+            function activeQtyInColdLot(lot) {
+                if (!lot || String(lot.itemId) !== targetItemId) return 0;
+                if ((lot.status || 'active') === 'released') return 0;
+                return Math.max(0, parseFloat(lot.qtyInCold) || 0);
+            }
+
+            let fromExplicitLots = 0;
+            let explicitColdOnItem = 0;
+            (appData.coldStorageLots || []).forEach(function(lot) {
+                const q = activeQtyInColdLot(lot);
+                if (q <= 0) return;
+                const pid = lot.purchaseId;
+                if (pid != null && String(pid) !== '') {
+                    explicitColdOnItem += q;
+                    const lotPurchaseId = String(pid);
+                    const lotPurchaseItemId = (lot.purchaseItemId != null && lot.purchaseItemId !== '') ? String(lot.purchaseItemId) : '';
+                    if (lotPurchaseId === targetPurchaseId && lotPurchaseItemId && targetPurchaseItemId && lotPurchaseItemId === targetPurchaseItemId) {
+                        fromExplicitLots += q;
+                    }
+                }
+            });
+
+            const activeColdQty = getActiveColdQtyByItem(targetItemId);
+            const unattributedCold = Math.max(0, activeColdQty - explicitColdOnItem);
+            if (unattributedCold <= 0.0001) return Math.max(0, fromExplicitLots);
+
+            const purchaseLineRows = getPurchaseLineRows(targetItemId);
+            purchaseLineRows.sort(function(a, b) {
+                const cmp = String(a.date).localeCompare(String(b.date));
+                if (cmp !== 0) return cmp;
+                const pidCmp = String(a.purchaseId).localeCompare(String(b.purchaseId));
+                if (pidCmp !== 0) return pidCmp;
+                return a.lineIdx - b.lineIdx;
+            });
+
+            let remaining = unattributedCold;
+            const reservedByLine = {};
+            purchaseLineRows.forEach(function(row) {
+                if (remaining <= 0 || row.qty <= 0) return;
+                const used = Math.min(row.qty, remaining);
+                remaining -= used;
+                reservedByLine[row.lineKey] = (reservedByLine[row.lineKey] || 0) + used;
+            });
+            return Math.max(0, fromExplicitLots + (reservedByLine[lineRow.lineKey] || 0));
+        }
+
+        function getPurchaseLineAvailableQty(lineRow, currentEditingSaleId, currentTempLinks) {
+            if (!lineRow) return 0;
+            const rowPurchaseId = String(lineRow.purchaseId);
+            const rowItemId = String(lineRow.itemId);
+            const rowPurchaseItemId = String(lineRow.purchaseItemId || '');
+
+            const coldReservedQty = getPurchaseLineColdReservedQty(lineRow);
             const alreadyLinked = (appData.sales || []).reduce(function(sum, sale) {
                 const saleIdStr = (sale && sale.id !== undefined && sale.id !== null) ? String(sale.id) : null;
                 if (sale.linkedPurchases && (!currentEditingSaleId || saleIdStr !== currentEditingSaleId)) {
                     const normalized = normalizeLinkedPurchasesForItems(sale.linkedPurchases, sale.items || []);
                     const used = normalized.reduce(function(acc, lp) {
-                        if (String(lp.purchaseId) === String(purchaseId) && String(lp.itemId) === String(itemId)) {
-                            return acc + getLinkedQtyValue(lp);
-                        }
+                        if (String(lp.purchaseId) !== rowPurchaseId || String(lp.itemId) !== rowItemId) return acc;
+                        if (!rowPurchaseItemId) return acc + getLinkedQtyValue(lp);
+                        if (String(lp.purchaseItemId || '') === rowPurchaseItemId) return acc + getLinkedQtyValue(lp);
                         return acc;
                     }, 0);
                     return sum + used;
@@ -6763,12 +6852,21 @@ function deleteAllMasters() {
                 return sum;
             }, 0);
             const currentTempQty = (currentTempLinks || []).reduce(function(sum, lp) {
-                if (String(lp.purchaseId) === String(purchaseId) && String(lp.itemId) === String(itemId)) {
-                    return sum + getLinkedQtyValue(lp);
-                }
+                if (String(lp.purchaseId) !== rowPurchaseId || String(lp.itemId) !== rowItemId) return sum;
+                if (!rowPurchaseItemId) return sum + getLinkedQtyValue(lp);
+                if (String(lp.purchaseItemId || '') === rowPurchaseItemId) return sum + getLinkedQtyValue(lp);
                 return sum;
             }, 0);
-            return Math.max(0, totalPurchased - coldReservedQty - alreadyLinked + currentTempQty);
+            return Math.max(0, (parseFloat(lineRow.qty) || 0) - coldReservedQty - alreadyLinked + currentTempQty);
+        }
+
+        function getPurchaseItemAvailableQty(purchaseId, itemId, currentEditingSaleId, currentTempLinks) {
+            const purchaseLineRows = getPurchaseLineRows(itemId).filter(function(row) {
+                return String(row.purchaseId) === String(purchaseId) && String(row.itemId) === String(itemId);
+            });
+            return purchaseLineRows.reduce(function(sum, row) {
+                return sum + getPurchaseLineAvailableQty(row, currentEditingSaleId, currentTempLinks);
+            }, 0);
         }
 
         function getPurchaseItemColdReservedQty(purchaseId, itemId) {
@@ -6836,50 +6934,47 @@ function deleteAllMasters() {
             const currentEditingSaleId = (editingSaleId !== null && editingSaleId !== undefined) ? String(editingSaleId) : null;
             tempLinkedPurchases = normalizeLinkedPurchasesForItems(linkedPurchases, currentSaleItems);
 
+            function getExistingQtyForLine(lineRow) {
+                return tempLinkedPurchases.reduce(function(sum, lp) {
+                    if (String(lp.purchaseId) !== String(lineRow.purchaseId)) return sum;
+                    if (String(lp.itemId) !== String(lineRow.itemId)) return sum;
+                    if (String(lineRow.purchaseItemId || '') && String(lp.purchaseItemId || '') !== String(lineRow.purchaseItemId || '')) return sum;
+                    return sum + getLinkedQtyValue(lp);
+                }, 0);
+            }
+
+            function renderLineRow(lineRow, inputId) {
+                const purchase = lineRow.purchase;
+                const availableQty = getPurchaseLineAvailableQty(lineRow, currentEditingSaleId, tempLinkedPurchases);
+                const existingQty = getExistingQtyForLine(lineRow);
+                if (availableQty <= 0.0001 && existingQty <= 0.0001) return '';
+                return `
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end py-2 border-b border-slate-100">
+                        <div class="md:col-span-2">
+                            <div class="font-medium text-slate-800">Invoice: ${escapeHtml(purchase.invoice)} | Supplier: ${escapeHtml(purchase.supplierName)}</div>
+                            <div class="text-sm text-slate-600">Item: ${escapeHtml(lineRow.itemName)} | Kaanta Parchi: ${escapeHtml(lineRow.kaantaParchi || '-')}</div>
+                            <div class="text-xs text-slate-500">Gross: ${lineRow.qty.toFixed(2)} kg | Bags: ${lineRow.bags.toFixed(2)} | Net: ${lineRow.netWeight.toFixed(2)} kg</div>
+                            <div class="text-sm ${availableQty > 0 ? 'text-green-600' : 'text-red-600'}">Available Quantity: ${availableQty.toFixed(2)} kg</div>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs text-slate-600 mb-1">Qty to use from this purchase line (kg)</label>
+                            <input type="number" id="${inputId}" data-purchase-id="${purchase.id}" data-item-id="${lineRow.itemId}" data-purchase-item-id="${lineRow.purchaseItemId || ''}" value="${existingQty > 0 ? existingQty.toFixed(2) : ''}" max="${availableQty.toFixed(2)}" step="0.01" class="link-item-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">
+                        </div>
+                    </div>
+                `;
+            }
+
             // Allow linking before adding sale items: show all purchase items.
             if (!currentSaleItems || currentSaleItems.length === 0) {
                 let rows = 0;
-                const uniquePurchaseItemMap = {};
-                (appData.purchases || []).forEach(function(purchase) {
-                    (purchase.items || []).forEach(function(pItem, pIdx) {
-                        const itemId = String(pItem.itemId);
-                        const key = String(purchase.id) + '|' + itemId;
-                        if (uniquePurchaseItemMap[key]) return;
-                        uniquePurchaseItemMap[key] = {
-                            purchase: purchase,
-                            itemId: itemId,
-                            itemName: pItem.itemName || ((appData.items || []).find(function(i){ return String(i.id) === itemId; }) || {}).name || itemId,
-                            rowIdx: pIdx
-                        };
-                    });
-                });
-                Object.keys(uniquePurchaseItemMap).forEach(function(key) {
-                    const row = uniquePurchaseItemMap[key];
-                    const purchase = row.purchase;
-                    const itemId = row.itemId;
-                    const itemName = row.itemName;
-                    const availableQty = getPurchaseItemAvailableQty(purchase.id, itemId, currentEditingSaleId, tempLinkedPurchases);
-                    const existingQty = tempLinkedPurchases.reduce(function(sum, lp) {
-                        if (String(lp.purchaseId) === String(purchase.id) && String(lp.itemId) === String(itemId)) return sum + getLinkedQtyValue(lp);
-                        return sum;
-                    }, 0);
-                    if (availableQty <= 0.0001 && existingQty <= 0.0001) return;
-                    const inputId = 'link_pre_' + purchase.id + '_' + itemId + '_' + row.rowIdx;
+                const purchaseLineRows = getPurchaseLineRows();
+                purchaseLineRows.forEach(function(lineRow, rowIdx) {
+                    const inputId = 'link_pre_' + lineRow.purchaseId + '_' + lineRow.itemId + '_' + rowIdx;
+                    const rowHtml = renderLineRow(lineRow, inputId);
+                    if (!rowHtml) return;
                     const div = document.createElement('div');
                     div.className = 'border border-slate-300 rounded-lg p-4 bg-white';
-                    div.innerHTML = `
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                            <div class="md:col-span-2">
-                                <div class="font-medium text-slate-800">Invoice: ${escapeHtml(purchase.invoice)} | Supplier: ${escapeHtml(purchase.supplierName)}</div>
-                                <div class="text-sm text-slate-600">Item: ${escapeHtml(itemName)}</div>
-                                <div class="text-sm ${availableQty > 0 ? 'text-green-600' : 'text-red-600'}">Available Quantity: ${availableQty.toFixed(2)} kg</div>
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="block text-xs text-slate-600 mb-1">Qty to use from this purchase item (kg)</label>
-                                <input type="number" id="${inputId}" data-purchase-id="${purchase.id}" data-item-id="${itemId}" value="${existingQty > 0 ? existingQty.toFixed(2) : ''}" max="${availableQty.toFixed(2)}" step="0.01" class="link-item-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">
-                            </div>
-                        </div>
-                    `;
+                    div.innerHTML = rowHtml;
                     container.appendChild(div);
                     rows++;
                 });
@@ -6904,30 +6999,13 @@ function deleteAllMasters() {
                 lines.push('<div class="text-sm text-slate-600">Required Gross Qty: ' + requiredQty.toFixed(2) + ' kg | Linked: ' + linkedQtyForItem.toFixed(2) + ' kg</div>');
                 lines.push('</div>');
                 let matchedRows = 0;
-                (appData.purchases || []).forEach(function(purchase) {
-                    const pItems = purchase.items || [];
-                    const hasMatch = pItems.some(function(pi) { return String(pi.itemId) === saleItemId; });
-                    if (!hasMatch) return;
-                    const availableQty = getPurchaseItemAvailableQty(purchase.id, saleItemId, currentEditingSaleId, tempLinkedPurchases);
-                    const existingQty = tempLinkedPurchases.reduce(function(sum, lp) {
-                        if (String(lp.purchaseId) === String(purchase.id) && String(lp.itemId) === saleItemId) {
-                            return sum + getLinkedQtyValue(lp);
-                        }
-                        return sum;
-                    }, 0);
-                    if (availableQty <= 0.0001 && existingQty <= 0.0001) return;
+                const saleLineRows = getPurchaseLineRows(saleItemId);
+                saleLineRows.forEach(function(lineRow) {
+                    const rowInputId = 'link_qty_' + saleIdx + '_' + lineRow.purchaseId + '_' + saleItemId + '_' + matchedRows;
+                    const rowHtml = renderLineRow(lineRow, rowInputId);
+                    if (!rowHtml) return;
                     matchedRows++;
-                    const inputId = 'link_qty_' + saleIdx + '_' + purchase.id + '_' + saleItemId;
-                    lines.push('<div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end py-2 border-b border-slate-100">');
-                    lines.push('<div class="md:col-span-2">');
-                    lines.push('<div class="font-medium text-slate-800">Invoice: ' + escapeHtml(purchase.invoice) + ' | Supplier: ' + escapeHtml(purchase.supplierName) + '</div>');
-                    lines.push('<div class="text-sm ' + (availableQty > 0 ? 'text-green-600' : 'text-red-600') + '">Available for ' + escapeHtml(saleItem.itemName) + ': ' + availableQty.toFixed(2) + ' kg</div>');
-                    lines.push('</div>');
-                    lines.push('<div class="md:col-span-2">');
-                    lines.push('<label class="block text-xs text-slate-600 mb-1">Qty to use from this purchase item (kg)</label>');
-                    lines.push('<input type="number" id="' + inputId + '" data-purchase-id="' + purchase.id + '" data-item-id="' + saleItemId + '" value="' + (existingQty > 0 ? existingQty.toFixed(2) : '') + '" max="' + availableQty.toFixed(2) + '" step="0.01" class="link-item-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">');
-                    lines.push('</div>');
-                    lines.push('</div>');
+                    lines.push(rowHtml);
                 });
                 if (matchedRows === 0) lines.push('<div class="text-sm text-red-600">No purchase with available quantity for this sale item.</div>');
                 wrapper.innerHTML = lines.join('');
@@ -6980,8 +7058,12 @@ function deleteAllMasters() {
                 const qty = getLinkedQtyValue(link);
                 if (!itemId || qty <= 0) return;
                 const purchase = (appData.purchases || []).find(function(p) { return String(p.id) === String(link.purchaseId); });
+                const targetPurchaseItemId = String(link.purchaseItemId || '');
                 const pItem = purchase && purchase.items
-                    ? purchase.items.find(function(pi) { return String(pi.itemId) === itemId; })
+                    ? purchase.items.find(function(pi) {
+                        if (targetPurchaseItemId) return String(pi.id || '') === targetPurchaseItemId;
+                        return String(pi.itemId) === itemId;
+                    })
                     : null;
                 const grossBase = parseFloat((pItem && pItem.grossWeight) || 0) || qty;
                 const isCoconutFromPurchase = !!(pItem && pItem.isCoconut);
@@ -7042,6 +7124,7 @@ function deleteAllMasters() {
                 validatedLinks.push({
                     purchaseId: input.getAttribute('data-purchase-id'),
                     itemId: input.getAttribute('data-item-id'),
+                    purchaseItemId: input.getAttribute('data-purchase-item-id') || '',
                     quantityUsed: +qty.toFixed(2)
                 });
             });
@@ -7099,12 +7182,18 @@ function deleteAllMasters() {
             linkedPurchases.forEach(function(link, idx) {
                 const purchase = (appData.purchases || []).find(function(p) { return String(p.id) === String(link.purchaseId); });
                 const item = (appData.items || []).find(function(i) { return String(i.id) === String(link.itemId); });
+                const pItem = purchase && purchase.items
+                    ? purchase.items.find(function(pi) {
+                        if (String(link.purchaseItemId || '')) return String(pi.id || '') === String(link.purchaseItemId || '');
+                        return String(pi.itemId || '') === String(link.itemId || '');
+                    })
+                    : null;
                 const div = document.createElement('div');
                 div.className = 'flex justify-between items-center p-3 bg-white border border-blue-300 rounded-lg';
                 div.innerHTML = `
                     <div class="flex-1">
                         <div class="font-medium text-slate-800">Invoice: ${escapeHtml(purchase ? purchase.invoice : link.purchaseId)} | Supplier: ${escapeHtml(purchase ? purchase.supplierName : '-')}</div>
-                        <div class="text-sm text-slate-600">Item: ${escapeHtml(item ? item.name : (link.itemId || '-'))} | Qty: ${(getLinkedQtyValue(link)).toFixed(2)} kg</div>
+                        <div class="text-sm text-slate-600">Item: ${escapeHtml(item ? item.name : (link.itemId || '-'))} | Kaanta Parchi: ${escapeHtml((pItem && pItem.kaantaParchi) || '-')} | Qty: ${(getLinkedQtyValue(link)).toFixed(2)} kg</div>
                     </div>
                     <button onclick="removePurchaseLink(${idx})" class="text-red-600 hover:text-red-800 font-bold">✖</button>
                 `;
