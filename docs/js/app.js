@@ -2808,7 +2808,8 @@ function deleteAllMasters() {
             const weightDisplay = document.getElementById('purchaseColdStorageWeightDisplay');
             const inRateDisplay = document.getElementById('purchaseColdStorageInRateDisplay');
             const outRateDisplay = document.getElementById('purchaseColdStorageOutRateDisplay');
-            const bagsDisplay = document.getElementById('purchaseColdStorageBagsDisplay');
+            const inBagsDisplay = document.getElementById('purchaseColdStorageInBagsDisplay');
+            const outBagsDisplay = document.getElementById('purchaseColdStorageOutBagsDisplay');
             if (!costEl || !toggleEl || !toggleEl.checked) {
                 if (costEl) costEl.value = '';
                 if (rentCostDisplay) rentCostDisplay.textContent = '0.00';
@@ -2820,18 +2821,23 @@ function deleteAllMasters() {
                 if (weightDisplay) weightDisplay.textContent = '0.00';
                 if (inRateDisplay) inRateDisplay.textContent = '0.00';
                 if (outRateDisplay) outRateDisplay.textContent = '0.00';
-                if (bagsDisplay) bagsDisplay.textContent = '0.00';
+                if (inBagsDisplay) inBagsDisplay.textContent = '0.00';
+                if (outBagsDisplay) outBagsDisplay.textContent = '0.00';
                 return 0;
             }
             const grossWeight = Math.max(0, parseFloat(document.getElementById('purchaseQuantity') && document.getElementById('purchaseQuantity').value) || 0);
             const bags = Math.max(0, parseFloat(document.getElementById('purchaseBags') && document.getElementById('purchaseBags').value) || 0);
+            const moveQtyInput = parseFloat(document.getElementById('purchaseColdMoveQty') && document.getElementById('purchaseColdMoveQty').value);
+            const moveBagsInput = parseFloat(document.getElementById('purchaseColdMoveBags') && document.getElementById('purchaseColdMoveBags').value);
+            const moveQty = Math.max(0, !isNaN(moveQtyInput) ? moveQtyInput : grossWeight);
+            const moveBags = Math.max(0, !isNaN(moveBagsInput) ? moveBagsInput : bags);
             const rentPerKg = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageRentPerKg') && document.getElementById('purchaseColdStorageRentPerKg').value) || 0);
             const inPerBag = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageInPerBag') && document.getElementById('purchaseColdStorageInPerBag').value) || 0);
             const outPerBag = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageOutPerBag') && document.getElementById('purchaseColdStorageOutPerBag').value) || 0);
             const otherCharge = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageOtherCharge') && document.getElementById('purchaseColdStorageOtherCharge').value) || 0);
-            const rentCost = grossWeight * rentPerKg;
-            const inCost = bags * inPerBag;
-            const outCost = bags * outPerBag;
+            const rentCost = moveQty * rentPerKg;
+            const inCost = moveBags * inPerBag;
+            const outCost = moveBags * outPerBag;
             const totalCost = rentCost + inCost + outCost + otherCharge;
             costEl.value = totalCost.toFixed(2);
             if (rentCostDisplay) rentCostDisplay.textContent = rentCost.toFixed(2);
@@ -2840,10 +2846,11 @@ function deleteAllMasters() {
             if (otherDisplay) otherDisplay.textContent = otherCharge.toFixed(2);
             if (totalDisplay) totalDisplay.textContent = totalCost.toFixed(2);
             if (rentRateDisplay) rentRateDisplay.textContent = rentPerKg.toFixed(2);
-            if (weightDisplay) weightDisplay.textContent = grossWeight.toFixed(2);
+            if (weightDisplay) weightDisplay.textContent = moveQty.toFixed(2);
             if (inRateDisplay) inRateDisplay.textContent = inPerBag.toFixed(2);
             if (outRateDisplay) outRateDisplay.textContent = outPerBag.toFixed(2);
-            if (bagsDisplay) bagsDisplay.textContent = bags.toFixed(2);
+            if (inBagsDisplay) inBagsDisplay.textContent = moveBags.toFixed(2);
+            if (outBagsDisplay) outBagsDisplay.textContent = moveBags.toFixed(2);
             return totalCost;
         }
 
@@ -2880,6 +2887,8 @@ function deleteAllMasters() {
             const outEl = document.getElementById('purchaseColdStorageOutPerBag');
             const otherEl = document.getElementById('purchaseColdStorageOtherCharge');
             const costEl = document.getElementById('purchaseColdStorageCost');
+            const moveQtyEl = document.getElementById('purchaseColdMoveQty');
+            const moveBagsEl = document.getElementById('purchaseColdMoveBags');
             const storageNameEl = document.getElementById('purchaseColdStorageName');
             const storageVendorEl = document.getElementById('purchaseColdStorageVendorName');
             const remarksEl = document.getElementById('purchaseColdStorageRemarks');
@@ -2890,6 +2899,8 @@ function deleteAllMasters() {
             if (outEl) outEl.value = '';
             if (otherEl) otherEl.value = '';
             if (costEl) costEl.value = '';
+            if (moveQtyEl) moveQtyEl.value = '';
+            if (moveBagsEl) moveBagsEl.value = '';
             if (storageNameEl) storageNameEl.value = '';
             if (storageVendorEl) storageVendorEl.value = '';
             if (remarksEl) remarksEl.value = '';
@@ -2909,6 +2920,8 @@ function deleteAllMasters() {
                 const outEl = document.getElementById('purchaseColdStorageOutPerBag');
                 const otherEl = document.getElementById('purchaseColdStorageOtherCharge');
                 const costEl = document.getElementById('purchaseColdStorageCost');
+                const moveQtyEl = document.getElementById('purchaseColdMoveQty');
+                const moveBagsEl = document.getElementById('purchaseColdMoveBags');
                 const storageNameEl = document.getElementById('purchaseColdStorageName');
                 const storageVendorEl = document.getElementById('purchaseColdStorageVendorName');
                 if (rentEl) rentEl.value = '';
@@ -2916,6 +2929,8 @@ function deleteAllMasters() {
                 if (outEl) outEl.value = '';
                 if (otherEl) otherEl.value = '';
                 if (costEl) costEl.value = '';
+                if (moveQtyEl) moveQtyEl.value = '';
+                if (moveBagsEl) moveBagsEl.value = '';
                 if (storageNameEl) storageNameEl.value = '';
                 if (storageVendorEl) storageVendorEl.value = '';
                 return;
@@ -2942,6 +2957,8 @@ function deleteAllMasters() {
             const coldStorageInPerBag = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageInPerBag') && document.getElementById('purchaseColdStorageInPerBag').value) || 0);
             const coldStorageOutPerBag = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageOutPerBag') && document.getElementById('purchaseColdStorageOutPerBag').value) || 0);
             const coldStorageOtherCharge = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageOtherCharge') && document.getElementById('purchaseColdStorageOtherCharge').value) || 0);
+            const coldMoveQtyInput = parseFloat(document.getElementById('purchaseColdMoveQty') && document.getElementById('purchaseColdMoveQty').value);
+            const coldMoveBagsInput = parseFloat(document.getElementById('purchaseColdMoveBags') && document.getElementById('purchaseColdMoveBags').value);
             const coldStorageName = (document.getElementById('purchaseColdStorageName') && document.getElementById('purchaseColdStorageName').value) ? document.getElementById('purchaseColdStorageName').value.trim() : '';
             const coldStorageVendorName = (document.getElementById('purchaseColdStorageVendorName') && document.getElementById('purchaseColdStorageVendorName').value) ? document.getElementById('purchaseColdStorageVendorName').value.trim() : '';
             const coldStorageRemarks = (document.getElementById('purchaseColdStorageRemarks') && document.getElementById('purchaseColdStorageRemarks').value) ? document.getElementById('purchaseColdStorageRemarks').value.trim() : '';
@@ -2991,11 +3008,25 @@ function deleteAllMasters() {
                 if (item.name.toLowerCase().includes('coconut')) total = netWeight * rate;
                 else if (item.unit.toLowerCase() !== 'qty' && item.unit.toLowerCase() !== 'quantity') total = netWeight * rate;
             }
+            const coldMoveQty = isColdStorage ? Math.max(0, !isNaN(coldMoveQtyInput) ? coldMoveQtyInput : grossWeight) : 0;
+            const coldMoveBags = isColdStorage ? Math.max(0, !isNaN(coldMoveBagsInput) ? coldMoveBagsInput : bags) : 0;
             const coldStorageCost = isColdStorage
-                ? ((Math.max(0, grossWeight) * coldStorageRentPerKg) + (Math.max(0, bags) * (coldStorageInPerBag + coldStorageOutPerBag)) + coldStorageOtherCharge)
+                ? ((Math.max(0, coldMoveQty) * coldStorageRentPerKg) + (Math.max(0, coldMoveBags) * (coldStorageInPerBag + coldStorageOutPerBag)) + coldStorageOtherCharge)
                 : 0;
             if (isColdStorage && (!coldStorageName || !coldStorageVendorName)) {
                 alert('Please enter Cold Storage Name and Cold Storage Vendor Name.');
+                return;
+            }
+            if (isColdStorage && coldMoveQty <= 0) {
+                alert('Please enter Move Qty to Cold (must be greater than zero).');
+                return;
+            }
+            if (isColdStorage && coldMoveQty - Math.max(0, grossWeight) > 0.0001) {
+                alert('Move Qty to Cold cannot exceed gross quantity.');
+                return;
+            }
+            if (isColdStorage && coldMoveBags - Math.max(0, bags) > 0.0001) {
+                alert('Move Bags to Cold cannot exceed line bags.');
                 return;
             }
             
@@ -3024,6 +3055,8 @@ function deleteAllMasters() {
                 coldStorageOutPerBag: isColdStorage ? coldStorageOutPerBag : 0,
                 coldStorageInOutPerBag: isColdStorage ? (coldStorageInPerBag + coldStorageOutPerBag) : 0,
                 coldStorageOtherCharge: isColdStorage ? coldStorageOtherCharge : 0,
+                coldMoveQty: isColdStorage ? +coldMoveQty.toFixed(2) : 0,
+                coldMoveBags: isColdStorage ? +coldMoveBags.toFixed(2) : 0,
                 coldStorageName: isColdStorage ? coldStorageName : '',
                 coldStorageVendorName: isColdStorage ? coldStorageVendorName : '',
                 coldStorageCost: isColdStorage ? +coldStorageCost.toFixed(2) : 0,
@@ -3050,6 +3083,10 @@ function deleteAllMasters() {
             document.getElementById('purchaseRate').value = '';
             document.getElementById('purchaseAmount').value = '';
             document.getElementById('purchaseItemTotal').value = '';
+            const coldMoveQtyEl = document.getElementById('purchaseColdMoveQty');
+            const coldMoveBagsEl = document.getElementById('purchaseColdMoveBags');
+            if (coldMoveQtyEl) coldMoveQtyEl.value = '';
+            if (coldMoveBagsEl) coldMoveBagsEl.value = '';
             var pkp = document.getElementById('purchaseKaantaParchi');
             if (pkp) pkp.value = '';
             document.getElementById('purchaseDiscountQtyContainer').style.display = 'none';
@@ -3106,6 +3143,8 @@ function deleteAllMasters() {
             const coldInEl = document.getElementById('purchaseColdStorageInPerBag');
             const coldOutEl = document.getElementById('purchaseColdStorageOutPerBag');
             const coldOtherEl = document.getElementById('purchaseColdStorageOtherCharge');
+            const coldMoveQtyEl = document.getElementById('purchaseColdMoveQty');
+            const coldMoveBagsEl = document.getElementById('purchaseColdMoveBags');
             const coldStorageNameEl = document.getElementById('purchaseColdStorageName');
             const coldStorageVendorEl = document.getElementById('purchaseColdStorageVendorName');
             const coldRemarksEl = document.getElementById('purchaseColdStorageRemarks');
@@ -3114,6 +3153,8 @@ function deleteAllMasters() {
             if (coldInEl) coldInEl.value = (item.coldStorageInPerBag != null ? item.coldStorageInPerBag : (item.coldStorageInOutPerBag || 0));
             if (coldOutEl) coldOutEl.value = (item.coldStorageOutPerBag != null ? item.coldStorageOutPerBag : 0);
             if (coldOtherEl) coldOtherEl.value = item.coldStorageOtherCharge || 0;
+            if (coldMoveQtyEl) coldMoveQtyEl.value = (item.coldMoveQty != null ? item.coldMoveQty : item.grossWeight || 0);
+            if (coldMoveBagsEl) coldMoveBagsEl.value = (item.coldMoveBags != null ? item.coldMoveBags : item.bags || 0);
             if (coldStorageNameEl) coldStorageNameEl.value = item.coldStorageName || '';
             if (coldStorageVendorEl) coldStorageVendorEl.value = item.coldStorageVendorName || '';
             if (coldRemarksEl) coldRemarksEl.value = item.coldStorageRemarks || '';
@@ -4418,9 +4459,11 @@ function deleteAllMasters() {
 
         function createAutoColdLotFromPurchaseItem(purchase, purchaseItem, itemIndex) {
             if (!purchase || !purchaseItem) return null;
-            const qty = Math.max(0, parseFloat(purchaseItem.grossWeight ?? purchaseItem.quantity ?? 0) || 0);
+            const lineQty = Math.max(0, parseFloat(purchaseItem.grossWeight ?? purchaseItem.quantity ?? 0) || 0);
+            const qty = Math.max(0, parseFloat(purchaseItem.coldMoveQty ?? lineQty) || 0);
             if (qty <= 0) return null;
-            const bags = Math.max(0, parseFloat(purchaseItem.bags) || 0);
+            const lineBags = Math.max(0, parseFloat(purchaseItem.bags) || 0);
+            const bags = Math.max(0, parseFloat(purchaseItem.coldMoveBags ?? lineBags) || 0);
             const rentPerKg = Math.max(0, parseFloat(purchaseItem.coldStorageRentPerKg) || 0);
             const inPerBag = Math.max(0, parseFloat(purchaseItem.coldStorageInPerBag) || Math.max(0, parseFloat(purchaseItem.coldStorageInOutPerBag) || 0));
             const outPerBag = Math.max(0, parseFloat(purchaseItem.coldStorageOutPerBag) || 0);
@@ -4430,7 +4473,10 @@ function deleteAllMasters() {
                 0,
                 parseFloat(purchaseItem.coldStorageCost) || ((qty * rentPerKg) + (bags * (inPerBag + outPerBag)) + otherCharge)
             );
-            const sourceInventoryCost = Math.max(0, (parseFloat(purchaseItem.total) || 0) + (parseFloat(purchaseItem.coldStorageCost) || 0));
+            const lineTotalInventoryCost = Math.max(0, (parseFloat(purchaseItem.total) || 0) + (parseFloat(purchaseItem.coldStorageCost) || 0));
+            const sourceInventoryCost = lineQty > 0
+                ? Math.max(0, lineTotalInventoryCost * Math.min(1, qty / lineQty))
+                : Math.max(0, lineTotalInventoryCost);
             const sourceKey = getPurchaseAutoColdSourceKey(purchase.id, purchaseItem, itemIndex);
             const lotId = Date.now() + Math.floor(Math.random() * 1000) + itemIndex;
             const coldStorageName = String(purchaseItem.coldStorageName || '').trim() || 'Auto from Purchase';
@@ -4445,6 +4491,7 @@ function deleteAllMasters() {
                 unit: getItemUnitById(purchaseItem.itemId),
                 coldStorageName: coldStorageName,
                 vendorName: vendorName,
+                supplierName: String(purchaseItem.supplierName || purchase.supplierName || '').trim() || '-',
                 qtyInCold: qty,
                 bagsInCold: bags,
                 rentPerKg: rentPerKg,
@@ -4730,6 +4777,7 @@ function deleteAllMasters() {
                 lot.bagsInCold = +bags.toFixed(2);
                 lot.coldStorageName = coldStorageName;
                 lot.vendorName = vendorName;
+                lot.supplierName = lot.supplierName || '-';
                 lot.rentPerKg = rentPerKg;
                 lot.inOutPerBag = inOutPerBag;
                 lot.otherCharge = otherCharge;
@@ -4749,6 +4797,7 @@ function deleteAllMasters() {
                     moveEntry.itemName = lot.itemName;
                     moveEntry.coldStorageName = lot.coldStorageName;
                     moveEntry.vendorName = lot.vendorName;
+                    moveEntry.supplierName = lot.supplierName || '-';
                     moveEntry.qty = lot.qtyInCold;
                     moveEntry.bags = lot.bagsInCold;
                     moveEntry.amount = lot.estimatedTotalCharge;
@@ -4812,6 +4861,7 @@ function deleteAllMasters() {
                 unit: getItemUnitById(itemId),
                 coldStorageName: coldStorageName,
                 vendorName: vendorName,
+                supplierName: '-',
                 qtyInCold: qty,
                 bagsInCold: bags,
                 rentPerKg: rentPerKg,
@@ -4848,6 +4898,7 @@ function deleteAllMasters() {
                 itemName: lot.itemName,
                 coldStorageName: coldStorageName,
                 vendorName: vendorName,
+                supplierName: lot.supplierName,
                 qty: qty,
                 bags: bags,
                 amount: estimatedTotalCharge,
@@ -5332,7 +5383,7 @@ function deleteAllMasters() {
                 if (!stillVisible) activeInlineReleaseLotId = null;
             }
             if (activeLots.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="13" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="14" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>';
                 return;
             }
             tbody.innerHTML = '';
@@ -5344,6 +5395,7 @@ function deleteAllMasters() {
                     <td class="px-3 py-2 text-sm">${escapeHtml(lot.itemName || '-')}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(lot.coldStorageName || '-')}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(lot.vendorName || '-')}</td>
+                    <td class="px-3 py-2 text-sm">${escapeHtml(lot.supplierName || '-')}</td>
                     <td class="px-3 py-2 text-sm text-right">${Number(lot.qtyInCold || 0).toFixed(2)}</td>
                     <td class="px-3 py-2 text-sm text-right">${Number(lot.bagsInCold || 0).toFixed(2)}</td>
                     <td class="px-3 py-2 text-sm text-right">${RU}${Number(lot.estimatedTotalCharge || 0).toFixed(2)}</td>
@@ -5367,7 +5419,7 @@ function deleteAllMasters() {
                     detailTr.className = 'border-b border-orange-200 bg-orange-50/40';
                     const inlineDate = new Date().toISOString().split('T')[0];
                     detailTr.innerHTML = `
-                        <td colspan="13" class="px-3 py-3">
+                        <td colspan="14" class="px-3 py-3">
                             <div class="rounded-lg border border-orange-200 bg-white p-4">
                                 <div class="flex items-center justify-between mb-3">
                                     <p class="font-semibold text-slate-800">Release Lot: ${escapeHtml(lot.itemName || '-')} | ${escapeHtml(lot.coldStorageName || '-')}</p>
@@ -6827,7 +6879,7 @@ function deleteAllMasters() {
                     const itemId = String(pItem.itemId || '');
                     if (!itemId) return;
                     if (hasFilter && itemId !== targetItemId) return;
-                    const qty = Math.max(0, parseFloat(pItem.netWeight ?? pItem.grossWeight ?? pItem.quantity ?? 0) || 0);
+                    const qty = Math.max(0, parseFloat(pItem.grossWeight ?? pItem.quantity ?? pItem.netWeight ?? 0) || 0);
                     rows.push({
                         purchase: purchase,
                         purchaseId: String(purchase.id),
