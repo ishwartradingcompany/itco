@@ -6693,6 +6693,11 @@ function deleteAllMasters() {
             return parseFloat(link.quantityUsed ?? link.quantity ?? link.qtyUsed ?? link.qty ?? 0) || 0;
         }
 
+        function getLinkedBagsValue(link) {
+            if (!link) return 0;
+            return parseFloat(link.bagsUsed ?? link.bags ?? 0) || 0;
+        }
+
         function getPurchaseLineKey(purchaseId, itemId, purchaseItemId, lineIdx) {
             const pid = String(purchaseId || '');
             const iid = String(itemId || '');
@@ -6722,6 +6727,7 @@ function deleteAllMasters() {
                         date: pItem.date || purchase.date || '',
                         itemName: pItem.itemName || ((appData.items || []).find(function(i) { return String(i.id) === itemId; }) || {}).name || itemId,
                         kaantaParchi: pItem.kaantaParchi || '',
+                        grossWeight: Math.max(0, parseFloat(pItem.grossWeight ?? pItem.quantity ?? pItem.netWeight ?? 0) || 0),
                         qty: qty,
                         bags: Math.max(0, parseFloat(pItem.bags) || 0),
                         netWeight: Math.max(0, parseFloat(pItem.netWeight ?? pItem.quantity ?? 0) || 0)
@@ -6751,28 +6757,30 @@ function deleteAllMasters() {
                 const purchaseId = link.purchaseId;
                 const purchaseItemId = (link.purchaseItemId != null && link.purchaseItemId !== '') ? String(link.purchaseItemId) : '';
                 if (link.itemId != null && link.itemId !== '') {
-                    normalized.push({ purchaseId: purchaseId, itemId: String(link.itemId), purchaseItemId: purchaseItemId, quantityUsed: qty });
+                    normalized.push({ purchaseId: purchaseId, itemId: String(link.itemId), purchaseItemId: purchaseItemId, quantityUsed: qty, bagsUsed: getLinkedBagsValue(link) });
                     return;
                 }
                 if (itemIds.length === 0) return;
                 if (itemIds.length === 1 || totalSaleQty <= 0) {
-                    normalized.push({ purchaseId: purchaseId, itemId: itemIds[0], purchaseItemId: purchaseItemId, quantityUsed: qty });
+                    normalized.push({ purchaseId: purchaseId, itemId: itemIds[0], purchaseItemId: purchaseItemId, quantityUsed: qty, bagsUsed: getLinkedBagsValue(link) });
                     return;
                 }
                 itemIds.forEach(function(itemId) {
                     const ratio = requiredByItem[itemId] / totalSaleQty;
-                    normalized.push({ purchaseId: purchaseId, itemId: itemId, purchaseItemId: purchaseItemId, quantityUsed: qty * ratio });
+                    normalized.push({ purchaseId: purchaseId, itemId: itemId, purchaseItemId: purchaseItemId, quantityUsed: qty * ratio, bagsUsed: getLinkedBagsValue(link) * ratio });
                 });
             });
             const map = {};
             normalized.forEach(function(l) {
                 const lineKey = getPurchaseLineKey(l.purchaseId, l.itemId, l.purchaseItemId, 0);
-                if (!map[lineKey]) map[lineKey] = { purchaseId: l.purchaseId, itemId: String(l.itemId), purchaseItemId: String(l.purchaseItemId || ''), quantityUsed: 0 };
+                if (!map[lineKey]) map[lineKey] = { purchaseId: l.purchaseId, itemId: String(l.itemId), purchaseItemId: String(l.purchaseItemId || ''), quantityUsed: 0, bagsUsed: 0 };
                 map[lineKey].quantityUsed += (parseFloat(l.quantityUsed) || 0);
+                map[lineKey].bagsUsed += (parseFloat(l.bagsUsed) || 0);
             });
             return Object.keys(map).map(function(k) {
                 const v = map[k];
                 v.quantityUsed = +v.quantityUsed.toFixed(2);
+                v.bagsUsed = +v.bagsUsed.toFixed(2);
                 return v;
             });
         }
@@ -6942,22 +6950,34 @@ function deleteAllMasters() {
                 }, 0);
             }
 
+            function getExistingBagsForLine(lineRow) {
+                return tempLinkedPurchases.reduce(function(sum, lp) {
+                    if (String(lp.purchaseId) !== String(lineRow.purchaseId)) return sum;
+                    if (String(lp.itemId) !== String(lineRow.itemId)) return sum;
+                    if (String(lineRow.purchaseItemId || '') && String(lp.purchaseItemId || '') !== String(lineRow.purchaseItemId || '')) return sum;
+                    return sum + getLinkedBagsValue(lp);
+                }, 0);
+            }
+
             function renderLineRow(lineRow, inputId) {
                 const purchase = lineRow.purchase;
                 const availableQty = getPurchaseLineAvailableQty(lineRow, currentEditingSaleId, tempLinkedPurchases);
                 const existingQty = getExistingQtyForLine(lineRow);
+                const existingBags = getExistingBagsForLine(lineRow);
                 if (availableQty <= 0.0001 && existingQty <= 0.0001) return '';
                 return `
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end py-2 border-b border-slate-100">
                         <div class="md:col-span-2">
                             <div class="font-medium text-slate-800">Invoice: ${escapeHtml(purchase.invoice)} | Supplier: ${escapeHtml(purchase.supplierName)}</div>
                             <div class="text-sm text-slate-600">Item: ${escapeHtml(lineRow.itemName)} | Kaanta Parchi: ${escapeHtml(lineRow.kaantaParchi || '-')}</div>
-                            <div class="text-xs text-slate-500">Gross: ${lineRow.qty.toFixed(2)} kg | Bags: ${lineRow.bags.toFixed(2)} | Net: ${lineRow.netWeight.toFixed(2)} kg</div>
+                            <div class="text-xs text-slate-500">Gross: ${lineRow.grossWeight.toFixed(2)} kg | Bags: ${lineRow.bags.toFixed(2)} | Net: ${lineRow.netWeight.toFixed(2)} kg</div>
                             <div class="text-sm ${availableQty > 0 ? 'text-green-600' : 'text-red-600'}">Available Quantity: ${availableQty.toFixed(2)} kg</div>
                         </div>
                         <div class="md:col-span-2">
                             <label class="block text-xs text-slate-600 mb-1">Qty to use from this purchase line (kg)</label>
-                            <input type="number" id="${inputId}" data-purchase-id="${purchase.id}" data-item-id="${lineRow.itemId}" data-purchase-item-id="${lineRow.purchaseItemId || ''}" value="${existingQty > 0 ? existingQty.toFixed(2) : ''}" max="${availableQty.toFixed(2)}" step="0.01" class="link-item-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">
+                            <input type="number" id="${inputId}" data-purchase-id="${purchase.id}" data-item-id="${lineRow.itemId}" data-purchase-item-id="${lineRow.purchaseItemId || ''}" data-line-key="${lineRow.lineKey}" value="${existingQty > 0 ? existingQty.toFixed(2) : ''}" max="${availableQty.toFixed(2)}" step="0.01" class="link-item-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">
+                            <label class="block text-xs text-slate-600 mt-2 mb-1">Bags to use from this purchase line</label>
+                            <input type="number" id="${inputId}_bags" data-line-key="${lineRow.lineKey}" value="${existingBags > 0 ? existingBags.toFixed(2) : ''}" max="${Math.max(0, lineRow.bags).toFixed(2)}" step="0.01" class="link-bags-input w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0.00">
                         </div>
                     </div>
                 `;
@@ -7025,25 +7045,35 @@ function deleteAllMasters() {
                 const linkedQty = (links || []).reduce(function(sum, lp) {
                     return String(lp.itemId) === itemId ? sum + getLinkedQtyValue(lp) : sum;
                 }, 0);
+                const linkedBags = (links || []).reduce(function(sum, lp) {
+                    return String(lp.itemId) === itemId ? sum + getLinkedBagsValue(lp) : sum;
+                }, 0);
                 if (linkedQty <= 0) return;
                 const oldTotal = rows.reduce(function(sum, r) { return sum + (parseFloat(r.row.grossWeight) || 0); }, 0);
                 let assigned = 0;
+                let assignedBags = 0;
                 rows.forEach(function(r, i) {
                     const oldGross = parseFloat(r.row.grossWeight) || 0;
-                    const oldNet = parseFloat(r.row.netWeight) || 0;
-                    const discountDelta = Math.max(0, oldGross - oldNet);
                     let newGross = 0;
+                    let newBags = 0;
                     if (i === rows.length - 1) newGross = linkedQty - assigned;
                     else {
                         const ratio = oldTotal > 0 ? (oldGross / oldTotal) : (1 / rows.length);
                         newGross = +(linkedQty * ratio).toFixed(2);
                         assigned += newGross;
                     }
+                    if (i === rows.length - 1) newBags = linkedBags - assignedBags;
+                    else {
+                        const ratioBags = oldTotal > 0 ? (oldGross / oldTotal) : (1 / rows.length);
+                        newBags = +(linkedBags * ratioBags).toFixed(2);
+                        assignedBags += newBags;
+                    }
                     r.row.grossWeight = +Math.max(0, newGross).toFixed(2);
                     if (r.row.isCoconut) r.row.netWeight = +Math.max(0, r.row.grossWeight - (parseFloat(r.row.discountQty) || 0)).toFixed(2);
                     else {
-                        r.row.netWeight = +Math.max(0, r.row.grossWeight - discountDelta).toFixed(2);
-                        r.row.bags = +discountDelta.toFixed(2);
+                        const useBags = Math.max(0, +newBags.toFixed(2));
+                        r.row.bags = useBags;
+                        r.row.netWeight = +Math.max(0, r.row.grossWeight - useBags).toFixed(2);
                     }
                     r.row.total = +((parseFloat(r.row.netWeight) || 0) * (parseFloat(r.row.rate) || 0)).toFixed(2);
                 });
@@ -7078,7 +7108,8 @@ function deleteAllMasters() {
 
                 if (!byItem[itemId]) byItem[itemId] = { qty: 0, bags: 0, discountQty: 0, isCoconut: false };
                 byItem[itemId].qty += qty;
-                byItem[itemId].bags += (qty * nonCoconutRatio);
+                const linkedBags = getLinkedBagsValue(link);
+                byItem[itemId].bags += (linkedBags > 0 ? linkedBags : (qty * nonCoconutRatio));
                 byItem[itemId].discountQty += (qty * coconutRatio);
                 byItem[itemId].isCoconut = byItem[itemId].isCoconut || isCoconutFromPurchase;
             });
@@ -7120,11 +7151,16 @@ function deleteAllMasters() {
                 if (qty <= 0) return;
                 const max = parseFloat(input.max) || 0;
                 if (max > 0 && qty - max > 0.0001) return;
+                const bagsInput = document.getElementById(input.id + '_bags');
+                const bagsVal = bagsInput ? (parseFloat(bagsInput.value) || 0) : 0;
+                const bagsMax = bagsInput ? (parseFloat(bagsInput.max) || 0) : 0;
+                if (bagsVal < 0 || (bagsMax > 0 && bagsVal - bagsMax > 0.0001)) return;
                 validatedLinks.push({
                     purchaseId: input.getAttribute('data-purchase-id'),
                     itemId: input.getAttribute('data-item-id'),
                     purchaseItemId: input.getAttribute('data-purchase-item-id') || '',
-                    quantityUsed: +qty.toFixed(2)
+                    quantityUsed: +qty.toFixed(2),
+                    bagsUsed: +bagsVal.toFixed(2)
                 });
             });
 
@@ -7144,14 +7180,18 @@ function deleteAllMasters() {
 
             const tolerance = 0.01;
             const requiredByItem = {};
+            const requiredBagsByItem = {};
             currentSaleItems.forEach(function(row) {
                 const itemId = String(row.itemId);
                 requiredByItem[itemId] = (requiredByItem[itemId] || 0) + (parseFloat(row.grossWeight) || 0);
+                requiredBagsByItem[itemId] = (requiredBagsByItem[itemId] || 0) + (parseFloat(row.bags) || 0);
             });
             const linkedByItem = {};
+            const linkedBagsByItem = {};
             validatedLinks.forEach(function(lp) {
                 const itemId = String(lp.itemId);
                 linkedByItem[itemId] = (linkedByItem[itemId] || 0) + getLinkedQtyValue(lp);
+                linkedBagsByItem[itemId] = (linkedBagsByItem[itemId] || 0) + getLinkedBagsValue(lp);
             });
             for (const itemId in requiredByItem) {
                 const req = requiredByItem[itemId] || 0;
@@ -7160,6 +7200,14 @@ function deleteAllMasters() {
                     const itemObj = (appData.items || []).find(function(i) { return String(i.id) === String(itemId); });
                     const name = itemObj ? itemObj.name : itemId;
                     alert('Purchase linking is compulsory item-wise. Item "' + name + '" requires ' + req.toFixed(2) + ' kg, but linked ' + lnk.toFixed(2) + ' kg.');
+                    return;
+                }
+                const reqBags = requiredBagsByItem[itemId] || 0;
+                const lnkBags = linkedBagsByItem[itemId] || 0;
+                if (Math.abs(reqBags - lnkBags) > tolerance) {
+                    const itemObj = (appData.items || []).find(function(i) { return String(i.id) === String(itemId); });
+                    const name = itemObj ? itemObj.name : itemId;
+                    alert('Purchase linking bags are compulsory item-wise. Item "' + name + '" requires ' + reqBags.toFixed(2) + ' bags, but linked ' + lnkBags.toFixed(2) + ' bags.');
                     return;
                 }
             }
@@ -7192,7 +7240,7 @@ function deleteAllMasters() {
                 div.innerHTML = `
                     <div class="flex-1">
                         <div class="font-medium text-slate-800">Invoice: ${escapeHtml(purchase ? purchase.invoice : link.purchaseId)} | Supplier: ${escapeHtml(purchase ? purchase.supplierName : '-')}</div>
-                        <div class="text-sm text-slate-600">Item: ${escapeHtml(item ? item.name : (link.itemId || '-'))} | Kaanta Parchi: ${escapeHtml((pItem && pItem.kaantaParchi) || '-')} | Qty: ${(getLinkedQtyValue(link)).toFixed(2)} kg</div>
+                        <div class="text-sm text-slate-600">Item: ${escapeHtml(item ? item.name : (link.itemId || '-'))} | Kaanta Parchi: ${escapeHtml((pItem && pItem.kaantaParchi) || '-')} | Qty: ${(getLinkedQtyValue(link)).toFixed(2)} kg | Bags: ${(getLinkedBagsValue(link)).toFixed(2)}</div>
                     </div>
                     <button onclick="removePurchaseLink(${idx})" class="text-red-600 hover:text-red-800 font-bold">✖</button>
                 `;
