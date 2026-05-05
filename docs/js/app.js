@@ -4215,8 +4215,29 @@ function deleteAllMasters() {
                 var linkedInvoices = Array.from(new Set(linkedSales.map(function(s) {
                     return s.invoice || ('Sale #' + s.id);
                 })));
-                var linkedBadge = linkedInvoices.length > 0
-                    ? ' <span class="inline-block ml-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Linked to sale invoice(s): ' + escapeHtml(linkedInvoices.join(', ')) + '">Linked to: ' + escapeHtml(linkedInvoices.join(', ')) + '</span>'
+                var purchaseColdLots = (appData.coldStorageLots || []).filter(function(lot) {
+                    return String(lot && lot.purchaseId || '') === String(purchase.id);
+                });
+                var purchaseHasColdMarkedItems = (purchase.items || []).some(function(item) {
+                    return !!(item && item.isColdStorage);
+                });
+                var hasMovedToCold = purchaseColdLots.length > 0 || purchaseHasColdMarkedItems;
+                var statusBadges = [];
+                if (hasMovedToCold) {
+                    var activeColdQty = purchaseColdLots.reduce(function(sum, lot) {
+                        if (!lot || (lot.status || 'active') === 'released') return sum;
+                        return sum + (parseFloat(lot.qtyInCold) || 0);
+                    }, 0);
+                    var coldStatusText = activeColdQty > 0.0001
+                        ? ('Moved to Cold: ' + activeColdQty.toFixed(2) + ' kg in cold')
+                        : 'Moved to Cold';
+                    statusBadges.push('<span class="inline-block mr-1 mb-1 px-1.5 py-0.5 rounded text-xs font-medium bg-cyan-100 text-cyan-800" title="Cold storage status for this purchase">' + escapeHtml(coldStatusText) + '</span>');
+                }
+                if (linkedInvoices.length > 0) {
+                    statusBadges.push('<span class="inline-block mr-1 mb-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Linked to sale invoice(s): ' + escapeHtml(linkedInvoices.join(', ')) + '">Linked to: ' + escapeHtml(linkedInvoices.join(', ')) + '</span>');
+                }
+                var statusBadgesHtml = statusBadges.length > 0
+                    ? '<div class="mt-1">' + statusBadges.join('') + '</div>'
                     : '';
                 
                 const row = document.createElement('tr');
@@ -4226,7 +4247,7 @@ function deleteAllMasters() {
                         <span class="text-slate-600">${escapeHtml(purchaseDateText)}</span>
                     </td>
                     <td class="px-4 py-3">
-                        <span class="font-mono text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">${purchase.masterInvoice || purchase.invoice}</span>${linkedBadge}
+                        <span class="font-mono text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">${purchase.masterInvoice || purchase.invoice}</span>${statusBadgesHtml}
                     </td>
                     <td class="px-4 py-3">
                         <span class="font-medium text-slate-700 text-sm">${escapeHtml(purchase.supplierName)}</span>
@@ -5014,7 +5035,13 @@ function deleteAllMasters() {
             const bearer = (document.getElementById('coldDamageBearer') && document.getElementById('coldDamageBearer').value) || 'us';
             const splitPercentInput = Math.max(0, Math.min(100, parseFloat(document.getElementById('coldDamageSplitPercent') && document.getElementById('coldDamageSplitPercent').value) || 50));
             const splitWrapper = document.getElementById('coldDamageSplitWrap');
+            const otherShareLabelEl = document.getElementById('coldDamageOtherShareLabel');
             if (splitWrapper) splitWrapper.classList.toggle('hidden', bearer !== 'split');
+            if (otherShareLabelEl) {
+                if (bearer === 'supplier') otherShareLabelEl.textContent = 'Supplier Share';
+                else if (bearer === 'no_one') otherShareLabelEl.textContent = 'Other Party Share';
+                else otherShareLabelEl.textContent = 'Cold Storage Share';
+            }
 
             const totalLossEl = document.getElementById('coldDamageTotalLossPreview');
             const usLossEl = document.getElementById('coldDamageUsLossPreview');
@@ -5031,9 +5058,11 @@ function deleteAllMasters() {
             const estimates = calculateColdDamageLossEstimate(lot, damageQty);
             let vendorShareRatio = 0;
             if (bearer === 'cold') vendorShareRatio = 1;
+            else if (bearer === 'supplier') vendorShareRatio = 1;
             else if (bearer === 'split') vendorShareRatio = splitPercentInput / 100;
+            else if (bearer === 'no_one') vendorShareRatio = 0;
             const vendorShare = estimates.totalLoss * vendorShareRatio;
-            const usShare = estimates.totalLoss - vendorShare;
+            const usShare = (bearer === 'no_one') ? 0 : (estimates.totalLoss - vendorShare);
             if (totalLossEl) totalLossEl.textContent = `${RU}${estimates.totalLoss.toFixed(2)}`;
             if (usLossEl) usLossEl.textContent = `${RU}${usShare.toFixed(2)}`;
             if (vendorLossEl) vendorLossEl.textContent = `${RU}${vendorShare.toFixed(2)}`;
@@ -5402,7 +5431,7 @@ function deleteAllMasters() {
                 alert('Damage quantity cannot exceed available lot quantity.');
                 return;
             }
-            if (!['us', 'cold', 'split'].includes(bearer)) {
+            if (!['us', 'cold', 'split', 'supplier', 'no_one'].includes(bearer)) {
                 alert('Please select a valid bearer.');
                 return;
             }
@@ -5410,10 +5439,13 @@ function deleteAllMasters() {
             const estimates = calculateColdDamageLossEstimate(lot, damageQty);
             let vendorShareRatio = 0;
             if (bearer === 'cold') vendorShareRatio = 1;
+            else if (bearer === 'supplier') vendorShareRatio = 1;
             else if (bearer === 'split') vendorShareRatio = splitPercent / 100;
             const vendorShareAmount = +(estimates.totalLoss * vendorShareRatio).toFixed(2);
-            const usShareAmount = +(estimates.totalLoss - vendorShareAmount).toFixed(2);
-            const payableReduction = Math.min(Math.max(0, parseFloat(lot.remainingPayable) || 0), vendorShareAmount);
+            const usShareAmount = +(bearer === 'no_one' ? 0 : (estimates.totalLoss - vendorShareAmount)).toFixed(2);
+            const payableReduction = (bearer === 'cold' || bearer === 'split')
+                ? Math.min(Math.max(0, parseFloat(lot.remainingPayable) || 0), vendorShareAmount)
+                : 0;
             const bagsInLot = Math.max(0, parseFloat(lot.bagsInCold) || 0);
             const damagedBags = qtyInLot > 0 ? +(bagsInLot * (damageQty / qtyInLot)).toFixed(2) : 0;
 
@@ -5443,6 +5475,7 @@ function deleteAllMasters() {
                 damageBags: damagedBags,
                 bearer: bearer,
                 splitPercent: bearer === 'split' ? splitPercent : null,
+                supplierName: lot.supplierName || '-',
                 sourceLoss: +estimates.sourceLoss.toFixed(2),
                 chargeLoss: +estimates.chargeLoss.toFixed(2),
                 totalLoss: +estimates.totalLoss.toFixed(2),
@@ -5694,7 +5727,11 @@ function deleteAllMasters() {
                 return;
             }
             tbody.innerHTML = rows.map(function(row) {
-                const bearerLabel = row.bearer === 'cold' ? 'Cold Storage' : (row.bearer === 'split' ? 'Split' : 'Us');
+                let bearerLabel = 'Us';
+                if (row.bearer === 'cold') bearerLabel = 'Cold Storage';
+                else if (row.bearer === 'split') bearerLabel = 'Split';
+                else if (row.bearer === 'supplier') bearerLabel = `Supplier (${row.supplierName || '-'})`;
+                else if (row.bearer === 'no_one') bearerLabel = 'No One';
                 return `<tr class="border-b border-slate-200">
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.date || '-')}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.itemName || '-')}</td>
@@ -8129,7 +8166,7 @@ function deleteAllMasters() {
             if (filteredSales.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="9" class="px-4 py-12 text-center">
+                        <td colspan="10" class="px-4 py-12 text-center">
                             <div class="flex flex-col items-center text-slate-400">
                                 <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
@@ -8155,6 +8192,22 @@ function deleteAllMasters() {
                 sale.balance = currentBalance;
                 const saleDateText = summarizeMultiValue(sale.multiDates || [sale.date], sale.date || '-');
                 const saleTruckText = summarizeMultiValue(sale.multiTrucks || [sale.truck], sale.truck || '-');
+                const linkedRows = normalizeLinkedPurchasesForItems((sale && sale.linkedPurchases) ? sale.linkedPurchases : [], sale.items || []);
+                const linkedPurchaseSummary = [];
+                const linkedSeen = {};
+                linkedRows.forEach(function(lp) {
+                    const purchase = (appData.purchases || []).find(function(p) { return String(p.id) === String(lp.purchaseId); });
+                    const invoice = purchase ? (purchase.invoice || lp.purchaseId) : (lp.purchaseId || '-');
+                    const key = String(invoice);
+                    if (linkedSeen[key]) return;
+                    linkedSeen[key] = true;
+                    linkedPurchaseSummary.push(invoice);
+                });
+                const linkedPurchaseHtml = linkedPurchaseSummary.length
+                    ? linkedPurchaseSummary.map(function(inv) {
+                        return `<div class="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-0.5 mb-1 inline-block mr-1">${escapeHtml(inv)}</div>`;
+                    }).join('')
+                    : '<span class="text-xs text-slate-400">-</span>';
                 
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-green-50/50 transition-colors';
@@ -8174,6 +8227,7 @@ function deleteAllMasters() {
                             ${itemsText}
                         </span>
                     </td>
+                    <td class="px-4 py-3">${linkedPurchaseHtml}</td>
                     <td class="px-4 py-3 text-right">
                         <span class="font-semibold text-slate-800">${RU}${grandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
                     </td>
