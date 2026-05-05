@@ -8166,7 +8166,7 @@ function deleteAllMasters() {
             if (filteredSales.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="10" class="px-4 py-12 text-center">
+                        <td colspan="9" class="px-4 py-12 text-center">
                             <div class="flex flex-col items-center text-slate-400">
                                 <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
@@ -8207,7 +8207,10 @@ function deleteAllMasters() {
                     ? linkedPurchaseSummary.map(function(inv) {
                         return `<div class="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-0.5 mb-1 inline-block mr-1">${escapeHtml(inv)}</div>`;
                     }).join('')
-                    : '<span class="text-xs text-slate-400">-</span>';
+                    : '';
+                const invoiceLinkedHtml = linkedPurchaseHtml
+                    ? `<div class="mt-1">${linkedPurchaseHtml}</div>`
+                    : '';
                 
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-green-50/50 transition-colors';
@@ -8216,7 +8219,7 @@ function deleteAllMasters() {
                         <span class="text-slate-600">${escapeHtml(saleDateText)}</span>
                     </td>
                     <td class="px-4 py-3">
-                        <span class="font-mono text-sm font-medium text-green-600 bg-green-50 px-2 py-1 rounded">${sale.masterInvoice || sale.invoice}</span>
+                        <span class="font-mono text-sm font-medium text-green-600 bg-green-50 px-2 py-1 rounded">${sale.masterInvoice || sale.invoice}</span>${invoiceLinkedHtml}
                     </td>
                     <td class="px-4 py-3">
                         <span class="font-medium text-slate-700 text-sm">${escapeHtml(sale.customerName)}</span>
@@ -8227,7 +8230,6 @@ function deleteAllMasters() {
                             ${itemsText}
                         </span>
                     </td>
-                    <td class="px-4 py-3">${linkedPurchaseHtml}</td>
                     <td class="px-4 py-3 text-right">
                         <span class="font-semibold text-slate-800">${RU}${grandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
                     </td>
