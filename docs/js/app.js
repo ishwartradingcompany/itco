@@ -6487,6 +6487,7 @@ function deleteAllMasters() {
                     coldStorageName: m.coldStorageName || '-',
                     vendorName: m.vendorName || '-',
                     supplierName: m.supplierName || (lot ? (lot.supplierName || '-') : '-'),
+                    originalBags: lot ? Math.max(0, (parseFloat(lot.bagsInCold) || 0) + (parseFloat(lot.releaseBagsTotal) || 0) + (parseFloat(lot.damageBagsTotal) || 0)) : 0,
                     qty: parseFloat(m.qty) || 0,
                     bags: parseFloat(m.bags) || 0,
                     amount: parseFloat(m.amount) || 0,
@@ -6513,6 +6514,7 @@ function deleteAllMasters() {
                         coldStorageName: lot ? (lot.coldStorageName || '-') : '-',
                         vendorName: p.party || (lot ? (lot.vendorName || '-') : '-'),
                         supplierName: lot ? (lot.supplierName || '-') : '-',
+                        originalBags: lot ? Math.max(0, (parseFloat(lot.bagsInCold) || 0) + (parseFloat(lot.releaseBagsTotal) || 0) + (parseFloat(lot.damageBagsTotal) || 0)) : 0,
                         qty: 0,
                         bags: 0,
                         amount: parseFloat(p.amount) || 0,
@@ -6579,6 +6581,7 @@ function deleteAllMasters() {
             rows.forEach(function(row) {
                 const qtyCell = row.qty > 0 ? Number(row.qty).toFixed(2) : '-';
                 const bagsCell = row.bags > 0 ? Number(row.bags).toFixed(2) : '-';
+                const originalBagsCell = row.originalBags > 0 ? Number(row.originalBags).toFixed(2) : '-';
                 const amountCell = row.amount > 0 ? `${RU}${Number(row.amount).toFixed(2)}` : '-';
                 const tr = document.createElement('tr');
                 tr.className = 'border-b border-slate-200';
@@ -6587,8 +6590,8 @@ function deleteAllMasters() {
                     <td class="px-3 py-2 text-sm font-medium text-slate-700">${escapeHtml(row.type || '-')}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.itemName || '-')}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.coldStorageName || '-')}</td>
-                    <td class="px-3 py-2 text-sm">${escapeHtml(row.vendorName || '-')}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.supplierName || '-')}</td>
+                    <td class="px-3 py-2 text-sm text-right">${originalBagsCell}</td>
                     <td class="px-3 py-2 text-sm text-right">${qtyCell}</td>
                     <td class="px-3 py-2 text-sm text-right">${bagsCell}</td>
                     <td class="px-3 py-2 text-sm text-right">${amountCell}</td>
@@ -6673,6 +6676,7 @@ function deleteAllMasters() {
                     coldStorageName: lot ? (lot.coldStorageName || '-') : '-',
                     vendorName: p.party || '-',
                     supplierName: lot ? (lot.supplierName || '-') : '-',
+                    originalBags: lot ? Math.max(0, (parseFloat(lot.bagsInCold) || 0) + (parseFloat(lot.releaseBagsTotal) || 0) + (parseFloat(lot.damageBagsTotal) || 0)) : 0,
                     qty: 0,
                     bags: 0,
                     amount: parseFloat(p.amount) || 0,
@@ -6682,6 +6686,7 @@ function deleteAllMasters() {
             } else {
                 const m = (appData.coldStorageMovements || []).find(function(x) { return String(x.id) === String(movementId); });
                 if (!m) return;
+                const lotMatch = (appData.coldStorageLots || []).find(function(l) { return String(l.id || '') === String(m.lotId || ''); });
                 const map = { move_in: 'Move In', charge_add: 'Periodic Charge', release_out: 'Release', damage: 'Damage' };
                 row = {
                     date: m.date || '-',
@@ -6689,7 +6694,8 @@ function deleteAllMasters() {
                     itemName: m.itemName || getItemNameById(m.itemId),
                     coldStorageName: m.coldStorageName || '-',
                     vendorName: m.vendorName || '-',
-                    supplierName: m.supplierName || (((appData.coldStorageLots || []).find(function(l) { return String(l.id || '') === String(m.lotId || ''); }) || {}).supplierName || '-'),
+                    supplierName: m.supplierName || (lotMatch ? (lotMatch.supplierName || '-') : '-'),
+                    originalBags: lotMatch ? Math.max(0, (parseFloat(lotMatch.bagsInCold) || 0) + (parseFloat(lotMatch.releaseBagsTotal) || 0) + (parseFloat(lotMatch.damageBagsTotal) || 0)) : 0,
                     qty: parseFloat(m.qty) || 0,
                     bags: parseFloat(m.bags) || 0,
                     amount: parseFloat(m.amount) || 0,
@@ -6705,6 +6711,7 @@ function deleteAllMasters() {
                 'Cold Storage: ' + (row.coldStorageName || '-') + '\n' +
                 'Vendor: ' + (row.vendorName || '-') + '\n' +
                 'Supplier: ' + (row.supplierName || '-') + '\n' +
+                'Original Bags: ' + Number(row.originalBags || 0).toFixed(2) + '\n' +
                 'Qty: ' + Number(row.qty || 0).toFixed(2) + '\n' +
                 'Bags: ' + Number(row.bags || 0).toFixed(2) + '\n' +
                 'Amount: ' + RU + Number(row.amount || 0).toFixed(2) + '\n' +
@@ -6726,15 +6733,15 @@ function deleteAllMasters() {
             csv += 'Cold Storage Movement Timeline\n';
             csv += 'Exported On,' + quoteCsv(new Date().toLocaleString()) + '\n';
             csv += '\n';
-            csv += 'Date,Type,Item,Cold Storage,Vendor,Supplier,Qty,Bags,Amount,Reference,Remarks\n';
+            csv += 'Date,Type,Item,Cold Storage,Supplier,Original Bags,Qty,Bags,Amount,Reference,Remarks\n';
             rows.forEach(function(row) {
                 csv += [
                     quoteCsv(row.date || '-'),
                     quoteCsv(row.type || '-'),
                     quoteCsv(row.itemName || '-'),
                     quoteCsv(row.coldStorageName || '-'),
-                    quoteCsv(row.vendorName || '-'),
                     quoteCsv(row.supplierName || '-'),
+                    quoteCsv(row.originalBags > 0 ? Number(row.originalBags).toFixed(2) : ''),
                     quoteCsv(row.qty > 0 ? Number(row.qty).toFixed(2) : ''),
                     quoteCsv(row.bags > 0 ? Number(row.bags).toFixed(2) : ''),
                     quoteCsv(row.amount > 0 ? Number(row.amount).toFixed(2) : ''),
