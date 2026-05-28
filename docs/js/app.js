@@ -4492,13 +4492,11 @@ function deleteAllMasters() {
             const ratio = safeQty / lotQty;
             const sourceInventoryCost = Math.max(0, parseFloat(lot.sourceInventoryCost) || 0);
             const sourceLoss = sourceInventoryCost * ratio;
-            const lotChargeBase = Math.max(0, parseFloat(lot.estimatedTotalCharge) || 0);
-            const chargeLoss = lotChargeBase * ratio;
             return {
                 safeQty: safeQty,
                 sourceLoss: sourceLoss,
-                chargeLoss: chargeLoss,
-                totalLoss: sourceLoss + chargeLoss,
+                chargeLoss: 0,
+                totalLoss: sourceLoss,
                 ratio: ratio
             };
         }
@@ -5033,11 +5031,16 @@ function deleteAllMasters() {
             const currentRelease = releaseSelect ? releaseSelect.value : '';
             const currentDamage = damageSelect ? damageSelect.value : '';
             const activeLots = (appData.coldStorageLots || []).filter(function(lot) { return (lot.status || 'active') !== 'released' && (parseFloat(lot.qtyInCold) || 0) > 0; });
+            const lotLabel = function(lot) {
+                const qty = Number(lot && lot.qtyInCold || 0).toFixed(2);
+                const bags = Number(lot && lot.bagsInCold || 0).toFixed(2);
+                return `${escapeHtml(lot.itemName)} | ${escapeHtml(lot.coldStorageName)} | Qty ${qty} | Bags ${bags}`;
+            };
 
             if (chargeSelect) {
                 chargeSelect.innerHTML = '<option value="">Select Lot</option>';
                 activeLots.forEach(function(lot) {
-                    chargeSelect.innerHTML += `<option value="${lot.id}">${escapeHtml(lot.itemName)} | ${escapeHtml(lot.coldStorageName)} | Qty ${Number(lot.qtyInCold || 0).toFixed(2)}</option>`;
+                    chargeSelect.innerHTML += `<option value="${lot.id}">${lotLabel(lot)}</option>`;
                 });
                 if (currentCharge && chargeSelect.querySelector(`option[value="${currentCharge}"]`)) chargeSelect.value = currentCharge;
             }
@@ -5045,14 +5048,14 @@ function deleteAllMasters() {
             if (releaseSelect) {
                 releaseSelect.innerHTML = '<option value="">Select Lot</option>';
                 activeLots.forEach(function(lot) {
-                    releaseSelect.innerHTML += `<option value="${lot.id}">${escapeHtml(lot.itemName)} | ${escapeHtml(lot.coldStorageName)} | Qty ${Number(lot.qtyInCold || 0).toFixed(2)}</option>`;
+                    releaseSelect.innerHTML += `<option value="${lot.id}">${lotLabel(lot)}</option>`;
                 });
                 if (currentRelease && releaseSelect.querySelector(`option[value="${currentRelease}"]`)) releaseSelect.value = currentRelease;
             }
             if (damageSelect) {
                 damageSelect.innerHTML = '<option value="">Select Lot</option>';
                 activeLots.forEach(function(lot) {
-                    damageSelect.innerHTML += `<option value="${lot.id}">${escapeHtml(lot.itemName)} | ${escapeHtml(lot.coldStorageName)} | Qty ${Number(lot.qtyInCold || 0).toFixed(2)}</option>`;
+                    damageSelect.innerHTML += `<option value="${lot.id}">${lotLabel(lot)}</option>`;
                 });
                 if (currentDamage && damageSelect.querySelector(`option[value="${currentDamage}"]`)) damageSelect.value = currentDamage;
             }
@@ -5081,21 +5084,53 @@ function deleteAllMasters() {
             const hintEl = document.getElementById('coldDamageAvailableHint');
             if (!hintEl) return;
             if (!lotId) {
-                hintEl.textContent = 'Available in lot: 0';
+                hintEl.textContent = 'Available in lot: 0 kg | 0 bags';
                 return;
             }
             const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(lotId); });
             if (!lot) {
-                hintEl.textContent = 'Available in lot: 0';
+                hintEl.textContent = 'Available in lot: 0 kg | 0 bags';
                 return;
             }
-            hintEl.textContent = `Available in lot: ${Number(lot.qtyInCold || 0).toFixed(2)} ${lot.unit || 'kg'} | Remaining Payable: ${RU}${Number(lot.remainingPayable || 0).toFixed(2)}`;
+            hintEl.textContent = `Available in lot: ${Number(lot.qtyInCold || 0).toFixed(2)} ${lot.unit || 'kg'} | ${Number(lot.bagsInCold || 0).toFixed(2)} bags`;
+            syncColdDamageInputs(coldDamageLastEditedField);
+        }
+
+        function onColdDamageQtyInput() {
+            coldDamageLastEditedField = 'qty';
+            syncColdDamageInputs('qty');
+        }
+
+        function onColdDamageBagsInput() {
+            coldDamageLastEditedField = 'bags';
+            syncColdDamageInputs('bags');
+        }
+
+        function syncColdDamageInputs(changedField) {
+            const lotId = (document.getElementById('coldDamageLotId') && document.getElementById('coldDamageLotId').value) || '';
+            const qtyEl = document.getElementById('coldDamageQty');
+            const bagsEl = document.getElementById('coldDamageBags');
+            const qtyVal = Math.max(0, parseFloat(qtyEl && qtyEl.value) || 0);
+            const bagsVal = Math.max(0, parseFloat(bagsEl && bagsEl.value) || 0);
+            const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(lotId); });
+            if (lot) {
+                const lotQty = Math.max(0, parseFloat(lot.qtyInCold) || 0);
+                const lotBags = Math.max(0, parseFloat(lot.bagsInCold) || 0);
+                const qtyPerBag = lotBags > 0 ? (lotQty / lotBags) : 0;
+                if (changedField === 'qty' && bagsEl && qtyPerBag > 0) {
+                    bagsEl.value = qtyVal > 0 ? (qtyVal / qtyPerBag).toFixed(2) : '';
+                }
+                if (changedField === 'bags' && qtyEl && qtyPerBag > 0) {
+                    qtyEl.value = bagsVal > 0 ? (bagsVal * qtyPerBag).toFixed(2) : '';
+                }
+            }
             updateColdDamageEstimate();
         }
 
         function updateColdDamageEstimate() {
             const lotId = (document.getElementById('coldDamageLotId') && document.getElementById('coldDamageLotId').value) || '';
             const damageQty = Math.max(0, parseFloat(document.getElementById('coldDamageQty') && document.getElementById('coldDamageQty').value) || 0);
+            const damageBags = Math.max(0, parseFloat(document.getElementById('coldDamageBags') && document.getElementById('coldDamageBags').value) || 0);
             const bearer = (document.getElementById('coldDamageBearer') && document.getElementById('coldDamageBearer').value) || 'us';
             const splitPercentInput = Math.max(0, Math.min(100, parseFloat(document.getElementById('coldDamageSplitPercent') && document.getElementById('coldDamageSplitPercent').value) || 50));
             const splitWrapper = document.getElementById('coldDamageSplitWrap');
@@ -5119,7 +5154,11 @@ function deleteAllMasters() {
             }
             const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(lotId); });
             if (!lot) return;
-            const estimates = calculateColdDamageLossEstimate(lot, damageQty);
+            const lotBags = Math.max(0, parseFloat(lot.bagsInCold) || 0);
+            const lotQty = Math.max(0, parseFloat(lot.qtyInCold) || 0);
+            const qtyFromBags = (lotBags > 0) ? (damageBags * (lotQty / lotBags)) : 0;
+            const effectiveQty = coldDamageLastEditedField === 'bags' ? qtyFromBags : damageQty;
+            const estimates = calculateColdDamageLossEstimate(lot, effectiveQty);
             let vendorShareRatio = 0;
             if (bearer === 'cold') vendorShareRatio = 1;
             else if (bearer === 'supplier') vendorShareRatio = 1;
@@ -5590,7 +5629,7 @@ function deleteAllMasters() {
                     return String(d.lotId) === String(lot.id) && String(d.date || '') === String(movement.date || '') && Math.abs((parseFloat(d.damageQty) || 0) - (parseFloat(movement.qty) || 0)) <= 0.01;
                 });
                 const damageQty = Math.max(0, parseFloat(movement.qty) || 0);
-                const damageBags = Math.max(0, parseFloat(damage && damage.damageBags) || 0);
+                const damageBags = Math.max(0, parseFloat((damage && damage.damageBags) || movement.bags) || 0);
                 lot.qtyInCold = +(Math.max(0, parseFloat(lot.qtyInCold) || 0) + damageQty).toFixed(2);
                 lot.bagsInCold = +(Math.max(0, parseFloat(lot.bagsInCold) || 0) + damageBags).toFixed(2);
                 lot.damageQtyTotal = +Math.max(0, (parseFloat(lot.damageQtyTotal) || 0) - damageQty).toFixed(2);
@@ -5619,7 +5658,8 @@ function deleteAllMasters() {
         function recordColdStorageDamage() {
             const date = (document.getElementById('coldDamageDate') && document.getElementById('coldDamageDate').value) || '';
             const lotId = (document.getElementById('coldDamageLotId') && document.getElementById('coldDamageLotId').value) || '';
-            const damageQty = Math.max(0, parseFloat(document.getElementById('coldDamageQty') && document.getElementById('coldDamageQty').value) || 0);
+            let damageQty = Math.max(0, parseFloat(document.getElementById('coldDamageQty') && document.getElementById('coldDamageQty').value) || 0);
+            let damageBags = Math.max(0, parseFloat(document.getElementById('coldDamageBags') && document.getElementById('coldDamageBags').value) || 0);
             const bearer = (document.getElementById('coldDamageBearer') && document.getElementById('coldDamageBearer').value) || 'us';
             const splitPercent = Math.max(0, Math.min(100, parseFloat(document.getElementById('coldDamageSplitPercent') && document.getElementById('coldDamageSplitPercent').value) || 50));
             const lotReference = String((document.getElementById('coldDamageReference') && document.getElementById('coldDamageReference').value) || '').trim();
@@ -5638,8 +5678,19 @@ function deleteAllMasters() {
                 return;
             }
             const qtyInLot = Math.max(0, parseFloat(lot.qtyInCold) || 0);
+            const bagsInLot = Math.max(0, parseFloat(lot.bagsInCold) || 0);
+            const qtyPerBag = bagsInLot > 0 ? (qtyInLot / bagsInLot) : 0;
+            if (coldDamageLastEditedField === 'bags' && qtyPerBag > 0) {
+                damageQty = +(damageBags * qtyPerBag).toFixed(2);
+            } else if (coldDamageLastEditedField !== 'bags' && qtyPerBag > 0) {
+                damageBags = +(damageQty / qtyPerBag).toFixed(2);
+            }
             if (damageQty > qtyInLot) {
                 alert('Damage quantity cannot exceed available lot quantity.');
+                return;
+            }
+            if (damageBags > bagsInLot + 0.0001) {
+                alert('Damage bags cannot exceed available lot bags.');
                 return;
             }
             if (!['us', 'cold', 'split', 'supplier', 'no_one'].includes(bearer)) {
@@ -5654,11 +5705,8 @@ function deleteAllMasters() {
             else if (bearer === 'split') vendorShareRatio = splitPercent / 100;
             const vendorShareAmount = +(estimates.totalLoss * vendorShareRatio).toFixed(2);
             const usShareAmount = +(bearer === 'no_one' ? 0 : (estimates.totalLoss - vendorShareAmount)).toFixed(2);
-            const payableReduction = (bearer === 'cold' || bearer === 'split')
-                ? Math.min(Math.max(0, parseFloat(lot.remainingPayable) || 0), vendorShareAmount)
-                : 0;
-            const bagsInLot = Math.max(0, parseFloat(lot.bagsInCold) || 0);
-            const damagedBags = qtyInLot > 0 ? +(bagsInLot * (damageQty / qtyInLot)).toFixed(2) : 0;
+            const payableReduction = 0;
+            const damagedBags = +Math.max(0, damageBags).toFixed(2);
 
             lot.qtyInCold = +(qtyInLot - damageQty).toFixed(2);
             if (lot.qtyInCold <= 0.0001) lot.qtyInCold = 0;
@@ -5669,7 +5717,6 @@ function deleteAllMasters() {
             lot.damageUsShareTotal = (parseFloat(lot.damageUsShareTotal) || 0) + usShareAmount;
             lot.damageVendorShareTotal = (parseFloat(lot.damageVendorShareTotal) || 0) + vendorShareAmount;
             lot.sourceInventoryCost = +Math.max(0, (parseFloat(lot.sourceInventoryCost) || 0) - estimates.sourceLoss).toFixed(2);
-            lot.payableAdjustmentTotal = (parseFloat(lot.payableAdjustmentTotal) || 0) + payableReduction;
             recalculateColdLotPayables(lot);
             lot.status = (lot.qtyInCold <= 0.0001) ? 'released' : 'active';
 
@@ -5692,7 +5739,7 @@ function deleteAllMasters() {
                 totalLoss: +estimates.totalLoss.toFixed(2),
                 usShareAmount: usShareAmount,
                 vendorShareAmount: vendorShareAmount,
-                payableReduction: +payableReduction.toFixed(2),
+                payableReduction: 0,
                 reference: lotReference,
                 remarks: remarks
             });
@@ -5708,8 +5755,9 @@ function deleteAllMasters() {
                 coldStorageName: lot.coldStorageName,
                 vendorName: lot.vendorName,
                 qty: damageQty,
+                bags: damagedBags,
                 amount: estimates.totalLoss,
-                payableReduction: payableReduction,
+                payableReduction: 0,
                 reference: lotReference,
                 remarks: remarks
             });
@@ -6268,6 +6316,7 @@ function deleteAllMasters() {
         let allStockMovements = [];
         let filteredColdLots = null;
         let lastColdMovementFilterKey = '';
+        let coldDamageLastEditedField = 'qty';
 
         function recalculateInventory() {
             rebuildInventoryFromTransactions();
