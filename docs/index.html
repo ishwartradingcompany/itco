@@ -1533,8 +1533,12 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-2">Damage Qty</label>
-                            <input type="number" id="coldDamageQty" min="0" step="any" oninput="updateColdDamageEstimate()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                            <small id="coldDamageAvailableHint" class="text-xs text-slate-500">Available in lot: 0</small>
+                            <input type="number" id="coldDamageQty" min="0" step="any" oninput="onColdDamageQtyInput()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small id="coldDamageAvailableHint" class="text-xs text-slate-500">Available in lot: 0 kg | 0 bags</small>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Damage Bags</label>
+                            <input type="number" id="coldDamageBags" min="0" step="any" oninput="onColdDamageBagsInput()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-2">Loss Bearer</label>
@@ -1542,6 +1546,8 @@
                                 <option value="us">Us</option>
                                 <option value="cold">Cold Storage</option>
                                 <option value="split">Both (Split)</option>
+                                <option value="supplier">Supplier</option>
+                                <option value="no_one">No One</option>
                             </select>
                         </div>
                         <div id="coldDamageSplitWrap" class="hidden">
@@ -1565,7 +1571,7 @@
                             <p id="coldDamageUsLossPreview" class="font-semibold text-slate-700">&#8377;0.00</p>
                         </div>
                         <div class="bg-emerald-50 border border-emerald-100 rounded-lg p-3">
-                            <p class="text-xs text-slate-600">Cold Storage Share</p>
+                            <p id="coldDamageOtherShareLabel" class="text-xs text-slate-600">Cold Storage Share</p>
                             <p id="coldDamageVendorLossPreview" class="font-semibold text-emerald-700">&#8377;0.00</p>
                         </div>
                     </div>
