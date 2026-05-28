@@ -358,6 +358,7 @@
             suppliers: [],
             customers: [],
             brokers: [],
+            coldStorages: [],
             purchases: [],
             sales: [],
             inventory: {},
@@ -390,6 +391,7 @@ const paginationState = {
     stockMovement: { currentPage: 1, pageSize: 10 },
     coldLots: { currentPage: 1, pageSize: 10 },
     coldMovements: { currentPage: 1, pageSize: 10 },
+    coldVendorPayables: { currentPage: 1, pageSize: 10 },
     pnl: { currentPage: 1, pageSize: 10 },
     ledger: { currentPage: 1, pageSize: 10 },
     openingBalance: { currentPage: 1, pageSize: 10 }
@@ -646,6 +648,17 @@ function changeColdMovementPageSize(size) {
     renderColdStorageMovementsHistory();
 }
 
+function changeColdVendorPayablesPage(page) {
+    paginationState.coldVendorPayables.currentPage = page;
+    renderColdVendorPayablesSummary();
+}
+
+function changeColdVendorPayablesPageSize(size) {
+    paginationState.coldVendorPayables.pageSize = parseInt(size);
+    paginationState.coldVendorPayables.currentPage = 1;
+    renderColdVendorPayablesSummary();
+}
+
 function changePnlPage(page) {
     paginationState.pnl.currentPage = page;
     renderPnLWithCurrentData();
@@ -812,7 +825,19 @@ function loadData() {
                 appData.coldStorageCharges = appData.coldStorageCharges || [];
                 appData.coldStorageMovements = appData.coldStorageMovements || [];
                 appData.coldStorageDamages = appData.coldStorageDamages || [];
+                appData.coldStorages = appData.coldStorages || [];
                 appData.settings = appData.settings || {};
+                appData.coldStorages = appData.coldStorages.map(function(cs, idx) {
+                    const safe = cs || {};
+                    return {
+                        id: safe.id != null ? safe.id : (Date.now() + idx),
+                        name: String(safe.name || '').trim(),
+                        vendorName: String(safe.vendorName || '').trim(),
+                        details: String(safe.details || '').trim(),
+                        active: safe.active !== false
+                    };
+                }).filter(function(cs) { return !!cs.name; });
+                normalizeColdStorageReferences();
                 const purchaseColdBackfillChanged = syncPurchaseAutoColdLotsForPurchaseIds(null, { skipCleanup: true });
                 rebuildInventoryFromTransactions();
 
@@ -823,6 +848,7 @@ function loadData() {
                 updateSuppliersList();
                 updateCustomersList();
                 updateBrokersList();
+                updateColdStoragesList();
                 updatePurchaseHistory();
                 updateSalesHistory();
                 updateBrokerageHistory();
@@ -962,6 +988,7 @@ function restoreFromJSON() {
                 appData.suppliers = appData.suppliers || [];
                 appData.customers = appData.customers || [];
                 appData.brokers = appData.brokers || [];
+                appData.coldStorages = appData.coldStorages || [];
                 appData.purchases = appData.purchases || [];
                 appData.sales = appData.sales || [];
                 appData.brokerages = appData.brokerages || [];
@@ -975,6 +1002,18 @@ function restoreFromJSON() {
                 (appData.suppliers || []).forEach(function(s){ if (s.active === undefined) s.active = true; });
                 (appData.customers || []).forEach(function(c){ if (c.active === undefined) c.active = true; });
                 (appData.brokers || []).forEach(function(b){ if (b.active === undefined) b.active = true; });
+                (appData.coldStorages || []).forEach(function(cs){ if (cs.active === undefined) cs.active = true; });
+                appData.coldStorages = (appData.coldStorages || []).map(function(cs, idx) {
+                    const safe = cs || {};
+                    return {
+                        id: safe.id != null ? safe.id : (Date.now() + idx),
+                        name: String(safe.name || '').trim(),
+                        vendorName: String(safe.vendorName || '').trim(),
+                        details: String(safe.details || '').trim(),
+                        active: safe.active !== false
+                    };
+                }).filter(function(cs) { return !!cs.name; });
+                normalizeColdStorageReferences();
                 // Save to Firebase
                 saveData();
                 
@@ -983,6 +1022,7 @@ function restoreFromJSON() {
                 updateSuppliersList();
                 updateCustomersList();
                 updateBrokersList();
+                updateColdStoragesList();
                 updatePurchaseHistory();
                 updateSalesHistory();
                 updateBrokerageHistory();
@@ -1039,7 +1079,7 @@ function openDeleteAllModal(action) {
         if (msgEl) msgEl.textContent = 'This will permanently delete all transactions: Purchases, Sales, Brokerage, Deductions, Payments, Adjustments, Opening Balances, and Inventory. This cannot be undone. Enter password to confirm.';
     } else {
         if (titleEl) titleEl.textContent = 'Delete All Masters';
-        if (msgEl) msgEl.textContent = 'This will permanently delete all master data: Items, Suppliers, Customers, Brokers, and Company details. Records (transactions) will remain. This cannot be undone. Enter password to confirm.';
+        if (msgEl) msgEl.textContent = 'This will permanently delete all master data: Items, Suppliers, Customers, Brokers, Cold Storages, and Company details. Records (transactions) will remain. This cannot be undone. Enter password to confirm.';
     }
     if (pwdEl) { pwdEl.value = ''; pwdEl.focus(); }
     var modal = document.getElementById('deleteAllModal');
@@ -1094,6 +1134,7 @@ function deleteAllMasters() {
     appData.suppliers = [];
     appData.customers = [];
     appData.brokers = [];
+    appData.coldStorages = [];
     appData.company = {};
     saveData();
     populateDropdowns();
@@ -1101,6 +1142,7 @@ function deleteAllMasters() {
     updateSuppliersList();
     updateCustomersList();
     updateBrokersList();
+    updateColdStoragesList();
     loadCompanyDetails();
     updateDashboard();
     if (typeof updateRecordsCount === 'function') updateRecordsCount();
@@ -1361,6 +1403,7 @@ function deleteAllMasters() {
         let editingSupplierId = null;
         let editingCustomerId = null;
         let editingBrokerId = null;
+        let editingColdStorageId = null;
 
         function addItem() {
             const name = document.getElementById('itemName').value;
@@ -1435,6 +1478,7 @@ function deleteAllMasters() {
             updateSuppliersList();
             updateCustomersList();
             updateBrokersList();
+            updateColdStoragesList();
         }
 
         function setItemActive(id, active) {
@@ -1473,6 +1517,10 @@ function deleteAllMasters() {
         function isDuplicateBrokerName(name, excludeId) {
             var n = normalizedName(name);
             return (appData.brokers || []).some(function(b) { return (b.id !== excludeId) && normalizedName(b.name) === n; });
+        }
+        function isDuplicateColdStorageName(name, excludeId) {
+            var n = normalizedName(name);
+            return (appData.coldStorages || []).some(function(cs) { return (cs.id !== excludeId) && normalizedName(cs.name) === n; });
         }
         function normalizeMobileForWhatsApp(rawMobile) {
             var digits = String(rawMobile || '').replace(/\D/g, '');
@@ -2450,6 +2498,211 @@ function deleteAllMasters() {
             populateDropdowns();
         }
 
+        function showColdStorageForm() {
+            document.getElementById('coldStoragesListView').classList.add('hidden');
+            document.getElementById('coldStorageFormView').classList.remove('hidden');
+        }
+
+        function hideColdStorageForm() {
+            document.getElementById('coldStoragesListView').classList.remove('hidden');
+            document.getElementById('coldStorageFormView').classList.add('hidden');
+            const nameEl = document.getElementById('coldStorageMasterName');
+            const vendorEl = document.getElementById('coldStorageMasterVendorName');
+            const detailsEl = document.getElementById('coldStorageMasterDetails');
+            if (nameEl) nameEl.value = '';
+            if (vendorEl) vendorEl.value = '';
+            if (detailsEl) detailsEl.value = '';
+            editingColdStorageId = null;
+        }
+
+        function addColdStorageMaster() {
+            const rawName = document.getElementById('coldStorageMasterName').value;
+            const name = rawName ? String(rawName).trim() : '';
+            const vendorName = (document.getElementById('coldStorageMasterVendorName').value || '').trim();
+            const details = (document.getElementById('coldStorageMasterDetails').value || '').trim();
+            if (!name) {
+                alert('Please enter Cold Storage Name.');
+                return;
+            }
+            if (editingColdStorageId) {
+                if (isDuplicateColdStorageName(name, editingColdStorageId)) {
+                    alert('Another cold storage with this name already exists.');
+                    return;
+                }
+                const coldStorage = (appData.coldStorages || []).find(function(cs) { return cs.id === editingColdStorageId; });
+                if (coldStorage) {
+                    coldStorage.name = name;
+                    coldStorage.vendorName = vendorName;
+                    coldStorage.details = details;
+                }
+                editingColdStorageId = null;
+            } else {
+                if (isDuplicateColdStorageName(name)) {
+                    alert('Cold storage with this name already exists.');
+                    return;
+                }
+                appData.coldStorages = appData.coldStorages || [];
+                appData.coldStorages.push({
+                    id: Date.now(),
+                    name: name,
+                    vendorName: vendorName,
+                    details: details,
+                    active: true
+                });
+            }
+            saveData();
+            updateColdStoragesList();
+            populateDropdowns();
+            hideColdStorageForm();
+        }
+
+        function updateColdStoragesList() {
+            const container = document.getElementById('coldStoragesList');
+            if (!container) return;
+            const term = getMasterSearchTerm('masterSearchColdStorages');
+            container.innerHTML = '';
+            const storages = (appData.coldStorages || []).filter(function(cs) {
+                if (!term) return true;
+                return ((cs.name || '').toLowerCase().indexOf(term) >= 0)
+                    || ((cs.vendorName || '').toLowerCase().indexOf(term) >= 0)
+                    || ((cs.details || '').toLowerCase().indexOf(term) >= 0);
+            });
+            storages.forEach(function(cs) {
+                const active = cs.active !== false;
+                const vendorLabel = cs.vendorName ? (' | Vendor: ' + cs.vendorName) : '';
+                const detailsLabel = cs.details ? (' | ' + cs.details) : '';
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center p-2 bg-gray-50 rounded';
+                div.innerHTML = '<span>' + (active ? '' : '<span class="text-slate-400 line-through">') + escapeHtml(cs.name || '-') + escapeHtml(vendorLabel) + escapeHtml(detailsLabel) + (active ? '' : '</span>') + '</span>' +
+                    '<div class="space-x-2">' +
+                    '<button onclick="editColdStorageMaster(' + cs.id + ')" class="text-blue-500 hover:text-blue-700">Edit</button>' +
+                    (active ? '<button onclick="setColdStorageActive(' + cs.id + ', false)" class="text-amber-600 hover:text-amber-800">Deactivate</button>' : '<button onclick="setColdStorageActive(' + cs.id + ', true)" class="text-green-600 hover:text-green-800">Activate</button>') +
+                    '<button onclick="removeColdStorageMaster(' + cs.id + ')" class="text-red-500 hover:text-red-700">×</button>' +
+                    '</div>';
+                container.appendChild(div);
+            });
+        }
+
+        function setColdStorageActive(id, active) {
+            const coldStorage = (appData.coldStorages || []).find(function(cs) { return cs.id === id; });
+            if (!coldStorage) return;
+            coldStorage.active = active;
+            saveData();
+            updateColdStoragesList();
+            populateDropdowns();
+        }
+
+        function editColdStorageMaster(id) {
+            const coldStorage = (appData.coldStorages || []).find(function(cs) { return cs.id === id; });
+            if (!coldStorage) return;
+            showColdStorageForm();
+            editingColdStorageId = id;
+            document.getElementById('coldStorageMasterName').value = coldStorage.name || '';
+            document.getElementById('coldStorageMasterVendorName').value = coldStorage.vendorName || '';
+            document.getElementById('coldStorageMasterDetails').value = coldStorage.details || '';
+        }
+
+        function removeColdStorageMaster(id) {
+            appData.coldStorages = (appData.coldStorages || []).filter(function(cs) { return cs.id !== id; });
+            saveData();
+            updateColdStoragesList();
+            populateDropdowns();
+        }
+
+        function getColdStorageMasterNameById(id) {
+            const idStr = String(id || '').trim();
+            if (!idStr) return '';
+            const coldStorage = (appData.coldStorages || []).find(function(cs) { return String(cs.id || '') === idStr; });
+            return coldStorage ? String(coldStorage.name || '').trim() : '';
+        }
+
+        function resolveColdStorageSelection(selectId, fallbackName) {
+            const selectEl = document.getElementById(selectId);
+            const selectedId = selectEl ? String(selectEl.value || '').trim() : '';
+            if (selectedId.indexOf('__legacy__:') === 0) {
+                return {
+                    id: '',
+                    name: selectedId.replace('__legacy__:', '').trim()
+                };
+            }
+            const selectedName = selectedId ? getColdStorageMasterNameById(selectedId) : '';
+            const legacyName = String(fallbackName || '').trim();
+            return {
+                id: selectedId || '',
+                name: String(selectedName || legacyName || '').trim()
+            };
+        }
+
+        function populateColdStorageSelect(selectId, placeholder, selectedId, selectedName) {
+            const selectEl = document.getElementById(selectId);
+            if (!selectEl) return;
+            const idStr = String(selectedId || '').trim();
+            const nameStr = String(selectedName || '').trim();
+            const activeStorages = (appData.coldStorages || []).filter(function(cs) { return cs.active !== false; });
+            selectEl.innerHTML = `<option value="">${escapeHtml(placeholder || 'Select cold storage')}</option>`;
+            activeStorages.forEach(function(cs) {
+                const vendorPart = cs.vendorName ? ` | ${cs.vendorName}` : '';
+                selectEl.innerHTML += `<option value="${cs.id}">${escapeHtml(cs.name || '')}${escapeHtml(vendorPart)}</option>`;
+            });
+            if (idStr && selectEl.querySelector(`option[value="${idStr}"]`)) {
+                selectEl.value = idStr;
+                return;
+            }
+            if (nameStr) {
+                const byName = activeStorages.find(function(cs) {
+                    return normalizedName(cs.name) === normalizedName(nameStr);
+                });
+                if (byName) {
+                    selectEl.value = String(byName.id);
+                    return;
+                }
+                const legacyValue = '__legacy__:' + nameStr;
+                selectEl.innerHTML += `<option value="${legacyValue}" data-legacy="1">${escapeHtml(nameStr)} (legacy)</option>`;
+                selectEl.value = legacyValue;
+                return;
+            }
+            selectEl.value = '';
+        }
+
+        function populateColdStorageNameDropdowns() {
+            const purchaseSelected = resolveColdStorageSelection('purchaseColdStorageName');
+            const moveSelected = resolveColdStorageSelection('coldMoveStorageName');
+            const editSelected = resolveColdStorageSelection('coldLotEditStorageName');
+            populateColdStorageSelect('purchaseColdStorageName', 'Select cold storage', purchaseSelected.id, purchaseSelected.name);
+            populateColdStorageSelect('coldMoveStorageName', 'Select cold storage', moveSelected.id, moveSelected.name);
+            populateColdStorageSelect('coldLotEditStorageName', 'Select cold storage', editSelected.id, editSelected.name);
+        }
+
+        function normalizeColdStorageReferences() {
+            const activeStorages = (appData.coldStorages || []).filter(function(cs) { return cs.active !== false; });
+            const byNormalizedName = {};
+            activeStorages.forEach(function(cs) {
+                const key = normalizedName(cs.name);
+                if (key && !byNormalizedName[key]) byNormalizedName[key] = cs;
+            });
+            const resolve = function(id, name) {
+                const byIdName = String(getColdStorageMasterNameById(id) || '').trim();
+                if (byIdName) return { id: String(id || ''), name: byIdName };
+                const byName = byNormalizedName[normalizedName(name)];
+                if (byName) return { id: String(byName.id || ''), name: String(byName.name || '').trim() };
+                return { id: '', name: String(name || '').trim() };
+            };
+            (appData.purchases || []).forEach(function(purchase) {
+                (purchase.items || []).forEach(function(item) {
+                    if (!item || !item.isColdStorage) return;
+                    const resolved = resolve(item.coldStorageId, item.coldStorageName);
+                    item.coldStorageId = resolved.id;
+                    item.coldStorageName = resolved.name;
+                });
+            });
+            (appData.coldStorageLots || []).forEach(function(lot) {
+                if (!lot) return;
+                const resolved = resolve(lot.coldStorageId, lot.coldStorageName);
+                lot.coldStorageId = resolved.id;
+                lot.coldStorageName = resolved.name || lot.coldStorageName;
+            });
+        }
+
         // Populate dropdowns
         function populateDropdowns() {
             // Purchase page dropdowns
@@ -2529,11 +2782,13 @@ function deleteAllMasters() {
             
             // Opening balance dropdowns
             populateOpeningBalanceDropdowns();
+            populateColdStorageNameDropdowns();
             refreshInlineBrokerageBrokerOptions();
             syncPurchaseSupplierDisplay();
             syncSaleCustomerDisplay();
             initPurchaseSupplierSearch();
             initSaleCustomerSearch();
+            if (typeof populateColdVendorPayablesFilterOptions === 'function') populateColdVendorPayablesFilterOptions();
         }
 
         function syncPurchaseSupplierDisplay() {
@@ -2983,7 +3238,9 @@ function deleteAllMasters() {
             const coldStorageOtherCharge = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageOtherCharge') && document.getElementById('purchaseColdStorageOtherCharge').value) || 0);
             const coldMoveQtyInput = parseFloat(document.getElementById('purchaseColdMoveQty') && document.getElementById('purchaseColdMoveQty').value);
             const coldMoveBagsInput = parseFloat(document.getElementById('purchaseColdMoveBags') && document.getElementById('purchaseColdMoveBags').value);
-            const coldStorageName = (document.getElementById('purchaseColdStorageName') && document.getElementById('purchaseColdStorageName').value) ? document.getElementById('purchaseColdStorageName').value.trim() : '';
+            const selectedColdStorage = resolveColdStorageSelection('purchaseColdStorageName');
+            const coldStorageId = selectedColdStorage.id;
+            const coldStorageName = selectedColdStorage.name;
             const coldStorageVendorName = (document.getElementById('purchaseColdStorageVendorName') && document.getElementById('purchaseColdStorageVendorName').value) ? document.getElementById('purchaseColdStorageVendorName').value.trim() : '';
             const coldStorageRemarks = (document.getElementById('purchaseColdStorageRemarks') && document.getElementById('purchaseColdStorageRemarks').value) ? document.getElementById('purchaseColdStorageRemarks').value.trim() : '';
             
@@ -3081,6 +3338,7 @@ function deleteAllMasters() {
                 coldStorageOtherCharge: isColdStorage ? coldStorageOtherCharge : 0,
                 coldMoveQty: isColdStorage ? +coldMoveQty.toFixed(2) : 0,
                 coldMoveBags: isColdStorage ? +coldMoveBags.toFixed(2) : 0,
+                coldStorageId: isColdStorage ? coldStorageId : '',
                 coldStorageName: isColdStorage ? coldStorageName : '',
                 coldStorageVendorName: isColdStorage ? coldStorageVendorName : '',
                 coldStorageCost: isColdStorage ? +coldStorageCost.toFixed(2) : 0,
@@ -3179,7 +3437,9 @@ function deleteAllMasters() {
             if (coldOtherEl) coldOtherEl.value = item.coldStorageOtherCharge || 0;
             if (coldMoveQtyEl) coldMoveQtyEl.value = (item.coldMoveQty != null ? item.coldMoveQty : item.grossWeight || 0);
             if (coldMoveBagsEl) coldMoveBagsEl.value = (item.coldMoveBags != null ? item.coldMoveBags : item.bags || 0);
-            if (coldStorageNameEl) coldStorageNameEl.value = item.coldStorageName || '';
+            if (coldStorageNameEl) {
+                populateColdStorageSelect('purchaseColdStorageName', 'Select cold storage', item.coldStorageId || '', item.coldStorageName || '');
+            }
             if (coldStorageVendorEl) coldStorageVendorEl.value = item.coldStorageVendorName || '';
             if (coldRemarksEl) coldRemarksEl.value = item.coldStorageRemarks || '';
             togglePurchaseColdStorageFields();
@@ -4556,7 +4816,8 @@ function deleteAllMasters() {
                 : Math.max(0, lineTotalInventoryCost);
             const sourceKey = getPurchaseAutoColdSourceKey(purchase.id, purchaseItem, itemIndex);
             const lotId = Date.now() + Math.floor(Math.random() * 1000) + itemIndex;
-            const coldStorageName = String(purchaseItem.coldStorageName || '').trim() || 'Auto from Purchase';
+            const coldStorageId = String(purchaseItem.coldStorageId || '').trim();
+            const coldStorageName = String(getColdStorageMasterNameById(coldStorageId) || purchaseItem.coldStorageName || '').trim() || 'Auto from Purchase';
             const vendorName = String(purchaseItem.coldStorageVendorName || purchaseItem.supplierName || purchase.supplierName || '').trim() || 'Unknown Vendor';
             const moveDate = purchaseItem.date || purchase.date || '';
             const remarks = String(purchaseItem.coldStorageRemarks || '').trim();
@@ -4567,6 +4828,7 @@ function deleteAllMasters() {
                 itemId: purchaseItem.itemId,
                 itemName: purchaseItem.itemName || getItemNameById(purchaseItem.itemId),
                 unit: getItemUnitById(purchaseItem.itemId),
+                coldStorageId: coldStorageId,
                 coldStorageName: coldStorageName,
                 vendorName: vendorName,
                 supplierName: String(purchaseItem.supplierName || purchase.supplierName || '').trim() || '-',
@@ -4699,9 +4961,11 @@ function deleteAllMasters() {
             if (releaseDateEl && !releaseDateEl.value) releaseDateEl.value = new Date().toISOString().split('T')[0];
             const damageDateEl = document.getElementById('coldDamageDate');
             if (damageDateEl && !damageDateEl.value) damageDateEl.value = new Date().toISOString().split('T')[0];
+            populateColdStorageNameDropdowns();
             populateColdMoveItemOptions();
             populateColdLotSelectors();
             populateColdMovementLotFilterOptions();
+            populateColdVendorPayablesFilterOptions();
             filterColdStorageLots();
             renderColdVendorPayablesSummary();
             renderColdStorageDamageSummary();
@@ -4820,7 +5084,9 @@ function deleteAllMasters() {
             const itemId = (document.getElementById('coldMoveItem') && document.getElementById('coldMoveItem').value) || '';
             const qty = Math.max(0, parseFloat(document.getElementById('coldMoveQty') && document.getElementById('coldMoveQty').value) || 0);
             const bags = Math.max(0, parseFloat(document.getElementById('coldMoveBags') && document.getElementById('coldMoveBags').value) || 0);
-            const coldStorageName = (document.getElementById('coldMoveStorageName') && document.getElementById('coldMoveStorageName').value || '').trim();
+            const selectedColdStorage = resolveColdStorageSelection('coldMoveStorageName');
+            const coldStorageId = selectedColdStorage.id;
+            const coldStorageName = selectedColdStorage.name;
             const vendorName = (document.getElementById('coldMoveVendorName') && document.getElementById('coldMoveVendorName').value || '').trim();
             const rentPerKg = Math.max(0, parseFloat(document.getElementById('coldMoveRentPerKg') && document.getElementById('coldMoveRentPerKg').value) || 0);
             const inOutPerBag = Math.max(0, parseFloat(document.getElementById('coldMoveInOutPerBag') && document.getElementById('coldMoveInOutPerBag').value) || 0);
@@ -4862,6 +5128,7 @@ function deleteAllMasters() {
                 lot.date = date;
                 lot.qtyInCold = +qty.toFixed(2);
                 lot.bagsInCold = +bags.toFixed(2);
+                lot.coldStorageId = coldStorageId;
                 lot.coldStorageName = coldStorageName;
                 lot.vendorName = vendorName;
                 lot.supplierName = lot.supplierName || '-';
@@ -4949,6 +5216,7 @@ function deleteAllMasters() {
                 itemId: itemId,
                 itemName: getItemNameById(itemId),
                 unit: getItemUnitById(itemId),
+                coldStorageId: coldStorageId,
                 coldStorageName: coldStorageName,
                 vendorName: vendorName,
                 supplierName: '-',
@@ -5798,7 +6066,9 @@ function deleteAllMasters() {
             if (document.getElementById('coldMoveItem')) document.getElementById('coldMoveItem').value = String(lot.itemId || '');
             if (document.getElementById('coldMoveQty')) document.getElementById('coldMoveQty').value = Number(lot.qtyInCold || 0).toFixed(2);
             if (document.getElementById('coldMoveBags')) document.getElementById('coldMoveBags').value = Number(lot.bagsInCold || 0).toFixed(2);
-            if (document.getElementById('coldMoveStorageName')) document.getElementById('coldMoveStorageName').value = lot.coldStorageName || '';
+            if (document.getElementById('coldMoveStorageName')) {
+                populateColdStorageSelect('coldMoveStorageName', 'Select cold storage', lot.coldStorageId || '', lot.coldStorageName || '');
+            }
             if (document.getElementById('coldMoveVendorName')) document.getElementById('coldMoveVendorName').value = lot.vendorName || '';
             if (document.getElementById('coldMoveRentPerKg')) document.getElementById('coldMoveRentPerKg').value = Number(lot.rentPerKg || 0).toFixed(2);
             if (document.getElementById('coldMoveInOutPerBag')) document.getElementById('coldMoveInOutPerBag').value = Number(lot.inOutPerBag || 0).toFixed(2);
@@ -5995,9 +6265,7 @@ function deleteAllMasters() {
             renderPagination('coldLotsPagination', lotsSorted.length, cp, ps, 'changeColdLotsPage', 'changeColdLotsPageSize');
         }
 
-        function renderColdVendorPayablesSummary() {
-            const tbody = document.getElementById('coldVendorPayablesBody');
-            if (!tbody) return;
+        function getColdVendorPayablesGroupedRows() {
             const grouped = {};
             const getPurchaseItemFromLot = function(lot) {
                 if (!lot) return null;
@@ -6012,9 +6280,10 @@ function deleteAllMasters() {
             (appData.coldStorageLots || []).forEach(function(lot) {
                 const vendor = String(lot.vendorName || '').trim() || 'Unknown Vendor';
                 const storage = String(lot.coldStorageName || '').trim() || 'Unknown Storage';
-                const key = `${vendor}|${storage}`;
+                const key = vendor + '|' + storage;
                 if (!grouped[key]) {
                     grouped[key] = {
+                        key: key,
                         vendorName: vendor,
                         coldStorageName: storage,
                         purchaseInvoices: new Set(),
@@ -6039,11 +6308,111 @@ function deleteAllMasters() {
                 grouped[key].adjustment += parseFloat(lot.payableAdjustmentTotal) || 0;
                 grouped[key].remaining += parseFloat(lot.remainingPayable) || 0;
             });
-            const rows = Object.values(grouped);
-            if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No cold storage payables yet</td></tr>';
+            return Object.values(grouped).sort(function(a, b) {
+                const vendorCmp = String(a.vendorName || '').localeCompare(String(b.vendorName || ''));
+                if (vendorCmp !== 0) return vendorCmp;
+                return String(a.coldStorageName || '').localeCompare(String(b.coldStorageName || ''));
+            });
+        }
+
+        function getFilteredColdVendorPayablesRows(sourceRows) {
+            const rows = Array.isArray(sourceRows) ? sourceRows : getColdVendorPayablesGroupedRows();
+            const search = ((document.getElementById('coldVendorPayablesSearch') && document.getElementById('coldVendorPayablesSearch').value) || '').trim().toLowerCase();
+            const vendorFilter = (document.getElementById('coldVendorPayablesVendorFilter') && document.getElementById('coldVendorPayablesVendorFilter').value) || '';
+            const storageFilter = (document.getElementById('coldVendorPayablesStorageFilter') && document.getElementById('coldVendorPayablesStorageFilter').value) || '';
+            return rows.filter(function(row) {
+                if (vendorFilter && row.vendorName !== vendorFilter) return false;
+                if (storageFilter && row.coldStorageName !== storageFilter) return false;
+                if (!search) return true;
+                const invoiceText = Array.from(row.purchaseInvoices || []).join(', ');
+                const kaantaText = Array.from(row.kaantaParchiNos || []).join(', ');
+                const haystack = [row.vendorName, row.coldStorageName, invoiceText, kaantaText]
+                    .map(function(v) { return String(v || '').toLowerCase(); })
+                    .join(' | ');
+                return haystack.indexOf(search) >= 0;
+            });
+        }
+
+        function updateColdVendorPayablesKpis(rows) {
+            const list = Array.isArray(rows) ? rows : [];
+            const totals = list.reduce(function(acc, row) {
+                acc.charge += parseFloat(row.totalCharge) || 0;
+                acc.paid += parseFloat(row.totalPaid) || 0;
+                acc.remaining += parseFloat(row.remaining) || 0;
+                return acc;
+            }, { charge: 0, paid: 0, remaining: 0 });
+            const chargeEl = document.getElementById('coldVendorPayablesTotalCharge');
+            const paidEl = document.getElementById('coldVendorPayablesTotalPaid');
+            const remainingEl = document.getElementById('coldVendorPayablesTotalRemaining');
+            if (chargeEl) chargeEl.textContent = RU + totals.charge.toFixed(2);
+            if (paidEl) paidEl.textContent = RU + totals.paid.toFixed(2);
+            if (remainingEl) remainingEl.textContent = RU + totals.remaining.toFixed(2);
+        }
+
+        function populateColdVendorPayablesFilterOptions() {
+            const vendorEl = document.getElementById('coldVendorPayablesVendorFilter');
+            const storageEl = document.getElementById('coldVendorPayablesStorageFilter');
+            if (!vendorEl || !storageEl) return;
+            const rows = getColdVendorPayablesGroupedRows();
+            const selectedVendor = vendorEl.value || '';
+            const selectedStorage = storageEl.value || '';
+            const vendors = Array.from(new Set(rows.map(function(r) { return r.vendorName; }))).sort();
+            const storages = Array.from(new Set(rows.map(function(r) { return r.coldStorageName; }))).sort();
+            vendorEl.innerHTML = '<option value="">All Vendors</option>';
+            vendors.forEach(function(vendor) {
+                vendorEl.innerHTML += `<option value="${escapeHtml(vendor)}">${escapeHtml(vendor)}</option>`;
+            });
+            storageEl.innerHTML = '<option value="">All Storages</option>';
+            storages.forEach(function(storage) {
+                storageEl.innerHTML += `<option value="${escapeHtml(storage)}">${escapeHtml(storage)}</option>`;
+            });
+            if (selectedVendor && vendorEl.querySelector(`option[value="${selectedVendor}"]`)) vendorEl.value = selectedVendor;
+            if (selectedStorage && storageEl.querySelector(`option[value="${selectedStorage}"]`)) storageEl.value = selectedStorage;
+        }
+
+        function filterColdVendorPayables() {
+            paginationState.coldVendorPayables.currentPage = 1;
+            renderColdVendorPayablesSummary();
+        }
+
+        function clearColdVendorPayablesFilters() {
+            const searchEl = document.getElementById('coldVendorPayablesSearch');
+            const vendorEl = document.getElementById('coldVendorPayablesVendorFilter');
+            const storageEl = document.getElementById('coldVendorPayablesStorageFilter');
+            if (searchEl) searchEl.value = '';
+            if (vendorEl) vendorEl.value = '';
+            if (storageEl) storageEl.value = '';
+            paginationState.coldVendorPayables.currentPage = 1;
+            renderColdVendorPayablesSummary();
+        }
+
+        function renderColdVendorPayablesSummary() {
+            const tbody = document.getElementById('coldVendorPayablesBody');
+            if (!tbody) return;
+            const groupedRows = getColdVendorPayablesGroupedRows();
+            const filterKey = [
+                ((document.getElementById('coldVendorPayablesSearch') && document.getElementById('coldVendorPayablesSearch').value) || '').trim().toLowerCase(),
+                (document.getElementById('coldVendorPayablesVendorFilter') && document.getElementById('coldVendorPayablesVendorFilter').value) || '',
+                (document.getElementById('coldVendorPayablesStorageFilter') && document.getElementById('coldVendorPayablesStorageFilter').value) || ''
+            ].join('|');
+            if (filterKey !== lastColdVendorPayablesFilterKey) {
+                paginationState.coldVendorPayables.currentPage = 1;
+                lastColdVendorPayablesFilterKey = filterKey;
+            }
+            const filteredRows = getFilteredColdVendorPayablesRows(groupedRows);
+            updateColdVendorPayablesKpis(filteredRows);
+
+            if (!filteredRows.length) {
+                tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No cold storage payables found</td></tr>';
+                const pager = document.getElementById('coldVendorPayablesPagination');
+                if (pager) pager.innerHTML = '';
                 return;
             }
+
+            const pageSize = paginationState.coldVendorPayables.pageSize;
+            const maxPage = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+            if (paginationState.coldVendorPayables.currentPage > maxPage) paginationState.coldVendorPayables.currentPage = maxPage;
+            const rows = getPaginatedData(filteredRows, paginationState.coldVendorPayables.currentPage, pageSize);
             tbody.innerHTML = rows.map(function(row) {
                 const invoiceText = Array.from(row.purchaseInvoices).join(', ') || '-';
                 const kaantaText = Array.from(row.kaantaParchiNos).join(', ') || '-';
@@ -6060,6 +6429,14 @@ function deleteAllMasters() {
                     <td class="px-3 py-2 text-sm text-right">${RU}${row.remaining.toFixed(2)}</td>
                 </tr>`;
             }).join('');
+            renderPagination(
+                'coldVendorPayablesPagination',
+                filteredRows.length,
+                paginationState.coldVendorPayables.currentPage,
+                paginationState.coldVendorPayables.pageSize,
+                'changeColdVendorPayablesPage',
+                'changeColdVendorPayablesPageSize'
+            );
         }
 
         function renderColdStorageDamageSummary() {
@@ -6408,6 +6785,7 @@ function deleteAllMasters() {
         let allStockMovements = [];
         let filteredColdLots = null;
         let lastColdMovementFilterKey = '';
+        let lastColdVendorPayablesFilterKey = '';
         let coldDamageLastEditedField = 'qty';
 
         function recalculateInventory() {
@@ -13460,6 +13838,7 @@ function exportLedgerStatement() {
             updateSuppliersList();
             updateCustomersList();
             updateBrokersList();
+            updateColdStoragesList();
             updatePurchaseHistory();
             updateSalesHistory();
             updateBrokerageHistory();
