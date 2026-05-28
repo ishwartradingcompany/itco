@@ -5999,13 +5999,41 @@ function deleteAllMasters() {
             const tbody = document.getElementById('coldVendorPayablesBody');
             if (!tbody) return;
             const grouped = {};
+            const getPurchaseItemFromLot = function(lot) {
+                if (!lot) return null;
+                const purchase = (appData.purchases || []).find(function(p) { return String(p.id || '') === String(lot.purchaseId || ''); });
+                if (!purchase || !Array.isArray(purchase.items)) return null;
+                const byItemId = String(lot.purchaseItemId || '');
+                if (byItemId) {
+                    return purchase.items.find(function(pi) { return String(pi.id || '') === byItemId; }) || null;
+                }
+                return purchase.items.find(function(pi) { return String(pi.itemId || '') === String(lot.itemId || ''); }) || null;
+            };
             (appData.coldStorageLots || []).forEach(function(lot) {
                 const vendor = String(lot.vendorName || '').trim() || 'Unknown Vendor';
                 const storage = String(lot.coldStorageName || '').trim() || 'Unknown Storage';
                 const key = `${vendor}|${storage}`;
                 if (!grouped[key]) {
-                    grouped[key] = { vendorName: vendor, coldStorageName: storage, totalCharge: 0, totalPaid: 0, adjustment: 0, remaining: 0 };
+                    grouped[key] = {
+                        vendorName: vendor,
+                        coldStorageName: storage,
+                        purchaseInvoices: new Set(),
+                        kaantaParchiNos: new Set(),
+                        quantity: 0,
+                        bags: 0,
+                        totalCharge: 0,
+                        totalPaid: 0,
+                        adjustment: 0,
+                        remaining: 0
+                    };
                 }
+                const item = getPurchaseItemFromLot(lot);
+                const invoiceNo = String(lot.purchaseInvoice || '').trim();
+                if (invoiceNo) grouped[key].purchaseInvoices.add(invoiceNo);
+                const kaantaNo = String((item && item.kaantaParchi) || '').trim();
+                if (kaantaNo) grouped[key].kaantaParchiNos.add(kaantaNo);
+                grouped[key].quantity += Math.max(0, parseFloat(lot.qtyInCold) || 0);
+                grouped[key].bags += Math.max(0, parseFloat(lot.bagsInCold) || 0);
                 grouped[key].totalCharge += parseFloat(lot.estimatedTotalCharge) || 0;
                 grouped[key].totalPaid += parseFloat(lot.paidTotal) || 0;
                 grouped[key].adjustment += parseFloat(lot.payableAdjustmentTotal) || 0;
@@ -6013,13 +6041,19 @@ function deleteAllMasters() {
             });
             const rows = Object.values(grouped);
             if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No cold storage payables yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No cold storage payables yet</td></tr>';
                 return;
             }
             tbody.innerHTML = rows.map(function(row) {
+                const invoiceText = Array.from(row.purchaseInvoices).join(', ') || '-';
+                const kaantaText = Array.from(row.kaantaParchiNos).join(', ') || '-';
                 return `<tr class="border-b border-slate-200">
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.vendorName)}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.coldStorageName)}</td>
+                    <td class="px-3 py-2 text-sm">${escapeHtml(invoiceText)}</td>
+                    <td class="px-3 py-2 text-sm">${escapeHtml(kaantaText)}</td>
+                    <td class="px-3 py-2 text-sm text-right">${row.quantity.toFixed(2)}</td>
+                    <td class="px-3 py-2 text-sm text-right">${row.bags.toFixed(2)}</td>
                     <td class="px-3 py-2 text-sm text-right">${RU}${row.totalCharge.toFixed(2)}</td>
                     <td class="px-3 py-2 text-sm text-right">${RU}${row.totalPaid.toFixed(2)}</td>
                     <td class="px-3 py-2 text-sm text-right text-amber-700">${RU}${row.adjustment.toFixed(2)}</td>
