@@ -6075,6 +6075,7 @@ function deleteAllMasters() {
                     coldStorageName: m.coldStorageName || '-',
                     vendorName: m.vendorName || '-',
                     qty: parseFloat(m.qty) || 0,
+                    bags: parseFloat(m.bags) || 0,
                     amount: parseFloat(m.amount) || 0,
                     reference: String(m.reference || '').trim() || ((m.lotId ? `Lot ${m.lotId}` : '-')),
                     remarks: m.remarks || '-',
@@ -6099,6 +6100,7 @@ function deleteAllMasters() {
                         coldStorageName: lot ? (lot.coldStorageName || '-') : '-',
                         vendorName: p.party || (lot ? (lot.vendorName || '-') : '-'),
                         qty: 0,
+                        bags: 0,
                         amount: parseFloat(p.amount) || 0,
                         reference: String(p.reference || '').trim() || (lotId ? `COLD-${lotId}` : (p.invoice || '-')),
                         remarks: p.remarks || (p.paidThrough ? `Via ${p.paidThrough}` : '-'),
@@ -6154,7 +6156,7 @@ function deleteAllMasters() {
             const rows = getPaginatedData(allRows, paginationState.coldMovements.currentPage, pageSize);
 
             if (!allRows.length) {
-                tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No matching cold storage movements found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" class="px-4 py-8 text-center text-slate-500">No matching cold storage movements found</td></tr>';
                 const pager = document.getElementById('coldMovementPagination');
                 if (pager) pager.innerHTML = '';
                 return;
@@ -6162,6 +6164,7 @@ function deleteAllMasters() {
             tbody.innerHTML = '';
             rows.forEach(function(row) {
                 const qtyCell = row.qty > 0 ? Number(row.qty).toFixed(2) : '-';
+                const bagsCell = row.bags > 0 ? Number(row.bags).toFixed(2) : '-';
                 const amountCell = row.amount > 0 ? `${RU}${Number(row.amount).toFixed(2)}` : '-';
                 const tr = document.createElement('tr');
                 tr.className = 'border-b border-slate-200';
@@ -6172,11 +6175,13 @@ function deleteAllMasters() {
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.coldStorageName || '-')}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.vendorName || '-')}</td>
                     <td class="px-3 py-2 text-sm text-right">${qtyCell}</td>
+                    <td class="px-3 py-2 text-sm text-right">${bagsCell}</td>
                     <td class="px-3 py-2 text-sm text-right">${amountCell}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.reference || '-')}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(row.remarks || '-')}</td>
                     <td class="px-3 py-2 text-sm">
                         <div class="flex gap-2">
+                            ${row.movementId ? `<button type="button" onclick="viewColdStorageMovement(${JSON.stringify(row.movementId)}, ${JSON.stringify(row.rawType || '')})" class="text-slate-700 hover:text-slate-900 font-medium">View</button>` : ''}
                             ${row.canEdit && row.movementId ? `<button type="button" onclick="editColdReleaseMovement(${JSON.stringify(row.movementId)})" class="text-blue-600 hover:text-blue-800 font-medium">Edit</button>` : ''}
                             ${row.canDelete ? `<button type="button" onclick="deleteColdStorageMovement(${JSON.stringify(row.movementId)}, ${JSON.stringify(row.rawType || '')})" class="text-red-600 hover:text-red-800 font-medium">Delete</button>` : '-'}
                         </div>
@@ -6190,7 +6195,7 @@ function deleteAllMasters() {
                     const detailTr = document.createElement('tr');
                     detailTr.className = 'border-b border-blue-200 bg-blue-50/40';
                     detailTr.innerHTML = `
-                        <td colspan="10" class="px-3 py-3">
+                        <td colspan="11" class="px-3 py-3">
                             <div class="rounded-lg border border-blue-200 bg-white p-4">
                                 <div class="flex items-center justify-between mb-3">
                                     <p class="font-semibold text-slate-800">Edit Release Movement: ${escapeHtml(ctx.lot.itemName || '-')} | Lot ${escapeHtml(String(ctx.lot.id || '-'))}</p>
@@ -6238,6 +6243,58 @@ function deleteAllMasters() {
             renderPagination('coldMovementPagination', allRows.length, paginationState.coldMovements.currentPage, paginationState.coldMovements.pageSize, 'changeColdMovementPage', 'changeColdMovementPageSize');
         }
 
+        function viewColdStorageMovement(movementId, rawType) {
+            if (!movementId) return;
+            const type = String(rawType || '');
+            let row = null;
+            if (type === 'cold_payment') {
+                const p = (appData.payments || []).find(function(x) { return String(x.id) === String(movementId); });
+                if (!p) return;
+                const lot = (appData.coldStorageLots || []).find(function(l) { return String(l.id) === String(p.invoiceId || ''); });
+                row = {
+                    date: p.date || '-',
+                    type: 'Payment',
+                    itemName: lot ? (lot.itemName || '-') : '-',
+                    coldStorageName: lot ? (lot.coldStorageName || '-') : '-',
+                    vendorName: p.party || '-',
+                    qty: 0,
+                    bags: 0,
+                    amount: parseFloat(p.amount) || 0,
+                    reference: String(p.reference || '').trim() || (p.invoice || '-'),
+                    remarks: p.remarks || '-'
+                };
+            } else {
+                const m = (appData.coldStorageMovements || []).find(function(x) { return String(x.id) === String(movementId); });
+                if (!m) return;
+                const map = { move_in: 'Move In', charge_add: 'Periodic Charge', release_out: 'Release', damage: 'Damage' };
+                row = {
+                    date: m.date || '-',
+                    type: map[m.type] || (m.type || 'Movement'),
+                    itemName: m.itemName || getItemNameById(m.itemId),
+                    coldStorageName: m.coldStorageName || '-',
+                    vendorName: m.vendorName || '-',
+                    qty: parseFloat(m.qty) || 0,
+                    bags: parseFloat(m.bags) || 0,
+                    amount: parseFloat(m.amount) || 0,
+                    reference: String(m.reference || '').trim() || ((m.lotId ? `Lot ${m.lotId}` : '-')),
+                    remarks: m.remarks || '-'
+                };
+            }
+            alert(
+                'Movement Details\n\n' +
+                'Date: ' + (row.date || '-') + '\n' +
+                'Type: ' + (row.type || '-') + '\n' +
+                'Item: ' + (row.itemName || '-') + '\n' +
+                'Cold Storage: ' + (row.coldStorageName || '-') + '\n' +
+                'Vendor: ' + (row.vendorName || '-') + '\n' +
+                'Qty: ' + Number(row.qty || 0).toFixed(2) + '\n' +
+                'Bags: ' + Number(row.bags || 0).toFixed(2) + '\n' +
+                'Amount: ' + RU + Number(row.amount || 0).toFixed(2) + '\n' +
+                'Reference: ' + (row.reference || '-') + '\n' +
+                'Remarks: ' + (row.remarks || '-')
+            );
+        }
+
         function exportColdMovementTimelineCsv() {
             const rows = getFilteredColdStorageMovementRows();
             if (!rows.length) {
@@ -6251,7 +6308,7 @@ function deleteAllMasters() {
             csv += 'Cold Storage Movement Timeline\n';
             csv += 'Exported On,' + quoteCsv(new Date().toLocaleString()) + '\n';
             csv += '\n';
-            csv += 'Date,Type,Item,Cold Storage,Vendor,Qty,Amount,Reference,Remarks\n';
+            csv += 'Date,Type,Item,Cold Storage,Vendor,Qty,Bags,Amount,Reference,Remarks\n';
             rows.forEach(function(row) {
                 csv += [
                     quoteCsv(row.date || '-'),
@@ -6260,6 +6317,7 @@ function deleteAllMasters() {
                     quoteCsv(row.coldStorageName || '-'),
                     quoteCsv(row.vendorName || '-'),
                     quoteCsv(row.qty > 0 ? Number(row.qty).toFixed(2) : ''),
+                    quoteCsv(row.bags > 0 ? Number(row.bags).toFixed(2) : ''),
                     quoteCsv(row.amount > 0 ? Number(row.amount).toFixed(2) : ''),
                     quoteCsv(row.reference || '-'),
                     quoteCsv(row.remarks || '-')
