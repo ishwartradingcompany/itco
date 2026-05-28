@@ -991,6 +991,7 @@
                                     <td colspan="13" class="px-4 py-8 text-center text-slate-500">No items added yet</td>
                                 </tr>
                             </tbody>
+                            <tfoot id="currentPurchaseItemsTotals"></tfoot>
                         </table>
                     </div>
                 </div>
@@ -1251,6 +1252,8 @@
                             <option value="">All Types</option>
                             <option value="Purchase">Purchases (IN)</option>
                             <option value="Sale">Sales (OUT)</option>
+                            <option value="MoveToCold">General to Cold (OUT)</option>
+                            <option value="ReleaseFromCold">Cold to General (IN)</option>
                         </select>
                     </div>
                     <div>
@@ -1279,12 +1282,13 @@
                                     <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Movement</th>
                                     <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Reference</th>
                                     <th class="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Quantity</th>
+                                    <th class="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Bags</th>
                                     <th class="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Running Balance</th>
                                 </tr>
                             </thead>
                             <tbody id="stockMovement">
                                 <tr>
-                                    <td colspan="6" class="px-4 py-12 text-center text-slate-500">
+                                    <td colspan="7" class="px-4 py-12 text-center text-slate-500">
                                         <svg class="w-10 h-10 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
                                         No stock movements recorded yet
                                     </td>
@@ -1348,6 +1352,10 @@
                             <input type="number" id="coldMovePaidAtMove" min="0" step="any" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         </div>
                         <div class="md:col-span-3 lg:col-span-2">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">LOT/CRATE Reference</label>
+                            <input type="text" id="coldMoveReference" placeholder="Lot/Crate number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div class="md:col-span-3 lg:col-span-2">
                             <label class="block text-sm font-medium text-slate-700 mb-2">Remarks</label>
                             <input type="text" id="coldMoveRemarks" placeholder="Notes / lot details" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         </div>
@@ -1361,6 +1369,9 @@
 
                 <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Active Cold Lots</h3>
+                    <div class="mb-4">
+                        <input type="text" id="coldLotsSearch" placeholder="Search lot, item, storage, vendor, supplier, remarks..." oninput="filterColdStorageLots()" class="w-full md:w-1/2 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
                     <div class="overflow-x-auto">
                         <table class="w-full table-auto border border-slate-200 rounded-lg">
                             <thead>
@@ -1370,8 +1381,10 @@
                                     <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Cold Storage</th>
                                     <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Vendor</th>
                                     <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Supplier</th>
-                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Qty</th>
-                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Bags</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Original Qty</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Original Bags</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Remaining Qty</th>
+                                    <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Remaining Bags</th>
                                     <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Total Charge</th>
                                     <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Paid</th>
                                     <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Payable Adj.</th>
@@ -1382,10 +1395,11 @@
                                 </tr>
                             </thead>
                             <tbody id="coldStorageLotsBody">
-                                <tr><td colspan="14" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>
+                                <tr><td colspan="16" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>
                             </tbody>
                         </table>
                     </div>
+                    <div id="coldLotsPagination" class="pagination-container"></div>
                 </div>
                 <div id="coldLotEditPanel" class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 hidden">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Edit Cold Lot</h3>
@@ -1456,6 +1470,10 @@
                                 <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
                                 <input type="number" id="coldChargeAmount" min="0" step="any" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                             </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">LOT/CRATE Reference</label>
+                                <input type="text" id="coldChargeReference" placeholder="Lot/Crate number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-slate-700 mb-2">Remarks</label>
                                 <input type="text" id="coldChargeRemarks" placeholder="Monthly rent / handling / misc" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
@@ -1486,6 +1504,10 @@
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-2">Paid at Release</label>
                                 <input type="number" id="coldReleasePaidAmount" min="0" step="any" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">LOT/CRATE Reference</label>
+                                <input type="text" id="coldReleaseReference" placeholder="Lot/Crate number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                             </div>
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-slate-700 mb-2">Remarks</label>
@@ -1525,6 +1547,10 @@
                         <div id="coldDamageSplitWrap" class="hidden">
                             <label class="block text-sm font-medium text-slate-700 mb-2">Cold Storage Share %</label>
                             <input type="number" id="coldDamageSplitPercent" min="0" max="100" value="50" oninput="updateColdDamageEstimate()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        </div>
+                        <div class="lg:col-span-2">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">LOT/CRATE Reference</label>
+                            <input type="text" id="coldDamageReference" placeholder="Lot/Crate number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         </div>
                         <div class="lg:col-span-2">
                             <label class="block text-sm font-medium text-slate-700 mb-2">Remarks</label>
@@ -1652,6 +1678,7 @@
                             </tbody>
                         </table>
                     </div>
+                    <div id="coldMovementPagination" class="pagination-container"></div>
                 </div>
             </div>
         </div>
@@ -1913,6 +1940,7 @@
                                     <td colspan="8" class="px-4 py-8 text-center text-slate-500">No items added yet</td>
                                 </tr>
                             </tbody>
+                            <tfoot id="currentSaleItemsTotals"></tfoot>
                         </table>
                     </div>
                 </div>
