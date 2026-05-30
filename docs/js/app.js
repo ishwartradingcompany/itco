@@ -783,7 +783,8 @@ function rebuildInventoryFromTransactions() {
         const activeQty = Math.max(0, parseFloat(lot.qtyInCold) || 0);
         if (activeQty <= 0) return;
         const releasedQty = Math.max(0, parseFloat(lot.releaseQtyTotal) || 0);
-        const lotTotalQty = activeQty + releasedQty;
+        const shrinkageQty = Math.max(0, parseFloat(lot.shrinkageQtyTotal) || 0);
+        const lotTotalQty = activeQty + releasedQty + shrinkageQty;
         const lotSourceCost = Math.max(0, parseFloat(lot.sourceInventoryCost) || 0);
         const activeSourceCost = lotTotalQty > 0 ? (lotSourceCost * (activeQty / lotTotalQty)) : 0;
         rebuilt[itemId].quantity -= activeQty;
@@ -827,6 +828,7 @@ function loadData() {
                 appData.coldStorageDamages = appData.coldStorageDamages || [];
                 appData.coldStorages = appData.coldStorages || [];
                 appData.settings = appData.settings || {};
+                normalizeColdStorageLotFields();
                 appData.coldStorages = appData.coldStorages.map(function(cs, idx) {
                     const safe = cs || {};
                     return {
@@ -997,6 +999,7 @@ function restoreFromJSON() {
                 appData.payments = appData.payments || [];
                 appData.settings = appData.settings || {};
                 appData.inventory = appData.inventory || {};
+                normalizeColdStorageLotFields();
                 rebuildInventoryFromTransactions();
                 (appData.items || []).forEach(function(i){ if (i.active === undefined) i.active = true; });
                 (appData.suppliers || []).forEach(function(s){ if (s.active === undefined) s.active = true; });
@@ -1220,6 +1223,10 @@ function deleteAllMasters() {
                 updateOpeningBalanceHistory();
             } else if (pageId === 'reports') {
                 if (typeof setDefaultReportDates === 'function') setDefaultReportDates();
+            } else if (pageId === 'ledger') {
+                if (typeof updateLedgerOptions === 'function') updateLedgerOptions();
+                if (typeof initLedgerEntitySearch === 'function') initLedgerEntitySearch();
+                if (typeof syncLedgerEntityDisplay === 'function') syncLedgerEntityDisplay();
             }
             
             // Update records count
@@ -2703,6 +2710,18 @@ function deleteAllMasters() {
             });
         }
 
+        function normalizeColdStorageLotFields() {
+            appData.coldStorageLots = (appData.coldStorageLots || []).map(function(lot) {
+                const safe = lot || {};
+                safe.releaseQtyTotal = Math.max(0, parseFloat(safe.releaseQtyTotal) || 0);
+                safe.releaseBagsTotal = Math.max(0, parseFloat(safe.releaseBagsTotal) || 0);
+                safe.damageQtyTotal = Math.max(0, parseFloat(safe.damageQtyTotal) || 0);
+                safe.damageBagsTotal = Math.max(0, parseFloat(safe.damageBagsTotal) || 0);
+                safe.shrinkageQtyTotal = Math.max(0, parseFloat(safe.shrinkageQtyTotal) || 0);
+                return safe;
+            });
+        }
+
         // Populate dropdowns
         function populateDropdowns() {
             // Purchase page dropdowns
@@ -2786,8 +2805,10 @@ function deleteAllMasters() {
             refreshInlineBrokerageBrokerOptions();
             syncPurchaseSupplierDisplay();
             syncSaleCustomerDisplay();
+            syncLedgerEntityDisplay();
             initPurchaseSupplierSearch();
             initSaleCustomerSearch();
+            initLedgerEntitySearch();
             if (typeof populateColdVendorPayablesFilterOptions === 'function') populateColdVendorPayablesFilterOptions();
         }
 
@@ -2800,6 +2821,113 @@ function deleteAllMasters() {
             var sel = document.getElementById('saleCustomer');
             var inp = document.getElementById('saleCustomerInput');
             if (sel && inp) { var opt = sel.options[sel.selectedIndex]; inp.value = (opt && opt.value) ? (opt.text || '') : ''; }
+        }
+        function getLedgerEntitiesForType(type) {
+            var t = String(type || '').trim().toLowerCase();
+            if (t === 'supplier') return (appData.suppliers || []).filter(function(s) { return s.active !== false; });
+            if (t === 'customer') return (appData.customers || []).filter(function(c) { return c.active !== false; });
+            if (t === 'broker') return (appData.brokers || []).filter(function(b) { return b.active !== false; });
+            return [];
+        }
+        function syncLedgerEntityDisplay() {
+            var sel = document.getElementById('ledgerEntity');
+            var inp = document.getElementById('ledgerEntityInput');
+            if (!sel || !inp) return;
+            var opt = sel.options[sel.selectedIndex];
+            inp.value = (opt && opt.value) ? (opt.text || '') : '';
+        }
+        function chooseLedgerEntity(id, name) {
+            var sel = document.getElementById('ledgerEntity');
+            var inp = document.getElementById('ledgerEntityInput');
+            var dd = document.getElementById('ledgerEntityDropdown');
+            if (!sel || !inp) return;
+            sel.value = String(id || '');
+            inp.value = String(name || '').trim();
+            if (dd) dd.classList.add('hidden');
+        }
+        function renderLedgerEntityDropdown(filter) {
+            var typeEl = document.getElementById('ledgerType');
+            var dd = document.getElementById('ledgerEntityDropdown');
+            if (!typeEl || !dd) return;
+            var list = getLedgerEntitiesForType(typeEl.value);
+            if (filter) {
+                var f = String(filter).trim().toLowerCase();
+                list = list.filter(function(entity) {
+                    return String(entity && entity.name || '').toLowerCase().indexOf(f) >= 0;
+                });
+            }
+            if (!typeEl.value) {
+                dd.innerHTML = '<div class="px-3 py-2 text-slate-500 text-sm">Select ledger type first</div>';
+                dd.classList.remove('hidden');
+                return;
+            }
+            if (!list.length) {
+                dd.innerHTML = '<div class="px-3 py-2 text-slate-500 text-sm">No matching entities found</div>';
+                dd.classList.remove('hidden');
+                return;
+            }
+            dd.innerHTML = list.map(function(entity, idx) {
+                return '<div class="px-3 py-2 cursor-pointer hover:bg-slate-100 border-b border-slate-100 last:border-0" data-id="' + entity.id + '" data-name="' + escapeHtml(entity.name || '') + '" data-index="' + idx + '">' + escapeHtml(entity.name || '') + '</div>';
+            }).join('');
+            dd.dataset.activeIndex = '0';
+            dd.classList.remove('hidden');
+        }
+        function initLedgerEntitySearch() {
+            var inp = document.getElementById('ledgerEntityInput');
+            var dd = document.getElementById('ledgerEntityDropdown');
+            var sel = document.getElementById('ledgerEntity');
+            if (!inp || !dd || !sel || inp._searchInited) return;
+            inp._searchInited = true;
+            inp.addEventListener('focus', function() { renderLedgerEntityDropdown(''); });
+            inp.addEventListener('click', function() { renderLedgerEntityDropdown(''); });
+            inp.addEventListener('input', function() {
+                sel.value = '';
+                renderLedgerEntityDropdown(inp.value);
+            });
+            inp.addEventListener('keydown', function(e) {
+                var rows = Array.prototype.slice.call(dd.querySelectorAll('[data-id]'));
+                if (e.key === 'Escape') {
+                    dd.classList.add('hidden');
+                    return;
+                }
+                if (!rows.length) return;
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    var currentIndex = parseInt(dd.dataset.activeIndex || '-1', 10);
+                    if (Number.isNaN(currentIndex)) currentIndex = -1;
+                    if (e.key === 'ArrowDown') currentIndex = Math.min(rows.length - 1, currentIndex + 1);
+                    if (e.key === 'ArrowUp') currentIndex = Math.max(0, currentIndex - 1);
+                    dd.dataset.activeIndex = String(currentIndex);
+                    rows.forEach(function(row, idx) {
+                        row.classList.toggle('bg-slate-100', idx === currentIndex);
+                    });
+                    return;
+                }
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    var chosenIndex = parseInt(dd.dataset.activeIndex || '0', 10);
+                    if (Number.isNaN(chosenIndex) || chosenIndex < 0 || chosenIndex >= rows.length) chosenIndex = 0;
+                    var row = rows[chosenIndex];
+                    chooseLedgerEntity(row.getAttribute('data-id'), row.getAttribute('data-name') || row.textContent);
+                }
+            });
+            dd.addEventListener('click', function(e) {
+                var row = e.target.closest('[data-id]');
+                if (row) {
+                    chooseLedgerEntity(row.getAttribute('data-id'), row.getAttribute('data-name') || row.textContent);
+                }
+            });
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('#ledgerEntityInput') && !e.target.closest('#ledgerEntityDropdown')) {
+                    dd.classList.add('hidden');
+                    var selectedText = '';
+                    var selected = sel.options[sel.selectedIndex];
+                    if (selected && selected.value) selectedText = selected.text || '';
+                    if (String(inp.value || '').trim() !== String(selectedText || '').trim()) {
+                        sel.value = '';
+                    }
+                }
+            });
         }
         function renderPurchaseSupplierDropdown(filter) {
             var list = (appData.suppliers || []).filter(function(s){ return s.active !== false; });
@@ -4774,8 +4902,9 @@ function deleteAllMasters() {
             const periodic = Math.max(0, parseFloat(lot.periodicChargeTotal) || 0);
             const released = Math.max(0, parseFloat(lot.releaseQtyTotal) || 0);
             const damaged = Math.max(0, parseFloat(lot.damageQtyTotal) || 0);
+            const shrinkage = Math.max(0, parseFloat(lot.shrinkageQtyTotal) || 0);
             const paid = Math.max(0, parseFloat(lot.paidTotal) || 0);
-            return periodic <= 0 && released <= 0 && damaged <= 0 && paid <= 0;
+            return periodic <= 0 && released <= 0 && damaged <= 0 && shrinkage <= 0 && paid <= 0;
         }
 
         function getPurchaseAutoColdSourceKey(purchaseId, purchaseItem, itemIndex) {
@@ -4790,8 +4919,9 @@ function deleteAllMasters() {
             const periodic = Math.max(0, parseFloat(lot.periodicChargeTotal) || 0);
             const released = Math.max(0, parseFloat(lot.releaseQtyTotal) || 0);
             const damaged = Math.max(0, parseFloat(lot.damageQtyTotal) || 0);
+            const shrinkage = Math.max(0, parseFloat(lot.shrinkageQtyTotal) || 0);
             const paid = Math.max(0, parseFloat(lot.paidTotal) || 0);
-            return periodic <= 0 && released <= 0 && damaged <= 0 && paid <= 0;
+            return periodic <= 0 && released <= 0 && damaged <= 0 && shrinkage <= 0 && paid <= 0;
         }
 
         function createAutoColdLotFromPurchaseItem(purchase, purchaseItem, itemIndex) {
@@ -4846,6 +4976,7 @@ function deleteAllMasters() {
                 remainingPayable: +estimatedTotalCharge.toFixed(2),
                 releaseQtyTotal: 0,
                 releaseBagsTotal: 0,
+                shrinkageQtyTotal: 0,
                 damageQtyTotal: 0,
                 damageBagsTotal: 0,
                 damageLossTotal: 0,
@@ -4959,6 +5090,8 @@ function deleteAllMasters() {
             if (chargeDateEl && !chargeDateEl.value) chargeDateEl.value = new Date().toISOString().split('T')[0];
             const releaseDateEl = document.getElementById('coldReleaseDate');
             if (releaseDateEl && !releaseDateEl.value) releaseDateEl.value = new Date().toISOString().split('T')[0];
+            const shrinkDateEl = document.getElementById('coldShrinkageDate');
+            if (shrinkDateEl && !shrinkDateEl.value) shrinkDateEl.value = new Date().toISOString().split('T')[0];
             const damageDateEl = document.getElementById('coldDamageDate');
             if (damageDateEl && !damageDateEl.value) damageDateEl.value = new Date().toISOString().split('T')[0];
             populateColdStorageNameDropdowns();
@@ -5234,6 +5367,7 @@ function deleteAllMasters() {
                 remainingPayable: Math.max(0, estimatedTotalCharge - paidAtMove),
                 releaseQtyTotal: 0,
                 releaseBagsTotal: 0,
+                shrinkageQtyTotal: 0,
                 damageQtyTotal: 0,
                 damageBagsTotal: 0,
                 damageLossTotal: 0,
@@ -5295,9 +5429,11 @@ function deleteAllMasters() {
             const chargeSelect = document.getElementById('coldChargeLotId');
             const releaseSelect = document.getElementById('coldReleaseLotId');
             const damageSelect = document.getElementById('coldDamageLotId');
+            const shrinkageSelect = document.getElementById('coldShrinkageLotId');
             const currentCharge = chargeSelect ? chargeSelect.value : '';
             const currentRelease = releaseSelect ? releaseSelect.value : '';
             const currentDamage = damageSelect ? damageSelect.value : '';
+            const currentShrinkage = shrinkageSelect ? shrinkageSelect.value : '';
             const activeLots = (appData.coldStorageLots || []).filter(function(lot) { return (lot.status || 'active') !== 'released' && (parseFloat(lot.qtyInCold) || 0) > 0; });
             const lotLabel = function(lot) {
                 const qty = Number(lot && lot.qtyInCold || 0).toFixed(2);
@@ -5327,8 +5463,24 @@ function deleteAllMasters() {
                 });
                 if (currentDamage && damageSelect.querySelector(`option[value="${currentDamage}"]`)) damageSelect.value = currentDamage;
             }
+            if (shrinkageSelect) {
+                shrinkageSelect.innerHTML = '<option value="">Select Lot</option>';
+                activeLots.forEach(function(lot) {
+                    shrinkageSelect.innerHTML += `<option value="${lot.id}">${lotLabel(lot)}</option>`;
+                });
+                if (currentShrinkage && shrinkageSelect.querySelector(`option[value="${currentShrinkage}"]`)) shrinkageSelect.value = currentShrinkage;
+            }
             onColdReleaseLotChange();
             onColdDamageLotChange();
+            onColdShrinkageLotChange();
+        }
+
+        function getColdLotExpectedQtyByBags(lot, bagsValue) {
+            const lotQty = Math.max(0, parseFloat(lot && lot.qtyInCold) || 0);
+            const lotBags = Math.max(0, parseFloat(lot && lot.bagsInCold) || 0);
+            const bags = Math.max(0, parseFloat(bagsValue) || 0);
+            if (lotQty <= 0 || lotBags <= 0 || bags <= 0) return 0;
+            return +(bags * (lotQty / lotBags)).toFixed(2);
         }
 
         function onColdReleaseLotChange() {
@@ -5344,7 +5496,47 @@ function deleteAllMasters() {
                 hintEl.textContent = 'Available in lot: 0';
                 return;
             }
-            hintEl.textContent = `Available in lot: ${Number(lot.qtyInCold || 0).toFixed(2)} ${lot.unit || 'kg'} | Remaining Payable: ${RU}${Number(lot.remainingPayable || 0).toFixed(2)}`;
+            const avgPerBag = (Math.max(0, parseFloat(lot.bagsInCold) || 0) > 0)
+                ? ((Math.max(0, parseFloat(lot.qtyInCold) || 0)) / Math.max(0, parseFloat(lot.bagsInCold) || 0))
+                : 0;
+            hintEl.textContent = `Available in lot: ${Number(lot.qtyInCold || 0).toFixed(2)} ${lot.unit || 'kg'} | Bags: ${Number(lot.bagsInCold || 0).toFixed(2)} | Avg/Bag: ${avgPerBag.toFixed(2)} | Expected qty is reference only | Shrinkage applies only at final bag closure | Remaining Payable: ${RU}${Number(lot.remainingPayable || 0).toFixed(2)}`;
+            updateColdReleaseExpectations();
+        }
+
+        function updateColdReleaseExpectations() {
+            const lotId = (document.getElementById('coldReleaseLotId') && document.getElementById('coldReleaseLotId').value) || '';
+            const hintEl = document.getElementById('coldReleaseAvailableHint');
+            if (!hintEl || !lotId) return;
+            const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(lotId); });
+            if (!lot) return;
+            const releaseBags = Math.max(0, parseFloat(document.getElementById('coldReleaseBags') && document.getElementById('coldReleaseBags').value) || 0);
+            const releaseQty = Math.max(0, parseFloat(document.getElementById('coldReleaseQty') && document.getElementById('coldReleaseQty').value) || 0);
+            const expectedQty = getColdLotExpectedQtyByBags(lot, releaseBags);
+            const isFinalBagRelease = Math.abs((Math.max(0, parseFloat(lot.bagsInCold) || 0) - releaseBags)) <= 0.0001;
+            const shrinkageQty = isFinalBagRelease
+                ? Math.max(0, +(Math.max(0, parseFloat(lot.qtyInCold) || 0) - releaseQty).toFixed(2))
+                : 0;
+            const avgPerBag = (Math.max(0, parseFloat(lot.bagsInCold) || 0) > 0)
+                ? ((Math.max(0, parseFloat(lot.qtyInCold) || 0)) / Math.max(0, parseFloat(lot.bagsInCold) || 0))
+                : 0;
+            const finalNote = isFinalBagRelease ? ' | Final bag closure: remaining qty auto-adjusts to shrinkage' : ' | Non-final: shrinkage is 0';
+            hintEl.textContent = `Available in lot: ${Number(lot.qtyInCold || 0).toFixed(2)} ${lot.unit || 'kg'} | Bags: ${Number(lot.bagsInCold || 0).toFixed(2)} | Avg/Bag: ${avgPerBag.toFixed(2)} | Expected Qty (reference): ${expectedQty.toFixed(2)} | Shrinkage: ${shrinkageQty.toFixed(2)}${finalNote} | Remaining Payable: ${RU}${Number(lot.remainingPayable || 0).toFixed(2)}`;
+        }
+
+        function onColdShrinkageLotChange() {
+            const lotId = (document.getElementById('coldShrinkageLotId') && document.getElementById('coldShrinkageLotId').value) || '';
+            const hintEl = document.getElementById('coldShrinkageAvailableHint');
+            if (!hintEl) return;
+            if (!lotId) {
+                hintEl.textContent = 'Available in lot: 0';
+                return;
+            }
+            const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(lotId); });
+            if (!lot) {
+                hintEl.textContent = 'Available in lot: 0';
+                return;
+            }
+            hintEl.textContent = `Available in lot: ${Number(lot.qtyInCold || 0).toFixed(2)} ${lot.unit || 'kg'} | Bags remain: ${Number(lot.bagsInCold || 0).toFixed(2)}`;
         }
 
         function onColdDamageLotChange() {
@@ -5493,6 +5685,81 @@ function deleteAllMasters() {
             alert('Periodic cold storage charge added.');
         }
 
+        function appendColdStorageShrinkageMovement(lot, payload) {
+            if (!lot) return null;
+            const date = String(payload && payload.date || '').trim();
+            const qty = Math.max(0, parseFloat(payload && payload.qty) || 0);
+            const reference = String(payload && payload.reference || '').trim();
+            const remarks = String(payload && payload.remarks || '').trim();
+            const linkedReleaseMovementId = String(payload && payload.linkedReleaseMovementId || '').trim();
+            const applyToLot = payload && payload.applyToLot !== false;
+            if (!date || qty <= 0) return null;
+            const qtyInLot = Math.max(0, parseFloat(lot.qtyInCold) || 0);
+            if (qty > qtyInLot + 0.0001) return null;
+            if (applyToLot) {
+                lot.qtyInCold = +(qtyInLot - qty).toFixed(2);
+                if (lot.qtyInCold <= 0.0001) lot.qtyInCold = 0;
+                lot.shrinkageQtyTotal = +((parseFloat(lot.shrinkageQtyTotal) || 0) + qty).toFixed(2);
+                lot.status = (lot.qtyInCold <= 0.0001) ? 'released' : (lot.status || 'active');
+            }
+            appData.coldStorageMovements = appData.coldStorageMovements || [];
+            const movement = {
+                id: Date.now() + Math.floor(Math.random() * 1000),
+                date: date,
+                type: 'shrinkage',
+                lotId: lot.id,
+                itemId: lot.itemId,
+                itemName: lot.itemName,
+                coldStorageName: lot.coldStorageName,
+                vendorName: lot.vendorName,
+                supplierName: lot.supplierName || '-',
+                qty: +qty.toFixed(2),
+                bags: 0,
+                amount: 0,
+                reference: reference,
+                remarks: remarks,
+                linkedReleaseMovementId: linkedReleaseMovementId || ''
+            };
+            appData.coldStorageMovements.push(movement);
+            return movement;
+        }
+
+        function recordColdStorageShrinkage() {
+            const date = (document.getElementById('coldShrinkageDate') && document.getElementById('coldShrinkageDate').value) || '';
+            const lotId = (document.getElementById('coldShrinkageLotId') && document.getElementById('coldShrinkageLotId').value) || '';
+            const shrinkageQty = Math.max(0, parseFloat(document.getElementById('coldShrinkageQty') && document.getElementById('coldShrinkageQty').value) || 0);
+            const lotReference = String((document.getElementById('coldShrinkageReference') && document.getElementById('coldShrinkageReference').value) || '').trim();
+            const remarks = (document.getElementById('coldShrinkageRemarks') && document.getElementById('coldShrinkageRemarks').value || '').trim();
+            if (!date || !lotId || shrinkageQty <= 0) {
+                alert('Please select date, lot and valid shrinkage quantity.');
+                return;
+            }
+            if (!lotReference) {
+                alert('Please enter LOT/CRATE reference.');
+                return;
+            }
+            const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(lotId); });
+            if (!lot) {
+                alert('Selected lot not found.');
+                return;
+            }
+            const movement = appendColdStorageShrinkageMovement(lot, {
+                date: date,
+                qty: shrinkageQty,
+                reference: lotReference,
+                remarks: remarks
+            });
+            if (!movement) {
+                alert('Shrinkage quantity cannot exceed available lot quantity.');
+                return;
+            }
+            saveData();
+            refreshInventory();
+            updateDashboard();
+            refreshColdStoragePanel();
+            alert('Cold storage shrinkage recorded successfully.');
+        }
+
         function applyColdLotRelease(payload) {
             const date = String(payload && payload.date || '');
             const lotId = String(payload && payload.lotId || '');
@@ -5501,8 +5768,8 @@ function deleteAllMasters() {
             const paidAtRelease = Math.max(0, parseFloat(payload && payload.paidAtRelease) || 0);
             const lotReference = String(payload && payload.reference || '').trim();
             const remarks = String(payload && payload.remarks || '').trim();
-            if (!date || !lotId || releaseQty <= 0) {
-                alert('Please select date, lot, and release quantity.');
+            if (!date || !lotId || releaseQty <= 0 || releaseBags <= 0) {
+                alert('Please select date, lot, release bags, and release quantity.');
                 return false;
             }
             if (!lotReference) {
@@ -5516,24 +5783,35 @@ function deleteAllMasters() {
             }
             const qtyInLot = Math.max(0, parseFloat(lot.qtyInCold) || 0);
             const bagsInLot = Math.max(0, parseFloat(lot.bagsInCold) || 0);
-            if (releaseQty > qtyInLot) {
-                alert('Release quantity cannot exceed lot quantity.');
-                return false;
-            }
+            const expectedReleaseQty = getColdLotExpectedQtyByBags(lot, releaseBags);
             if (releaseBags > bagsInLot) {
                 alert('Release bags cannot exceed lot bags.');
+                return false;
+            }
+            if (releaseQty > qtyInLot + 0.0001) {
+                alert('Actual release quantity cannot exceed lot quantity.');
+                return false;
+            }
+            const isFinalBagRelease = Math.abs((bagsInLot - releaseBags)) <= 0.0001;
+            const shrinkageQty = isFinalBagRelease
+                ? Math.max(0, +(qtyInLot - releaseQty).toFixed(2))
+                : 0;
+            const totalQtyOut = +(releaseQty + shrinkageQty).toFixed(2);
+            if (totalQtyOut > qtyInLot + 0.0001) {
+                alert('Release quantity cannot exceed lot quantity.');
                 return false;
             }
             if (paidAtRelease > (parseFloat(lot.remainingPayable) || 0)) {
                 alert('Paid at release cannot exceed remaining payable.');
                 return false;
             }
-            lot.qtyInCold = +(qtyInLot - releaseQty).toFixed(2);
+            lot.qtyInCold = +(qtyInLot - totalQtyOut).toFixed(2);
             if (lot.qtyInCold <= 0.0001) lot.qtyInCold = 0;
             lot.bagsInCold = +(bagsInLot - releaseBags).toFixed(2);
             if (lot.bagsInCold <= 0.0001) lot.bagsInCold = 0;
             lot.releaseQtyTotal = (parseFloat(lot.releaseQtyTotal) || 0) + releaseQty;
             lot.releaseBagsTotal = (parseFloat(lot.releaseBagsTotal) || 0) + releaseBags;
+            lot.shrinkageQtyTotal = (parseFloat(lot.shrinkageQtyTotal) || 0) + shrinkageQty;
             lot.paidAtRelease = (parseFloat(lot.paidAtRelease) || 0) + paidAtRelease;
             lot.paidTotal = (parseFloat(lot.paidTotal) || 0) + paidAtRelease;
             if (lotReference) lot.lotReference = lotReference;
@@ -5542,7 +5820,7 @@ function deleteAllMasters() {
 
             if (!appData.inventory[lot.itemId]) appData.inventory[lot.itemId] = { quantity: 0, totalCost: 0 };
             const sourceCost = parseFloat(lot.sourceInventoryCost) || 0;
-            const originalQty = (parseFloat(lot.releaseQtyTotal) || 0) + (parseFloat(lot.qtyInCold) || 0);
+            const originalQty = (parseFloat(lot.releaseQtyTotal) || 0) + (parseFloat(lot.qtyInCold) || 0) + (parseFloat(lot.shrinkageQtyTotal) || 0);
             const avgInventoryCost = originalQty > 0 ? (sourceCost / originalQty) : 0;
             appData.inventory[lot.itemId].quantity += releaseQty;
             appData.inventory[lot.itemId].totalCost += (avgInventoryCost * releaseQty);
@@ -5562,9 +5840,26 @@ function deleteAllMasters() {
                 bags: releaseBags,
                 amount: paidAtRelease,
                 reference: lotReference,
-                remarks: remarks
+                remarks: remarks,
+                shrinkageQty: +shrinkageQty.toFixed(2),
+                expectedQty: +expectedReleaseQty.toFixed(2),
+                isFinalBagRelease: isFinalBagRelease
             };
             appData.coldStorageMovements.push(movementEntry);
+
+            if (shrinkageQty > 0) {
+                const shrinkageMovement = appendColdStorageShrinkageMovement(lot, {
+                    date: date,
+                    qty: shrinkageQty,
+                    reference: lotReference,
+                    remarks: (remarks ? (remarks + ' | ') : '') + 'Auto shrinkage at release',
+                    linkedReleaseMovementId: movementEntry.id,
+                    applyToLot: false
+                });
+                if (shrinkageMovement) {
+                    movementEntry.linkedShrinkageMovementId = shrinkageMovement.id;
+                }
+            }
 
             if (paidAtRelease > 0) {
                 appData.payments = appData.payments || [];
@@ -5609,14 +5904,11 @@ function deleteAllMasters() {
         function releaseFromColdStorage() {
             const date = (document.getElementById('coldReleaseDate') && document.getElementById('coldReleaseDate').value) || '';
             const lotId = (document.getElementById('coldReleaseLotId') && document.getElementById('coldReleaseLotId').value) || '';
+            const releaseBags = Math.max(0, parseFloat(document.getElementById('coldReleaseBags') && document.getElementById('coldReleaseBags').value) || 0);
             const releaseQty = Math.max(0, parseFloat(document.getElementById('coldReleaseQty') && document.getElementById('coldReleaseQty').value) || 0);
             const paidAtRelease = Math.max(0, parseFloat(document.getElementById('coldReleasePaidAmount') && document.getElementById('coldReleasePaidAmount').value) || 0);
             const lotReference = (document.getElementById('coldReleaseReference') && document.getElementById('coldReleaseReference').value || '').trim();
             const remarks = (document.getElementById('coldReleaseRemarks') && document.getElementById('coldReleaseRemarks').value || '').trim();
-            const lot = (appData.coldStorageLots || []).find(function(x) { return String(x.id) === String(lotId); });
-            const qtyInLot = Math.max(0, parseFloat(lot && lot.qtyInCold) || 0);
-            const bagsInLot = Math.max(0, parseFloat(lot && lot.bagsInCold) || 0);
-            const releaseBags = qtyInLot > 0 ? +((bagsInLot * (releaseQty / qtyInLot))).toFixed(2) : 0;
             if (applyColdLotRelease({ date: date, lotId: lotId, releaseQty: releaseQty, releaseBags: releaseBags, paidAtRelease: paidAtRelease, reference: lotReference, remarks: remarks })) {
                 alert('Released from cold storage successfully.');
             }
@@ -5647,13 +5939,20 @@ function deleteAllMasters() {
             if (!move) return null;
             const lot = (appData.coldStorageLots || []).find(function(l) { return String(l.id) === String(move.lotId || ''); });
             if (!lot) return null;
+            const linkedShrinkageMove = (appData.coldStorageMovements || []).find(function(m) {
+                return String(m.type || '') === 'shrinkage' && String(m.linkedReleaseMovementId || '') === String(move.id || '');
+            }) || (appData.coldStorageMovements || []).find(function(m) {
+                return String(m.id || '') === String(move.linkedShrinkageMovementId || '');
+            }) || null;
+            const oldShrinkageQty = Math.max(0, parseFloat(linkedShrinkageMove && linkedShrinkageMove.qty) || parseFloat(move.shrinkageQty) || 0);
             const oldQty = Math.max(0, parseFloat(move.qty) || 0);
             const oldBags = Math.max(0, parseFloat(move.bags) || 0);
             const oldPaid = Math.max(0, parseFloat(move.amount) || 0);
-            const baseQtyInLot = Math.max(0, (parseFloat(lot.qtyInCold) || 0) + oldQty);
+            const baseQtyInLot = Math.max(0, (parseFloat(lot.qtyInCold) || 0) + oldQty + oldShrinkageQty);
             const baseBagsInLot = Math.max(0, (parseFloat(lot.bagsInCold) || 0) + oldBags);
             const baseReleaseQtyTotal = Math.max(0, (parseFloat(lot.releaseQtyTotal) || 0) - oldQty);
             const baseReleaseBagsTotal = Math.max(0, (parseFloat(lot.releaseBagsTotal) || 0) - oldBags);
+            const baseShrinkageQtyTotal = Math.max(0, (parseFloat(lot.shrinkageQtyTotal) || 0) - oldShrinkageQty);
             const basePaidAtRelease = Math.max(0, (parseFloat(lot.paidAtRelease) || 0) - oldPaid);
             const basePaidTotal = Math.max(0, (parseFloat(lot.paidTotal) || 0) - oldPaid);
             const estimated = Math.max(0, parseFloat(lot.estimatedTotalCharge) || 0);
@@ -5665,13 +5964,16 @@ function deleteAllMasters() {
                 oldQty: oldQty,
                 oldBags: oldBags,
                 oldPaid: oldPaid,
+                oldShrinkageQty: oldShrinkageQty,
                 baseQtyInLot: baseQtyInLot,
                 baseBagsInLot: baseBagsInLot,
                 baseReleaseQtyTotal: baseReleaseQtyTotal,
                 baseReleaseBagsTotal: baseReleaseBagsTotal,
+                baseShrinkageQtyTotal: baseShrinkageQtyTotal,
                 basePaidAtRelease: basePaidAtRelease,
                 basePaidTotal: basePaidTotal,
-                maxEditablePaid: maxEditablePaid
+                maxEditablePaid: maxEditablePaid,
+                linkedShrinkageMove: linkedShrinkageMove
             };
         }
 
@@ -5708,7 +6010,12 @@ function deleteAllMasters() {
                 alert('Please enter valid date and release quantity.');
                 return;
             }
-            if (newQty > ctx.baseQtyInLot + 0.0001) {
+            const expectedQty = getColdLotExpectedQtyByBags(ctx.lot, newBags);
+            const isFinalBagRelease = Math.abs((ctx.baseBagsInLot - newBags)) <= 0.0001;
+            const nextShrinkageQty = isFinalBagRelease
+                ? Math.max(0, +(ctx.baseQtyInLot - newQty).toFixed(2))
+                : 0;
+            if (newQty + nextShrinkageQty > ctx.baseQtyInLot + 0.0001) {
                 alert('Release quantity cannot exceed available lot quantity for this edit.');
                 return;
             }
@@ -5736,7 +6043,7 @@ function deleteAllMasters() {
 
             if (!appData.inventory[ctx.lot.itemId]) appData.inventory[ctx.lot.itemId] = { quantity: 0, totalCost: 0 };
             const sourceCost = Math.max(0, parseFloat(ctx.lot.sourceInventoryCost) || 0);
-            const originalQty = Math.max(0.0001, ctx.baseReleaseQtyTotal + ctx.baseQtyInLot);
+            const originalQty = Math.max(0.0001, ctx.baseReleaseQtyTotal + ctx.baseShrinkageQtyTotal + ctx.baseQtyInLot);
             const avgInventoryCost = sourceCost / originalQty;
             const qtyDelta = newQty - ctx.oldQty;
             appData.inventory[ctx.lot.itemId].quantity = (parseFloat(appData.inventory[ctx.lot.itemId].quantity) || 0) + qtyDelta;
@@ -5745,15 +6052,40 @@ function deleteAllMasters() {
                 delete appData.inventory[ctx.lot.itemId];
             }
 
-            ctx.lot.qtyInCold = +(ctx.baseQtyInLot - newQty).toFixed(2);
+            ctx.lot.qtyInCold = +(ctx.baseQtyInLot - newQty - nextShrinkageQty).toFixed(2);
             ctx.lot.bagsInCold = +(ctx.baseBagsInLot - newBags).toFixed(2);
             ctx.lot.releaseQtyTotal = +(ctx.baseReleaseQtyTotal + newQty).toFixed(2);
             ctx.lot.releaseBagsTotal = +(ctx.baseReleaseBagsTotal + newBags).toFixed(2);
+            ctx.lot.shrinkageQtyTotal = +(ctx.baseShrinkageQtyTotal + nextShrinkageQty).toFixed(2);
             ctx.lot.paidAtRelease = +(ctx.basePaidAtRelease + newPaid).toFixed(2);
             ctx.lot.paidTotal = +(ctx.basePaidTotal + newPaid).toFixed(2);
             recalculateColdLotPayables(ctx.lot);
             ctx.lot.status = (ctx.lot.qtyInCold <= 0.0001) ? 'released' : 'partiallyReleased';
             Object.assign(ctx.lot, getAuditMeta(false));
+
+            if (ctx.linkedShrinkageMove) {
+                if (nextShrinkageQty <= 0.0001) {
+                    appData.coldStorageMovements = (appData.coldStorageMovements || []).filter(function(m) { return String(m.id) !== String(ctx.linkedShrinkageMove.id); });
+                    delete ctx.move.linkedShrinkageMovementId;
+                } else {
+                    ctx.linkedShrinkageMove.date = newDate;
+                    ctx.linkedShrinkageMove.qty = +nextShrinkageQty.toFixed(2);
+                    ctx.linkedShrinkageMove.reference = newReference;
+                    ctx.linkedShrinkageMove.remarks = (nextRemarks ? (nextRemarks + ' | ') : '') + 'Auto shrinkage at release';
+                }
+            } else if (nextShrinkageQty > 0.0001) {
+                const nextShrinkMove = appendColdStorageShrinkageMovement(ctx.lot, {
+                    date: newDate,
+                    qty: nextShrinkageQty,
+                    reference: newReference,
+                    remarks: (nextRemarks ? (nextRemarks + ' | ') : '') + 'Auto shrinkage at release',
+                    linkedReleaseMovementId: ctx.move.id,
+                    applyToLot: false
+                });
+                if (nextShrinkMove) {
+                    ctx.move.linkedShrinkageMovementId = nextShrinkMove.id;
+                }
+            }
 
             const payment = findReleasePaymentByMovement(ctx.move, ctx.lot);
             if (payment && newPaid <= 0.0001) {
@@ -5797,6 +6129,9 @@ function deleteAllMasters() {
             ctx.move.vendorName = ctx.lot.vendorName || ctx.move.vendorName;
             ctx.move.itemName = ctx.lot.itemName || ctx.move.itemName;
             ctx.move.coldStorageName = ctx.lot.coldStorageName || ctx.move.coldStorageName;
+            ctx.move.shrinkageQty = +nextShrinkageQty.toFixed(2);
+            ctx.move.expectedQty = +expectedQty.toFixed(2);
+            ctx.move.isFinalBagRelease = isFinalBagRelease;
 
             activeInlineMovementReleaseEditId = null;
             saveData();
@@ -5857,16 +6192,23 @@ function deleteAllMasters() {
                 const qty = Math.max(0, parseFloat(movement.qty) || 0);
                 const bags = Math.max(0, parseFloat(movement.bags) || 0);
                 const paid = Math.max(0, parseFloat(movement.amount) || 0);
+                const linkedShrink = (appData.coldStorageMovements || []).find(function(m) {
+                    return String(m.type || '') === 'shrinkage' && String(m.linkedReleaseMovementId || '') === String(movement.id || '');
+                }) || (appData.coldStorageMovements || []).find(function(m) {
+                    return String(m.id || '') === String(movement.linkedShrinkageMovementId || '');
+                }) || null;
+                const shrinkQty = Math.max(0, parseFloat(linkedShrink && linkedShrink.qty) || parseFloat(movement.shrinkageQty) || 0);
                 const inv = appData.inventory[lot.itemId];
                 const invQty = Math.max(0, parseFloat(inv && inv.quantity) || 0);
                 if (invQty + 0.0001 < qty) {
                     alert('Cannot delete this release because normal inventory has already been consumed.');
                     return;
                 }
-                lot.qtyInCold = +(Math.max(0, parseFloat(lot.qtyInCold) || 0) + qty).toFixed(2);
+                lot.qtyInCold = +(Math.max(0, parseFloat(lot.qtyInCold) || 0) + qty + shrinkQty).toFixed(2);
                 lot.bagsInCold = +(Math.max(0, parseFloat(lot.bagsInCold) || 0) + bags).toFixed(2);
                 lot.releaseQtyTotal = +Math.max(0, (parseFloat(lot.releaseQtyTotal) || 0) - qty).toFixed(2);
                 lot.releaseBagsTotal = +Math.max(0, (parseFloat(lot.releaseBagsTotal) || 0) - bags).toFixed(2);
+                lot.shrinkageQtyTotal = +Math.max(0, (parseFloat(lot.shrinkageQtyTotal) || 0) - shrinkQty).toFixed(2);
                 lot.paidAtRelease = +Math.max(0, (parseFloat(lot.paidAtRelease) || 0) - paid).toFixed(2);
                 lot.paidTotal = +Math.max(0, (parseFloat(lot.paidTotal) || 0) - paid).toFixed(2);
                 recalculateColdLotPayables(lot);
@@ -5874,7 +6216,7 @@ function deleteAllMasters() {
 
                 if (!appData.inventory[lot.itemId]) appData.inventory[lot.itemId] = { quantity: 0, totalCost: 0 };
                 const sourceCost = Math.max(0, parseFloat(lot.sourceInventoryCost) || 0);
-                const originalQty = Math.max(0.0001, (parseFloat(lot.releaseQtyTotal) || 0) + (parseFloat(lot.qtyInCold) || 0));
+                const originalQty = Math.max(0.0001, (parseFloat(lot.releaseQtyTotal) || 0) + (parseFloat(lot.qtyInCold) || 0) + (parseFloat(lot.shrinkageQtyTotal) || 0));
                 const avgCost = sourceCost / originalQty;
                 appData.inventory[lot.itemId].quantity = Math.max(0, (parseFloat(appData.inventory[lot.itemId].quantity) || 0) - qty);
                 appData.inventory[lot.itemId].totalCost = Math.max(0, (parseFloat(appData.inventory[lot.itemId].totalCost) || 0) - (avgCost * qty));
@@ -5883,6 +6225,9 @@ function deleteAllMasters() {
                 const payment = findReleasePaymentByMovement(movement, lot);
                 if (payment) {
                     appData.payments = (appData.payments || []).filter(function(p) { return String(p.id) !== String(payment.id); });
+                }
+                if (linkedShrink) {
+                    appData.coldStorageMovements = (appData.coldStorageMovements || []).filter(function(m) { return String(m.id) !== String(linkedShrink.id); });
                 }
             } else if (type === 'charge_add') {
                 const amount = Math.max(0, parseFloat(movement.amount) || 0);
@@ -5910,6 +6255,18 @@ function deleteAllMasters() {
                 recalculateColdLotPayables(lot);
                 lot.status = (lot.qtyInCold <= 0.0001) ? 'released' : 'active';
                 appData.coldStorageDamages = (appData.coldStorageDamages || []).filter(function(d) { return d !== damage; });
+            } else if (type === 'shrinkage') {
+                const shrinkQty = Math.max(0, parseFloat(movement.qty) || 0);
+                lot.qtyInCold = +(Math.max(0, parseFloat(lot.qtyInCold) || 0) + shrinkQty).toFixed(2);
+                lot.shrinkageQtyTotal = +Math.max(0, (parseFloat(lot.shrinkageQtyTotal) || 0) - shrinkQty).toFixed(2);
+                lot.status = (lot.qtyInCold <= 0.0001) ? 'released' : 'active';
+                const linkedRelease = (appData.coldStorageMovements || []).find(function(m) {
+                    return String(m.id) === String(movement.linkedReleaseMovementId || '');
+                });
+                if (linkedRelease) {
+                    linkedRelease.shrinkageQty = 0;
+                    delete linkedRelease.linkedShrinkageMovementId;
+                }
             } else {
                 alert('Delete is not supported for this movement type.');
                 return;
@@ -6167,7 +6524,7 @@ function deleteAllMasters() {
                 if (!stillVisible) activeInlineReleaseLotId = null;
             }
             if (activeLots.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="16" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="15" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>';
                 const pager = document.getElementById('coldLotsPagination');
                 if (pager) pager.innerHTML = '';
                 return;
@@ -6184,7 +6541,7 @@ function deleteAllMasters() {
             const pageLots = getPaginatedData(lotsSorted, cp, ps);
             tbody.innerHTML = '';
             pageLots.forEach(function(lot) {
-                const originalQty = Math.max(0, (parseFloat(lot.qtyInCold) || 0) + (parseFloat(lot.releaseQtyTotal) || 0) + (parseFloat(lot.damageQtyTotal) || 0));
+                const originalQty = Math.max(0, (parseFloat(lot.qtyInCold) || 0) + (parseFloat(lot.releaseQtyTotal) || 0) + (parseFloat(lot.damageQtyTotal) || 0) + (parseFloat(lot.shrinkageQtyTotal) || 0));
                 const originalBags = Math.max(0, (parseFloat(lot.bagsInCold) || 0) + (parseFloat(lot.releaseBagsTotal) || 0) + (parseFloat(lot.damageBagsTotal) || 0));
                 const tr = document.createElement('tr');
                 tr.className = 'border-b border-slate-200';
@@ -6192,7 +6549,6 @@ function deleteAllMasters() {
                     <td class="px-3 py-2 text-sm">${lot.date || '-'}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(lot.itemName || '-')}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(lot.coldStorageName || '-')}</td>
-                    <td class="px-3 py-2 text-sm">${escapeHtml(lot.vendorName || '-')}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(lot.supplierName || '-')}</td>
                     <td class="px-3 py-2 text-sm text-right">${originalQty.toFixed(2)}</td>
                     <td class="px-3 py-2 text-sm text-right">${originalBags.toFixed(2)}</td>
@@ -6219,7 +6575,7 @@ function deleteAllMasters() {
                     detailTr.className = 'border-b border-orange-200 bg-orange-50/40';
                     const inlineDate = new Date().toISOString().split('T')[0];
                     detailTr.innerHTML = `
-                        <td colspan="16" class="px-3 py-3">
+                        <td colspan="15" class="px-3 py-3">
                             <div class="rounded-lg border border-orange-200 bg-white p-4">
                                 <div class="flex items-center justify-between mb-3">
                                     <p class="font-semibold text-slate-800">Release Lot: ${escapeHtml(lot.itemName || '-')} | ${escapeHtml(lot.coldStorageName || '-')}</p>
@@ -6475,6 +6831,7 @@ function deleteAllMasters() {
                     move_in: 'Move In',
                     charge_add: 'Periodic Charge',
                     release_out: 'Release',
+                    shrinkage: 'Shrinkage',
                     damage: 'Damage'
                 };
                 return {
@@ -6687,7 +7044,7 @@ function deleteAllMasters() {
                 const m = (appData.coldStorageMovements || []).find(function(x) { return String(x.id) === String(movementId); });
                 if (!m) return;
                 const lotMatch = (appData.coldStorageLots || []).find(function(l) { return String(l.id || '') === String(m.lotId || ''); });
-                const map = { move_in: 'Move In', charge_add: 'Periodic Charge', release_out: 'Release', damage: 'Damage' };
+                const map = { move_in: 'Move In', charge_add: 'Periodic Charge', release_out: 'Release', shrinkage: 'Shrinkage', damage: 'Damage' };
                 row = {
                     date: m.date || '-',
                     type: map[m.type] || (m.type || 'Movement'),
@@ -10906,22 +11263,32 @@ function onPnLFilterChange() {
         function updateLedgerOptions() {
             const type = document.getElementById('ledgerType').value;
             const entitySelect = document.getElementById('ledgerEntity');
+            const entityInput = document.getElementById('ledgerEntityInput');
             
             entitySelect.innerHTML = '<option value="">Select Entity</option>';
             
             if (type === 'supplier') {
-                appData.suppliers.forEach(supplier => {
+                (appData.suppliers || []).filter(function(s){ return s.active !== false; }).forEach(supplier => {
                     entitySelect.innerHTML += `<option value="${supplier.id}">${supplier.name}</option>`;
                 });
             } else if (type === 'customer') {
-                appData.customers.forEach(customer => {
+                (appData.customers || []).filter(function(c){ return c.active !== false; }).forEach(customer => {
                     entitySelect.innerHTML += `<option value="${customer.id}">${customer.name}</option>`;
                 });
             } else if (type === 'broker') {
-                appData.brokers.forEach(broker => {
+                (appData.brokers || []).filter(function(b){ return b.active !== false; }).forEach(broker => {
                     entitySelect.innerHTML += `<option value="${broker.id}">${broker.name}</option>`;
                 });
             }
+            entitySelect.value = '';
+            if (entityInput) entityInput.value = '';
+            const entityDropdown = document.getElementById('ledgerEntityDropdown');
+            if (entityDropdown) {
+                entityDropdown.innerHTML = '';
+                entityDropdown.classList.add('hidden');
+                entityDropdown.dataset.activeIndex = '0';
+            }
+            syncLedgerEntityDisplay();
         }
 
         function generateLedger() {
