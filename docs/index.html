@@ -1485,7 +1485,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
                         <h3 class="text-lg font-bold text-slate-800 mb-4">Add Periodic Charge</h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1517,7 +1517,7 @@
 
                     <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
                         <h3 class="text-lg font-bold text-slate-800 mb-2">Release from Cold (Quick Mode)</h3>
-                        <p class="text-xs text-slate-500 mb-4">Preferred workflow: click <strong>Release</strong> in each lot row under Active Cold Lots for detailed qty and bags entry.</p>
+                        <p class="text-xs text-slate-500 mb-4">Preferred workflow: click <strong>Release</strong> in each lot row under Active Cold Lots for detailed qty and bags entry. Expected qty is a reference only. Shrinkage is recorded only when bags become zero on final release; non-final releases record no shrinkage.</p>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-2">Date</label>
@@ -1528,8 +1528,12 @@
                                 <select id="coldReleaseLotId" onchange="onColdReleaseLotChange()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"><option value="">Select Lot</option></select>
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-2">Release Qty</label>
-                                <input type="number" id="coldReleaseQty" min="0" step="any" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Release Bags</label>
+                                <input type="number" id="coldReleaseBags" min="0" step="any" oninput="updateColdReleaseExpectations()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Actual Release Qty (weighed)</label>
+                                <input type="number" id="coldReleaseQty" min="0" step="any" oninput="updateColdReleaseExpectations()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                                 <small id="coldReleaseAvailableHint" class="text-xs text-slate-500">Available in lot: 0</small>
                             </div>
                             <div>
@@ -1547,6 +1551,36 @@
                         </div>
                         <div class="mt-4">
                             <button type="button" onclick="releaseFromColdStorage()" class="bg-orange-600 text-white px-5 py-2 rounded-lg hover:bg-orange-700 transition-colors">Release Lot Qty</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4">Record Weight Loss (Shrinkage)</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Date</label>
+                                <input type="date" id="coldShrinkageDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Lot</label>
+                                <select id="coldShrinkageLotId" onchange="onColdShrinkageLotChange()" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"><option value="">Select Lot</option></select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Shrinkage Qty</label>
+                                <input type="number" id="coldShrinkageQty" min="0" step="any" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <small id="coldShrinkageAvailableHint" class="text-xs text-slate-500">Available in lot: 0</small>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">LOT/CRATE Reference</label>
+                                <input type="text" id="coldShrinkageReference" placeholder="Lot/Crate number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Remarks</label>
+                                <input type="text" id="coldShrinkageRemarks" placeholder="Water loss / natural weight loss notes" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <button type="button" onclick="recordColdStorageShrinkage()" class="bg-slate-700 text-white px-5 py-2 rounded-lg hover:bg-slate-800 transition-colors">Record Shrinkage</button>
                         </div>
                     </div>
                 </div>
@@ -1715,6 +1749,7 @@
                                 <option value="move_in">Move In</option>
                                 <option value="charge_add">Periodic Charge</option>
                                 <option value="release_out">Release</option>
+                                <option value="shrinkage">Shrinkage</option>
                                 <option value="damage">Damage</option>
                                 <option value="cold_payment">Payment</option>
                             </select>
@@ -2701,8 +2736,8 @@
                         <select id="ledgerEntity" onchange="syncLedgerEntityDisplay()" class="hidden p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                             <option value="">Select Entity</option>
                         </select>
-                        <input type="text" id="ledgerEntityInput" placeholder="Type or select entity" autocomplete="off" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                        <div id="ledgerEntityDropdown" class="absolute left-0 right-0 top-full mt-0 bg-white border border-slate-300 rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto hidden"></div>
+                        <input type="text" id="ledgerEntityInput" placeholder="Click to view all, type to search entity" autocomplete="off" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <div id="ledgerEntityDropdown" class="absolute left-0 right-0 top-full mt-0 bg-white border border-slate-300 rounded-lg shadow-lg z-[120] max-h-48 overflow-y-auto hidden"></div>
                     </div>
                     <div class="flex items-center gap-2">
                         <label class="text-sm text-slate-600 whitespace-nowrap">From</label>
