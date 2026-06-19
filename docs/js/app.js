@@ -5108,23 +5108,12 @@ function deleteAllMasters() {
 
         function renderColdStorageSummaryCards() {
             const lots = appData.coldStorageLots || [];
+            const movements = appData.coldStorageMovements || [];
             const totals = lots.reduce(function(acc, lot) {
                 const qtyInCold = Math.max(0, parseFloat(lot.qtyInCold) || 0);
                 const bagsInCold = Math.max(0, parseFloat(lot.bagsInCold) || 0);
-                const releaseQty = Math.max(0, parseFloat(lot.releaseQtyTotal) || 0);
-                const releaseBags = Math.max(0, parseFloat(lot.releaseBagsTotal) || 0);
-                const damageQty = Math.max(0, parseFloat(lot.damageQtyTotal) || 0);
-                const damageBags = Math.max(0, parseFloat(lot.damageBagsTotal) || 0);
-                const shrinkQty = Math.max(0, parseFloat(lot.shrinkageQtyTotal) || 0);
                 acc.availableQty += qtyInCold;
                 acc.availableBags += bagsInCold;
-                acc.movedQty += qtyInCold + releaseQty + damageQty + shrinkQty;
-                acc.movedBags += bagsInCold + releaseBags + damageBags;
-                acc.releasedQty += releaseQty;
-                acc.releasedBags += releaseBags;
-                acc.damagedQty += damageQty;
-                acc.damagedBags += damageBags;
-                acc.shrinkageQty += shrinkQty;
                 return acc;
             }, {
                 availableQty: 0,
@@ -5136,6 +5125,23 @@ function deleteAllMasters() {
                 damagedQty: 0,
                 damagedBags: 0,
                 shrinkageQty: 0
+            });
+            movements.forEach(function(m) {
+                const type = String(m && m.type || '').trim().toLowerCase();
+                const qty = Math.max(0, parseFloat(m && m.qty) || 0);
+                const bags = Math.max(0, parseFloat(m && m.bags) || 0);
+                if (type === 'move_in' || type === 'move') {
+                    totals.movedQty += qty;
+                    totals.movedBags += bags;
+                } else if (type === 'release_out' || type === 'release') {
+                    totals.releasedQty += qty;
+                    totals.releasedBags += bags;
+                } else if (type === 'damage') {
+                    totals.damagedQty += qty;
+                    totals.damagedBags += bags;
+                } else if (type === 'shrinkage') {
+                    totals.shrinkageQty += qty;
+                }
             });
 
             const setText = function(id, text) {
