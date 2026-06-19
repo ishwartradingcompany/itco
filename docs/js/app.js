@@ -2827,6 +2827,37 @@ function deleteAllMasters() {
             if (t === 'supplier') return (appData.suppliers || []).filter(function(s) { return s.active !== false; });
             if (t === 'customer') return (appData.customers || []).filter(function(c) { return c.active !== false; });
             if (t === 'broker') return (appData.brokers || []).filter(function(b) { return b.active !== false; });
+            if (t === 'cold_storage') {
+                var entities = [];
+                var byKey = {};
+                (appData.coldStorages || []).filter(function(cs) { return cs.active !== false && String(cs.name || '').trim(); }).forEach(function(cs) {
+                    var name = String(cs.name || '').trim();
+                    var key = normalizedName(name);
+                    if (!key || byKey[key]) return;
+                    byKey[key] = true;
+                    entities.push({
+                        id: 'cs_master_' + String(cs.id),
+                        name: name,
+                        source: 'master',
+                        masterId: String(cs.id),
+                        matchKey: key
+                    });
+                });
+                (appData.coldStorageLots || []).forEach(function(lot) {
+                    var name = String(lot && lot.coldStorageName || '').trim();
+                    var key = normalizedName(name);
+                    if (!key || byKey[key]) return;
+                    byKey[key] = true;
+                    entities.push({
+                        id: 'cs_name_' + key,
+                        name: name,
+                        source: 'name',
+                        masterId: '',
+                        matchKey: key
+                    });
+                });
+                return entities.sort(function(a, b) { return String(a.name || '').localeCompare(String(b.name || '')); });
+            }
             return [];
         }
         function syncLedgerEntityDisplay() {
@@ -11337,20 +11368,9 @@ function onPnLFilterChange() {
             const entityInput = document.getElementById('ledgerEntityInput');
             
             entitySelect.innerHTML = '<option value="">Select Entity</option>';
-            
-            if (type === 'supplier') {
-                (appData.suppliers || []).filter(function(s){ return s.active !== false; }).forEach(supplier => {
-                    entitySelect.innerHTML += `<option value="${supplier.id}">${supplier.name}</option>`;
-                });
-            } else if (type === 'customer') {
-                (appData.customers || []).filter(function(c){ return c.active !== false; }).forEach(customer => {
-                    entitySelect.innerHTML += `<option value="${customer.id}">${customer.name}</option>`;
-                });
-            } else if (type === 'broker') {
-                (appData.brokers || []).filter(function(b){ return b.active !== false; }).forEach(broker => {
-                    entitySelect.innerHTML += `<option value="${broker.id}">${broker.name}</option>`;
-                });
-            }
+            getLedgerEntitiesForType(type).forEach(function(entity) {
+                entitySelect.innerHTML += `<option value="${entity.id}">${entity.name}</option>`;
+            });
             entitySelect.value = '';
             if (entityInput) entityInput.value = '';
             const entityDropdown = document.getElementById('ledgerEntityDropdown');
@@ -11377,6 +11397,8 @@ function onPnLFilterChange() {
             let entries = [];
             let balance = 0;
             let entityName = '';
+            const ledgerEntities = getLedgerEntitiesForType(type);
+            const selectedLedgerEntity = ledgerEntities.find(function(e) { return String(e.id) === String(entityId); }) || null;
             
             // Get entity name
             if (type === 'supplier') {
@@ -11388,6 +11410,8 @@ function onPnLFilterChange() {
             } else if (type === 'broker') {
                 const broker = appData.brokers.find(b => b.id == entityId);
                 entityName = broker ? broker.name : 'Unknown Broker';
+            } else if (type === 'cold_storage') {
+                entityName = selectedLedgerEntity ? (selectedLedgerEntity.name || 'Unknown Cold Storage') : 'Unknown Cold Storage';
             }
             
             if (type === 'supplier') {
@@ -11602,6 +11626,89 @@ function onPnLFilterChange() {
                             canDelete: true
                         });
                     });
+            } else if (type === 'cold_storage') {
+                const selectedMatchKey = normalizedName((selectedLedgerEntity && selectedLedgerEntity.name) || '');
+                const selectedMasterId = String(selectedLedgerEntity && selectedLedgerEntity.masterId || '');
+                const matchesLot = function(lot) {
+                    if (!lot) return false;
+                    if (selectedMasterId && String(lot.coldStorageId || '') === selectedMasterId) return true;
+                    return normalizedName(lot.coldStorageName) === selectedMatchKey;
+                };
+                const lotById = {};
+                (appData.coldStorageLots || []).forEach(function(lot) {
+                    lotById[String(lot.id)] = lot;
+                });
+
+                // Debit entries: charges raised for this cold storage.
+                (appData.coldStorageMovements || [])
+                    .filter(function(m) {
+                        const moveType = String(m.type || '');
+                        if (!['move_in', 'charge_add'].includes(moveType)) return false;
+                        const lot = lotById[String(m.lotId || '')];
+                        if (lot) return matchesLot(lot);
+                        return normalizedName(m.coldStorageName) === selectedMatchKey;
+                    })
+                    .forEach(function(m) {
+                        const label = String(m.type || '') === 'move_in' ? 'Move to cold charge' : 'Periodic charge';
+                        entries.push({
+                            id: `cold_charge_${m.id}`,
+                            type: 'cold_charge',
+                            sourceId: m.id,
+                            date: m.date || '',
+                            description: `${label} - ${m.itemName || 'Lot'}`,
+                            invoice: m.reference || (`LOT-${m.lotId || '-'}`),
+                            debit: Math.max(0, parseFloat(m.amount) || 0),
+                            credit: 0,
+                            balance: 0,
+                            canDelete: false
+                        });
+                    });
+
+                // Credit entries: payments made to cold storage.
+                (appData.payments || [])
+                    .filter(function(p) {
+                        if (String(p.type || '').toLowerCase() !== 'cold_storage_payment') return false;
+                        const lot = lotById[String(p.invoiceId || '')];
+                        if (lot) return matchesLot(lot);
+                        return normalizedName(p.party) === selectedMatchKey;
+                    })
+                    .forEach(function(payment) {
+                        entries.push({
+                            id: `payment_${payment.id}`,
+                            type: 'payment',
+                            sourceId: payment.id,
+                            date: payment.date || '',
+                            description: `Payment - ${payment.mode || ''}${payment.paidThrough ? ' via ' + payment.paidThrough : ''}`,
+                            invoice: payment.invoice || (`COLD-${payment.invoiceId || '-'}`),
+                            debit: 0,
+                            credit: Math.max(0, parseFloat(payment.amount) || 0),
+                            balance: 0,
+                            canDelete: true
+                        });
+                    });
+
+                // Credit entries: vendor share damage recovery (if recorded).
+                (appData.coldStorageDamages || [])
+                    .filter(function(dmg) {
+                        if ((parseFloat(dmg.vendorShareAmount) || 0) <= 0) return false;
+                        const lot = lotById[String(dmg.lotId || '')];
+                        if (lot) return matchesLot(lot);
+                        return normalizedName(dmg.coldStorageName) === selectedMatchKey;
+                    })
+                    .forEach(function(damage) {
+                        entries.push({
+                            id: `cold_damage_recovery_${damage.id}`,
+                            type: 'cold_recovery',
+                            sourceId: damage.id,
+                            date: damage.date || '',
+                            description: `Damage recovery - ${damage.itemName || 'Lot'}`,
+                            invoice: damage.reference || (`LOT-${damage.lotId || '-'}`),
+                            debit: 0,
+                            credit: Math.max(0, parseFloat(damage.vendorShareAmount) || 0),
+                            balance: 0,
+                            canDelete: false
+                        });
+                    });
             }
             
             finalizeLedgerEntriesInChronologicalOrder(entries);
@@ -11646,6 +11753,10 @@ function onPnLFilterChange() {
                 receiveButton.style.display = 'block';
             } else if (type === 'broker' && balance > 0) {
                 balanceTypeElement.textContent = 'Brokerage Payable';
+                balanceElement.className = 'text-2xl font-bold text-red-600';
+                payButton.style.display = 'block';
+            } else if (type === 'cold_storage' && balance > 0) {
+                balanceTypeElement.textContent = 'Cold Storage Payable';
                 balanceElement.className = 'text-2xl font-bold text-red-600';
                 payButton.style.display = 'block';
             } else {
@@ -11694,7 +11805,13 @@ function onPnLFilterChange() {
             const entityName = meta.entityName || document.getElementById('ledgerEntityName').textContent || 'Ledger';
             const balance = meta.balance != null ? meta.balance : 0;
             const ledgerType = meta.type || 'ledger';
-            const typeLabel = ledgerType === 'supplier' ? 'Supplier' : ledgerType === 'customer' ? 'Customer' : 'Broker';
+            const typeLabel = ledgerType === 'supplier'
+                ? 'Supplier'
+                : ledgerType === 'customer'
+                    ? 'Customer'
+                    : ledgerType === 'cold_storage'
+                        ? 'Cold Storage'
+                        : 'Broker';
             const fromEl = document.getElementById('ledgerFromDate');
             const toEl = document.getElementById('ledgerToDate');
             const fromDate = fromEl && fromEl.value ? fromEl.value : '';
