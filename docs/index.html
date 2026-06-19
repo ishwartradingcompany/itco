@@ -1329,6 +1329,28 @@
             </div>
 
             <div id="coldStorageInventoryPanel" class="hidden space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-4">
+                        <p class="text-xs text-slate-500 uppercase tracking-wide">Available In Cold</p>
+                        <p id="coldSummaryAvailableQty" class="text-xl font-bold text-blue-700 mt-1">0.00 kg</p>
+                        <p id="coldSummaryAvailableBags" class="text-sm text-slate-600 mt-1">0.00 bags</p>
+                    </div>
+                    <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-4">
+                        <p class="text-xs text-slate-500 uppercase tracking-wide">Moved To Cold</p>
+                        <p id="coldSummaryMovedQty" class="text-xl font-bold text-indigo-700 mt-1">0.00 kg</p>
+                        <p id="coldSummaryMovedBags" class="text-sm text-slate-600 mt-1">0.00 bags</p>
+                    </div>
+                    <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-4">
+                        <p class="text-xs text-slate-500 uppercase tracking-wide">Damaged</p>
+                        <p id="coldSummaryDamagedQty" class="text-xl font-bold text-rose-700 mt-1">0.00 kg</p>
+                        <p id="coldSummaryDamagedBags" class="text-sm text-slate-600 mt-1">0.00 bags</p>
+                    </div>
+                    <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-4">
+                        <p class="text-xs text-slate-500 uppercase tracking-wide">Reduced (Shrinkage)</p>
+                        <p id="coldSummaryShrinkageQty" class="text-xl font-bold text-amber-700 mt-1">0.00 kg</p>
+                        <p id="coldSummaryShrinkageBags" class="text-sm text-slate-600 mt-1">0.00 bags</p>
+                    </div>
+                </div>
                 <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Move to Cold Storage</h3>
                     <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -1400,7 +1422,7 @@
                 <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Active Cold Lots</h3>
                     <div class="mb-4">
-                        <input type="text" id="coldLotsSearch" placeholder="Search lot, item, storage, vendor, supplier, remarks..." oninput="filterColdStorageLots()" class="w-full md:w-1/2 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <input type="text" id="coldLotsSearch" placeholder="Search lot, item, lot/crate, original bags, storage, vendor, supplier, remarks..." oninput="filterColdStorageLots()" class="w-full md:w-1/2 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full table-auto border border-slate-200 rounded-lg">
@@ -1419,12 +1441,13 @@
                                     <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Payable Adj.</th>
                                     <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Remaining</th>
                                     <th class="px-3 py-2 text-right text-xs font-semibold text-slate-700">Damaged Qty</th>
+                                    <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">LOT/CRATE</th>
                                     <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Remarks</th>
                                     <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="coldStorageLotsBody">
-                                <tr><td colspan="15" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>
+                                <tr><td colspan="16" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -2028,6 +2051,11 @@
                             <input type="text" id="saleKaantaParchi" placeholder="Kaanta Parchi Number" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                             <small class="text-slate-500">Optional weighbridge slip reference</small>
                         </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">City Name</label>
+                            <input type="text" id="saleCityName" placeholder="City name" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <small class="text-slate-500">Optional city for this item entry</small>
+                        </div>
                     </div>
                     <div class="mt-4">
                         <button onclick="addItemToSale()" class="bg-secondary text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">Add Item to Invoice</button>
@@ -2048,12 +2076,13 @@
                                     <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Rate</th>
                                     <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Amount</th>
                                     <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Kaanta Parchi</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">City</th>
                                     <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="currentSaleItems">
                                 <tr>
-                                    <td colspan="8" class="px-4 py-8 text-center text-slate-500">No items added yet</td>
+                                    <td colspan="9" class="px-4 py-8 text-center text-slate-500">No items added yet</td>
                                 </tr>
                             </tbody>
                             <tfoot id="currentSaleItemsTotals"></tfoot>
