@@ -5120,6 +5120,8 @@ function deleteAllMasters() {
                 acc.availableBags += bagsInCold;
                 acc.movedQty += qtyInCold + releaseQty + damageQty + shrinkQty;
                 acc.movedBags += bagsInCold + releaseBags + damageBags;
+                acc.releasedQty += releaseQty;
+                acc.releasedBags += releaseBags;
                 acc.damagedQty += damageQty;
                 acc.damagedBags += damageBags;
                 acc.shrinkageQty += shrinkQty;
@@ -5129,6 +5131,8 @@ function deleteAllMasters() {
                 availableBags: 0,
                 movedQty: 0,
                 movedBags: 0,
+                releasedQty: 0,
+                releasedBags: 0,
                 damagedQty: 0,
                 damagedBags: 0,
                 shrinkageQty: 0
@@ -5142,6 +5146,8 @@ function deleteAllMasters() {
             setText('coldSummaryAvailableBags', `${totals.availableBags.toFixed(2)} bags`);
             setText('coldSummaryMovedQty', `${totals.movedQty.toFixed(2)} kg`);
             setText('coldSummaryMovedBags', `${totals.movedBags.toFixed(2)} bags`);
+            setText('coldSummaryReleasedQty', `${totals.releasedQty.toFixed(2)} kg`);
+            setText('coldSummaryReleasedBags', `${totals.releasedBags.toFixed(2)} bags`);
             setText('coldSummaryDamagedQty', `${totals.damagedQty.toFixed(2)} kg`);
             setText('coldSummaryDamagedBags', `${totals.damagedBags.toFixed(2)} bags`);
             setText('coldSummaryShrinkageQty', `${totals.shrinkageQty.toFixed(2)} kg`);
