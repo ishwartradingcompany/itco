@@ -3647,7 +3647,7 @@ function deleteAllMasters() {
                 row.innerHTML = `
                     <td class="px-4 py-3">
                         <div>${escapeHtml(item.supplierName || '-')}</div>
-                        <div class="text-xs text-slate-500">${escapeHtml(item.date || '-')} | ${escapeHtml(item.truck || '-')} | ${escapeHtml(item.lrNumber || '-')}</div>
+                        <div class="text-xs text-slate-500">${escapeHtml(item.date || '-')} | ${escapeHtml(item.truck || '-')} | ${escapeHtml(item.lrNumber || '-')} | ${escapeHtml(item.cityName || item.city || '-')}</div>
                     </td>
                     <td class="px-4 py-3">${item.itemName}</td>
                     <td class="px-4 py-3">${item.grossWeight}</td>
@@ -5099,10 +5099,53 @@ function deleteAllMasters() {
             populateColdLotSelectors();
             populateColdMovementLotFilterOptions();
             populateColdVendorPayablesFilterOptions();
+            renderColdStorageSummaryCards();
             filterColdStorageLots();
             renderColdVendorPayablesSummary();
             renderColdStorageDamageSummary();
             renderColdStorageMovementsHistory();
+        }
+
+        function renderColdStorageSummaryCards() {
+            const lots = appData.coldStorageLots || [];
+            const totals = lots.reduce(function(acc, lot) {
+                const qtyInCold = Math.max(0, parseFloat(lot.qtyInCold) || 0);
+                const bagsInCold = Math.max(0, parseFloat(lot.bagsInCold) || 0);
+                const releaseQty = Math.max(0, parseFloat(lot.releaseQtyTotal) || 0);
+                const releaseBags = Math.max(0, parseFloat(lot.releaseBagsTotal) || 0);
+                const damageQty = Math.max(0, parseFloat(lot.damageQtyTotal) || 0);
+                const damageBags = Math.max(0, parseFloat(lot.damageBagsTotal) || 0);
+                const shrinkQty = Math.max(0, parseFloat(lot.shrinkageQtyTotal) || 0);
+                acc.availableQty += qtyInCold;
+                acc.availableBags += bagsInCold;
+                acc.movedQty += qtyInCold + releaseQty + damageQty + shrinkQty;
+                acc.movedBags += bagsInCold + releaseBags + damageBags;
+                acc.damagedQty += damageQty;
+                acc.damagedBags += damageBags;
+                acc.shrinkageQty += shrinkQty;
+                return acc;
+            }, {
+                availableQty: 0,
+                availableBags: 0,
+                movedQty: 0,
+                movedBags: 0,
+                damagedQty: 0,
+                damagedBags: 0,
+                shrinkageQty: 0
+            });
+
+            const setText = function(id, text) {
+                const el = document.getElementById(id);
+                if (el) el.textContent = text;
+            };
+            setText('coldSummaryAvailableQty', `${totals.availableQty.toFixed(2)} kg`);
+            setText('coldSummaryAvailableBags', `${totals.availableBags.toFixed(2)} bags`);
+            setText('coldSummaryMovedQty', `${totals.movedQty.toFixed(2)} kg`);
+            setText('coldSummaryMovedBags', `${totals.movedBags.toFixed(2)} bags`);
+            setText('coldSummaryDamagedQty', `${totals.damagedQty.toFixed(2)} kg`);
+            setText('coldSummaryDamagedBags', `${totals.damagedBags.toFixed(2)} bags`);
+            setText('coldSummaryShrinkageQty', `${totals.shrinkageQty.toFixed(2)} kg`);
+            setText('coldSummaryShrinkageBags', `0.00 bags`);
         }
 
         function openInlineColdRelease(lotId) {
@@ -6496,6 +6539,8 @@ function deleteAllMasters() {
                 return;
             }
             filteredColdLots = activeLots.filter(function(lot) {
+                const originalQty = Math.max(0, (parseFloat(lot.qtyInCold) || 0) + (parseFloat(lot.releaseQtyTotal) || 0) + (parseFloat(lot.damageQtyTotal) || 0) + (parseFloat(lot.shrinkageQtyTotal) || 0));
+                const originalBags = Math.max(0, (parseFloat(lot.bagsInCold) || 0) + (parseFloat(lot.releaseBagsTotal) || 0) + (parseFloat(lot.damageBagsTotal) || 0));
                 const haystack = [
                     lot.id,
                     lot.itemName,
@@ -6503,7 +6548,11 @@ function deleteAllMasters() {
                     lot.vendorName,
                     lot.supplierName,
                     lot.lotReference,
-                    lot.remarks
+                    lot.remarks,
+                    originalQty.toFixed(2),
+                    originalBags.toFixed(2),
+                    Number(lot.qtyInCold || 0).toFixed(2),
+                    Number(lot.bagsInCold || 0).toFixed(2)
                 ].map(function(v) { return String(v || '').toLowerCase(); }).join(' | ');
                 return haystack.indexOf(search) !== -1;
             });
@@ -6524,7 +6573,7 @@ function deleteAllMasters() {
                 if (!stillVisible) activeInlineReleaseLotId = null;
             }
             if (activeLots.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="15" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="16" class="px-4 py-8 text-center text-slate-500">No active cold lots yet</td></tr>';
                 const pager = document.getElementById('coldLotsPagination');
                 if (pager) pager.innerHTML = '';
                 return;
@@ -6559,6 +6608,7 @@ function deleteAllMasters() {
                     <td class="px-3 py-2 text-sm text-right text-amber-700">${RU}${Number(lot.payableAdjustmentTotal || 0).toFixed(2)}</td>
                     <td class="px-3 py-2 text-sm text-right">${RU}${Number(lot.remainingPayable || 0).toFixed(2)}</td>
                     <td class="px-3 py-2 text-sm text-right text-rose-700">${Number(lot.damageQtyTotal || 0).toFixed(2)}</td>
+                    <td class="px-3 py-2 text-sm">${escapeHtml(String(lot.lotReference || '').trim() || '-')}</td>
                     <td class="px-3 py-2 text-sm">${escapeHtml(lot.remarks || '-')}</td>
                     <td class="px-3 py-2 text-sm">
                         <div class="flex gap-2">
@@ -6575,7 +6625,7 @@ function deleteAllMasters() {
                     detailTr.className = 'border-b border-orange-200 bg-orange-50/40';
                     const inlineDate = new Date().toISOString().split('T')[0];
                     detailTr.innerHTML = `
-                        <td colspan="15" class="px-3 py-3">
+                        <td colspan="16" class="px-3 py-3">
                             <div class="rounded-lg border border-orange-200 bg-white p-4">
                                 <div class="flex items-center justify-between mb-3">
                                     <p class="font-semibold text-slate-800">Release Lot: ${escapeHtml(lot.itemName || '-')} | ${escapeHtml(lot.coldStorageName || '-')}</p>
@@ -7654,6 +7704,7 @@ function deleteAllMasters() {
             const truck = (document.getElementById('saleTruck') && document.getElementById('saleTruck').value) ? document.getElementById('saleTruck').value.trim() : '';
             const lrNumber = (document.getElementById('saleLRNumber') && document.getElementById('saleLRNumber').value) ? document.getElementById('saleLRNumber').value.trim() : '';
             const kaantaParchi = (document.getElementById('saleKaantaParchi') && document.getElementById('saleKaantaParchi').value) ? document.getElementById('saleKaantaParchi').value.trim() : '';
+            const cityName = (document.getElementById('saleCityName') && document.getElementById('saleCityName').value) ? document.getElementById('saleCityName').value.trim() : '';
             const grossWeight = parseFloat(document.getElementById('saleQuantity').value);
             const bags = parseFloat(document.getElementById('saleBags').value) || 0;
             const discountQty = parseFloat(document.getElementById('saleDiscountQty').value) || 0;
@@ -7706,6 +7757,7 @@ function deleteAllMasters() {
                 truck: truck,
                 lrNumber: lrNumber,
                 kaantaParchi: kaantaParchi,
+                cityName: cityName,
                 grossWeight: grossWeight, // Gross quantity to be deducted from inventory
                 bags: bags,
                 netWeight: netWeight, // Net quantity after discount (for display)
@@ -7737,6 +7789,8 @@ function deleteAllMasters() {
             document.getElementById('availableStock').textContent = 'Available: 0';
             var skp = document.getElementById('saleKaantaParchi');
             if (skp) skp.value = '';
+            var cityEl = document.getElementById('saleCityName');
+            if (cityEl) cityEl.value = '';
             document.getElementById('saleDiscountQtyContainer').style.display = 'none';
         }
 
@@ -7771,6 +7825,8 @@ function deleteAllMasters() {
             document.getElementById('saleRate').value = item.rate || '';
             var skp = document.getElementById('saleKaantaParchi');
             if (skp) skp.value = item.kaantaParchi || '';
+            var cityEl = document.getElementById('saleCityName');
+            if (cityEl) cityEl.value = item.cityName || item.city || '';
             if (item.date) document.getElementById('saleDate').value = item.date;
             document.getElementById('saleTruck').value = item.truck || '';
             document.getElementById('saleLRNumber').value = item.lrNumber || '';
@@ -7809,6 +7865,8 @@ function deleteAllMasters() {
             document.getElementById('availableStock').textContent = 'Available: 0';
             var skp = document.getElementById('saleKaantaParchi');
             if (skp) skp.value = '';
+            var cityEl = document.getElementById('saleCityName');
+            if (cityEl) cityEl.value = '';
             document.getElementById('saleDiscountQtyContainer').style.display = 'none';
             updateCurrentSaleItemsDisplay();
         }
@@ -7829,7 +7887,7 @@ function deleteAllMasters() {
             if (tfoot) tfoot.innerHTML = '';
             
             if (currentSaleItems.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No items added yet</td></tr>';
                 return;
             }
             
@@ -7860,6 +7918,7 @@ function deleteAllMasters() {
                     <td class="px-4 py-3">${RU}${item.rate}</td>
                     <td class="px-4 py-3">${RU}${item.total.toFixed(2)}</td>
                     <td class="px-4 py-3">${escapeHtml(item.kaantaParchi || '-')}</td>
+                    <td class="px-4 py-3">${escapeHtml(item.cityName || item.city || '-')}</td>
                     <td class="px-4 py-3">${actionCell}</td>
                 `;
                 tbody.appendChild(row);
@@ -7881,7 +7940,7 @@ function deleteAllMasters() {
                         <td class="px-4 py-3 font-semibold text-slate-800">${totals.net.toFixed(2)}</td>
                         <td class="px-4 py-3"></td>
                         <td class="px-4 py-3 font-semibold text-slate-800">${RU}${totals.amount.toFixed(2)}</td>
-                        <td class="px-4 py-3" colspan="2"></td>
+                        <td class="px-4 py-3" colspan="3"></td>
                     </tr>
                 `;
             }
@@ -12441,6 +12500,7 @@ function onPnLFilterChange() {
                             <td class="border px-2 py-1">${item.itemName}</td>
                             <td class="border px-2 py-1">${escapeHtml(item.date || sale.date || '-')}</td>
                             <td class="border px-2 py-1">${escapeHtml(item.truck || sale.truck || '-')}</td>
+                            <td class="border px-2 py-1">${escapeHtml(item.cityName || item.city || '-')}</td>
                             <td class="border px-2 py-1 text-center">${item.grossWeight}</td>
                             ${middleColumn}
                             <td class="border px-2 py-1 text-center">${item.netWeight}</td>
@@ -12526,6 +12586,7 @@ function onPnLFilterChange() {
                                 <th class="border px-2 py-1">Item</th>
                                 <th class="border px-2 py-1">Date</th>
                                 <th class="border px-2 py-1">Truck No</th>
+                                <th class="border px-2 py-1">City</th>
                                 <th class="border px-2 py-1">Gross Weight</th>
                                 <th class="border px-2 py-1">Bags/Discount</th>
                                 <th class="border px-2 py-1">Net Weight</th>
@@ -12647,6 +12708,7 @@ function onPnLFilterChange() {
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Rate</th>
                                 <th class="border border-slate-300 px-3 py-2 text-right text-sm">Amount</th>
                                 <th class="border border-slate-300 px-3 py-2 text-left text-sm">Kaanta Parchi</th>
+                                <th class="border border-slate-300 px-3 py-2 text-left text-sm">City</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -12664,6 +12726,7 @@ function onPnLFilterChange() {
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm">${RU}${item.rate.toFixed(2)}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-right text-sm font-semibold">${RU}${item.total.toFixed(2)}</td>
                                     <td class="border border-slate-300 px-3 py-2 text-sm">${escapeHtml(item.kaantaParchi || '-')}</td>
+                                    <td class="border border-slate-300 px-3 py-2 text-sm">${escapeHtml(item.cityName || item.city || '-')}</td>
                                 </tr>
                             `; }).join('')}
                         </tbody>
