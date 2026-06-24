@@ -397,6 +397,58 @@ const paginationState = {
     openingBalance: { currentPage: 1, pageSize: 10 }
 };
 
+let activeRowActionMenuKey = '';
+let rowActionMenuHandlersInited = false;
+
+function closeRowActionMenus() {
+    activeRowActionMenuKey = '';
+    document.querySelectorAll('.row-action-more-btn').forEach(function(btn) {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-expanded', 'false');
+    });
+    document.querySelectorAll('.row-action-menu').forEach(function(menu) {
+        menu.classList.add('hidden');
+    });
+}
+
+function toggleRowActionMenu(event, menuKey) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const wrap = event && event.currentTarget ? event.currentTarget.closest('.row-action-menu-wrap') : null;
+    if (!wrap) return;
+    const menu = wrap.querySelector('.row-action-menu');
+    const trigger = wrap.querySelector('.row-action-more-btn');
+    if (!menu || !trigger) return;
+
+    const shouldOpen = menu.classList.contains('hidden') || activeRowActionMenuKey !== menuKey;
+    closeRowActionMenus();
+    if (shouldOpen) {
+        menu.classList.remove('hidden');
+        trigger.classList.add('active');
+        trigger.setAttribute('aria-expanded', 'true');
+        activeRowActionMenuKey = menuKey;
+    }
+}
+
+function initRowActionMenuHandlers() {
+    if (rowActionMenuHandlersInited) return;
+    rowActionMenuHandlersInited = true;
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.row-action-menu-wrap')) {
+            closeRowActionMenus();
+        }
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeRowActionMenus();
+        }
+    });
+}
+
 const ledgerTableSort = { column: 'date', direction: 'desc' };
 
 function ledgerEntryChronoCompare(a, b) {
@@ -4643,6 +4695,7 @@ function deleteAllMasters() {
         
         function renderPurchaseTable() {
             const tbody = document.getElementById('purchaseHistory');
+            closeRowActionMenus();
             tbody.innerHTML = '';
             
             if (filteredPurchases.length === 0) {
@@ -4759,12 +4812,19 @@ function deleteAllMasters() {
                     <td class="px-4 py-3.5">
                         <div class="flex items-center justify-center gap-1.5">
                             <button onclick="viewPurchase(${purchase.id})" class="action-btn action-view" title="View"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg></button>
-                            <button onclick="printPurchaseInvoice(${purchase.id})" class="action-btn action-print" title="Print"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
-                            <button onclick="downloadPurchaseInvoiceWithLedgerJpg(${purchase.id})" class="action-btn" title="Download Invoice + Ledger JPG"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 14a1 1 0 011-1h3a1 1 0 110 2H5v1h10v-1h-2a1 1 0 110-2h3a1 1 0 011 1v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2zm7-12a1 1 0 011 1v6.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 9.586V3a1 1 0 011-1z" clip-rule="evenodd"/></svg></button>
-                            <button onclick="sendPurchaseWhatsApp(${purchase.id})" class="action-btn" title="Send WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="currentColor"><path d="M19.11 17.43c-.28-.14-1.63-.81-1.88-.9-.25-.09-.43-.14-.61.14-.18.28-.7.9-.86 1.09-.16.19-.32.21-.6.07-.28-.14-1.17-.43-2.24-1.37-.83-.74-1.39-1.65-1.55-1.93-.16-.28-.02-.44.12-.58.13-.13.28-.32.42-.49.14-.16.19-.28.28-.46.09-.19.05-.35-.02-.49-.07-.14-.61-1.47-.84-2.02-.22-.52-.44-.45-.61-.46-.16-.01-.35-.01-.53-.01-.19 0-.49.07-.75.35-.25.28-.96.94-.96 2.3 0 1.35.98 2.66 1.11 2.85.14.19 1.93 2.95 4.68 4.13.65.28 1.16.45 1.56.58.66.21 1.27.18 1.74.11.53-.08 1.63-.67 1.86-1.32.23-.65.23-1.21.16-1.32-.07-.12-.25-.19-.53-.33z"/><path d="M16.01 3.2c-7.05 0-12.78 5.73-12.78 12.78 0 2.24.58 4.42 1.68 6.34l-1.79 6.53 6.7-1.76c1.84 1 3.91 1.53 6.02 1.53h.01c7.05 0 12.78-5.73 12.78-12.78 0-3.42-1.33-6.63-3.75-9.05-2.42-2.42-5.63-3.75-9.06-3.75zm-.16 22.99h-.01c-1.89 0-3.75-.51-5.37-1.48l-.39-.23-3.97 1.04 1.06-3.87-.25-.4c-1.05-1.66-1.6-3.58-1.6-5.54 0-5.72 4.66-10.38 10.39-10.38 2.77 0 5.38 1.08 7.33 3.03 1.96 1.96 3.03 4.56 3.03 7.33 0 5.73-4.66 10.39-10.38 10.39z"/></svg></button>
                             <button onclick="editPurchase(${purchase.id})" class="action-btn action-edit" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg></button>
-                            <button onclick="payPurchase(${purchase.id})" class="action-btn action-pay" title="Pay"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12v2H6V3zm0 4h12v2h-4.5c-.83 2.07-2.6 3.56-4.74 3.94L14 21h-2.5l-5.24-8H6v-2h4.5c1.38 0 2.56-.8 3.12-1.94L6 9V7z"/></svg></button>
-                            <button onclick="deletePurchase(${purchase.id})" class="action-btn action-delete" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd"/></svg></button>
+                            <button onclick="printPurchaseInvoice(${purchase.id})" class="action-btn action-print" title="Print"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
+                            <div class="relative row-action-menu-wrap">
+                                <button type="button" onclick="toggleRowActionMenu(event, 'purchase-${purchase.id}')" class="action-btn row-action-more-btn" title="More actions" aria-haspopup="true" aria-expanded="false">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0 5.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/></svg>
+                                </button>
+                                <div class="row-action-menu hidden absolute right-0 top-9 z-[90] min-w-[220px] bg-white border border-slate-200 rounded-lg shadow-lg py-1">
+                                    <button type="button" class="row-action-menu-item" onclick="closeRowActionMenus(); downloadPurchaseInvoiceWithLedgerJpg(${purchase.id});">Download Invoice + Ledger JPG</button>
+                                    <button type="button" class="row-action-menu-item" onclick="closeRowActionMenus(); sendPurchaseWhatsApp(${purchase.id});">Send WhatsApp</button>
+                                    <button type="button" class="row-action-menu-item" onclick="closeRowActionMenus(); payPurchase(${purchase.id});">Pay</button>
+                                    <button type="button" class="row-action-menu-item row-action-menu-item-danger" onclick="closeRowActionMenus(); deletePurchase(${purchase.id});">Delete</button>
+                                </div>
+                            </div>
                         </div>
                     </td>
                 `;
@@ -9580,6 +9640,7 @@ function deleteAllMasters() {
         
         function renderSalesTable() {
             const tbody = document.getElementById('salesHistory');
+            closeRowActionMenus();
             tbody.innerHTML = '';
             
             if (filteredSales.length === 0) {
@@ -9666,12 +9727,19 @@ function deleteAllMasters() {
                     <td class="px-4 py-3.5">
                         <div class="flex items-center justify-center gap-1.5">
                             <button onclick="viewSale(${sale.id})" class="action-btn action-view" title="View"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg></button>
-                            <button onclick="printSaleInvoice(${sale.id})" class="action-btn action-print" title="Print Invoice"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
-                            <button onclick="downloadSaleInvoiceWithLedgerJpg(${sale.id})" class="action-btn" title="Download Invoice + Ledger JPG"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 14a1 1 0 011-1h3a1 1 0 110 2H5v1h10v-1h-2a1 1 0 110-2h3a1 1 0 011 1v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2zm7-12a1 1 0 011 1v6.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 9.586V3a1 1 0 011-1z" clip-rule="evenodd"/></svg></button>
-                            <button onclick="sendSaleWhatsApp(${sale.id})" class="action-btn" title="Send WhatsApp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="currentColor"><path d="M19.11 17.43c-.28-.14-1.63-.81-1.88-.9-.25-.09-.43-.14-.61.14-.18.28-.7.9-.86 1.09-.16.19-.32.21-.6.07-.28-.14-1.17-.43-2.24-1.37-.83-.74-1.39-1.65-1.55-1.93-.16-.28-.02-.44.12-.58.13-.13.28-.32.42-.49.14-.16.19-.28.28-.46.09-.19.05-.35-.02-.49-.07-.14-.61-1.47-.84-2.02-.22-.52-.44-.45-.61-.46-.16-.01-.35-.01-.53-.01-.19 0-.49.07-.75.35-.25.28-.96.94-.96 2.3 0 1.35.98 2.66 1.11 2.85.14.19 1.93 2.95 4.68 4.13.65.28 1.16.45 1.56.58.66.21 1.27.18 1.74.11.53-.08 1.63-.67 1.86-1.32.23-.65.23-1.21.16-1.32-.07-.12-.25-.19-.53-.33z"/><path d="M16.01 3.2c-7.05 0-12.78 5.73-12.78 12.78 0 2.24.58 4.42 1.68 6.34l-1.79 6.53 6.7-1.76c1.84 1 3.91 1.53 6.02 1.53h.01c7.05 0 12.78-5.73 12.78-12.78 0-3.42-1.33-6.63-3.75-9.05-2.42-2.42-5.63-3.75-9.06-3.75zm-.16 22.99h-.01c-1.89 0-3.75-.51-5.37-1.48l-.39-.23-3.97 1.04 1.06-3.87-.25-.4c-1.05-1.66-1.6-3.58-1.6-5.54 0-5.72 4.66-10.38 10.39-10.38 2.77 0 5.38 1.08 7.33 3.03 1.96 1.96 3.03 4.56 3.03 7.33 0 5.73-4.66 10.39-10.38 10.39z"/></svg></button>
                             <button onclick="editSale(${sale.id})" class="action-btn action-edit" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg></button>
-                            <button onclick="receiveSale(${sale.id})" class="action-btn action-pay" title="Receive Payment"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12v2H6V3zm0 4h12v2h-4.5c-.83 2.07-2.6 3.56-4.74 3.94L14 21h-2.5l-5.24-8H6v-2h4.5c1.38 0 2.56-.8 3.12-1.94L6 9V7z"/></svg></button>
-                            <button onclick="deleteSale(${sale.id})" class="action-btn action-delete" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd"/></svg></button>
+                            <button onclick="printSaleInvoice(${sale.id})" class="action-btn action-print" title="Print Invoice"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
+                            <div class="relative row-action-menu-wrap">
+                                <button type="button" onclick="toggleRowActionMenu(event, 'sale-${sale.id}')" class="action-btn row-action-more-btn" title="More actions" aria-haspopup="true" aria-expanded="false">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0 5.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/></svg>
+                                </button>
+                                <div class="row-action-menu hidden absolute right-0 top-9 z-[90] min-w-[220px] bg-white border border-slate-200 rounded-lg shadow-lg py-1">
+                                    <button type="button" class="row-action-menu-item" onclick="closeRowActionMenus(); downloadSaleInvoiceWithLedgerJpg(${sale.id});">Download Invoice + Ledger JPG</button>
+                                    <button type="button" class="row-action-menu-item" onclick="closeRowActionMenus(); sendSaleWhatsApp(${sale.id});">Send WhatsApp</button>
+                                    <button type="button" class="row-action-menu-item" onclick="closeRowActionMenus(); receiveSale(${sale.id});">Receive Payment</button>
+                                    <button type="button" class="row-action-menu-item row-action-menu-item-danger" onclick="closeRowActionMenus(); deleteSale(${sale.id});">Delete</button>
+                                </div>
+                            </div>
                         </div>
                     </td>
                 `;
@@ -14430,6 +14498,7 @@ function exportLedgerStatement() {
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
             loadData();
+            initRowActionMenuHandlers();
             showPage('home');
             updateItemsList();
             updateSuppliersList();
