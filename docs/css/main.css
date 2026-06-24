@@ -1263,3 +1263,64 @@
             line-height: 1.35;
             word-break: break-word;
         }
+
+        #purchaseHistoryView .row-action-menu-wrap,
+        #salesHistoryView .row-action-menu-wrap {
+            position: relative;
+        }
+
+        #purchaseHistoryView .row-action-more-btn,
+        #salesHistoryView .row-action-more-btn {
+            color: #475569;
+            border: 1px solid transparent;
+        }
+
+        #purchaseHistoryView .row-action-more-btn:hover,
+        #salesHistoryView .row-action-more-btn:hover,
+        #purchaseHistoryView .row-action-more-btn.active,
+        #salesHistoryView .row-action-more-btn.active {
+            background: linear-gradient(135deg, rgba(71, 85, 105, 0.12) 0%, rgba(71, 85, 105, 0.2) 100%);
+            border-color: rgba(71, 85, 105, 0.25);
+            color: #334155;
+        }
+
+        #purchaseHistoryView .row-action-menu,
+        #salesHistoryView .row-action-menu {
+            min-width: 220px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+            overflow: hidden;
+        }
+
+        #purchaseHistoryView .row-action-menu-item,
+        #salesHistoryView .row-action-menu-item {
+            width: 100%;
+            text-align: left;
+            padding: 9px 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #334155;
+            background: transparent;
+            border: 0;
+            cursor: pointer;
+            transition: background-color 0.15s ease, color 0.15s ease;
+        }
+
+        #purchaseHistoryView .row-action-menu-item:hover,
+        #salesHistoryView .row-action-menu-item:hover {
+            background: #f8fafc;
+            color: #0f172a;
+        }
+
+        #purchaseHistoryView .row-action-menu-item-danger,
+        #salesHistoryView .row-action-menu-item-danger {
+            color: #dc2626;
+        }
+
+        #purchaseHistoryView .row-action-menu-item-danger:hover,
+        #salesHistoryView .row-action-menu-item-danger:hover {
+            background: #fef2f2;
+            color: #b91c1c;
+        }
