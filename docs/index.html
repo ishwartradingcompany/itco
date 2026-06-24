@@ -519,7 +519,7 @@
 
     <!-- Page 2: Master -->
     <div id="master" class="page-content hidden">
-        <div class="max-w-7xl mx-auto px-4 py-8">
+        <div class="max-w-[1500px] mx-auto px-4 py-8 lg:px-6">
                 <div class="mb-6 border-l-4 border-blue-600 pl-4">
                 <h2 class="text-3xl font-bold text-slate-900">Master Data Management</h2>
                 <p class="text-slate-600 text-sm mt-1">Search within each section below to filter that master list.</p>
@@ -707,9 +707,9 @@
             </div>
             
             <!-- Purchase History (Shown by default) -->
-            <div id="purchaseHistoryView" class="space-y-4">
+            <div id="purchaseHistoryView" class="space-y-5">
                 <!-- Header Section with Stats -->
-                <div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-5 text-white shadow-lg">
+                <div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 text-white shadow-lg border border-blue-500/30">
                     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                         <div>
                             <h3 class="text-xl font-bold flex items-center gap-2">
@@ -720,16 +720,16 @@
                             </h3>
                             <p class="text-blue-100 text-sm mt-1">Manage and track all your purchase invoices</p>
                         </div>
-                        <div class="flex gap-3">
-                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                        <div class="flex flex-wrap gap-3">
+                            <div class="bg-white/15 backdrop-blur rounded-xl px-4 py-3 text-center min-w-[130px]">
                                 <p class="text-2xl font-bold" id="purchaseTotalCount">0</p>
                                 <p class="text-xs text-blue-100">Total Invoices</p>
                             </div>
-                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                            <div class="bg-white/15 backdrop-blur rounded-xl px-4 py-3 text-center min-w-[130px]">
                                 <p class="text-2xl font-bold" id="purchaseTotalAmount">&#8377;0</p>
                                 <p class="text-xs text-blue-100">Total Value</p>
                             </div>
-                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                            <div class="bg-white/15 backdrop-blur rounded-xl px-4 py-3 text-center min-w-[130px]">
                                 <p class="text-2xl font-bold" id="purchasePendingAmount">&#8377;0</p>
                                 <p class="text-xs text-blue-100">Pending</p>
                             </div>
@@ -738,7 +738,7 @@
                 </div>
                 
                 <!-- Filter Section -->
-                <div class="bg-white rounded-xl shadow-md border border-slate-200 p-4">
+                <div class="bg-white rounded-xl shadow-md border border-slate-200 p-5">
                     <div class="flex items-center justify-between mb-3">
                         <h4 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
                             <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -753,30 +753,30 @@
                             Clear All
                         </button>
                     </div>
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                         <div class="col-span-2 md:col-span-1">
                             <div class="relative">
                                 <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                                 </svg>
                                 <input type="text" id="purchaseSearch" placeholder="Search..." 
-                                    class="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50"
+                                    class="w-full pl-9 pr-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50"
                                     onkeyup="filterPurchases()">
                             </div>
                         </div>
                         <div>
-                            <select id="purchaseFilterSupplier" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()">
+                            <select id="purchaseFilterSupplier" class="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()">
                                 <option value="">All Suppliers</option>
                             </select>
                         </div>
                         <div>
-                            <input type="date" id="purchaseDateFrom" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()" title="From Date">
+                            <input type="date" id="purchaseDateFrom" class="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()" title="From Date">
                         </div>
                         <div>
-                            <input type="date" id="purchaseDateTo" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()" title="To Date">
+                            <input type="date" id="purchaseDateTo" class="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()" title="To Date">
                         </div>
                         <div>
-                            <select id="purchaseSort" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()">
+                            <select id="purchaseSort" class="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="filterPurchases()">
                                 <option value="date-desc">Newest First</option>
                                 <option value="date-asc">Oldest First</option>
                                 <option value="amount-desc">Amount (high)</option>
@@ -792,25 +792,26 @@
                 </div>
                 
                 <!-- Table Section -->
-                <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+                <div class="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full">
+                        <table class="w-full text-sm">
                             <thead>
                                 <tr class="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</th>
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Invoice</th>
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Supplier</th>
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Truck</th>
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Items</th>
-                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Amount</th>
-                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Paid</th>
-                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Balance</th>
-                                    <th class="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
+                                    <th class="w-[110px] px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Date</th>
+                                    <th class="w-[150px] px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Invoice</th>
+                                    <th class="min-w-[170px] px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Supplier</th>
+                                    <th class="w-[140px] px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Truck</th>
+                                    <th class="w-[120px] px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Items</th>
+                                    <th class="min-w-[230px] px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Linked Details</th>
+                                    <th class="w-[135px] px-4 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Amount</th>
+                                    <th class="w-[135px] px-4 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Paid</th>
+                                    <th class="w-[140px] px-4 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Balance</th>
+                                    <th class="w-[190px] px-4 py-3.5 text-center text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="purchaseHistory" class="divide-y divide-slate-100">
                                 <tr>
-                                    <td colspan="9" class="px-4 py-12 text-center">
+                                    <td colspan="10" class="px-4 py-12 text-center">
                                         <div class="flex flex-col items-center text-slate-400">
                                             <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
@@ -823,7 +824,7 @@
                             </tbody>
                         </table>
                     </div>
-                    <div id="purchasePagination" class="pagination-container border-t border-slate-100"></div>
+                    <div id="purchasePagination" class="pagination-container border-t border-slate-100 px-4 py-3"></div>
                 </div>
             </div>
 
@@ -1830,7 +1831,7 @@
 
     <!-- Page 5: Sales -->
     <div id="sales" class="page-content hidden">
-        <div class="max-w-7xl mx-auto px-4 py-8">
+        <div class="max-w-[1500px] mx-auto px-4 py-8 lg:px-6">
             <div class="flex justify-between items-center mb-8 border-l-4 border-blue-600 pl-4">
                 <h2 class="text-3xl font-bold text-slate-900">Sales Management</h2>
                 <button onclick="showSalesForm()" id="addSalesBtn" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 shadow-md">
@@ -1840,9 +1841,9 @@
             </div>
             
             <!-- Sales History (Shown by default) -->
-            <div id="salesHistoryView" class="space-y-4">
+            <div id="salesHistoryView" class="space-y-5">
                 <!-- Header Section with Stats -->
-                <div class="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-5 text-white shadow-lg">
+                <div class="bg-gradient-to-r from-green-600 to-emerald-600 rounded-2xl p-6 text-white shadow-lg border border-emerald-500/30">
                     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                         <div>
                             <h3 class="text-xl font-bold flex items-center gap-2">
@@ -1853,16 +1854,16 @@
                             </h3>
                             <p class="text-green-100 text-sm mt-1">Manage and track all your sales invoices</p>
                         </div>
-                        <div class="flex gap-3">
-                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                        <div class="flex flex-wrap gap-3">
+                            <div class="bg-white/15 backdrop-blur rounded-xl px-4 py-3 text-center min-w-[130px]">
                                 <p class="text-2xl font-bold" id="salesTotalCount">0</p>
                                 <p class="text-xs text-green-100">Total Invoices</p>
                             </div>
-                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                            <div class="bg-white/15 backdrop-blur rounded-xl px-4 py-3 text-center min-w-[130px]">
                                 <p class="text-2xl font-bold" id="salesTotalAmount">&#8377;0</p>
                                 <p class="text-xs text-green-100">Total Value</p>
                             </div>
-                            <div class="bg-white/15 backdrop-blur rounded-lg px-4 py-2 text-center">
+                            <div class="bg-white/15 backdrop-blur rounded-xl px-4 py-3 text-center min-w-[130px]">
                                 <p class="text-2xl font-bold" id="salesPendingAmount">&#8377;0</p>
                                 <p class="text-xs text-green-100">Receivable</p>
                             </div>
@@ -1871,7 +1872,7 @@
                 </div>
                 
                 <!-- Filter Section -->
-                <div class="bg-white rounded-xl shadow-md border border-slate-200 p-4">
+                <div class="bg-white rounded-xl shadow-md border border-slate-200 p-5">
                     <div class="flex items-center justify-between mb-3">
                         <h4 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
                             <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1886,30 +1887,30 @@
                             Clear All
                         </button>
                     </div>
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                         <div class="col-span-2 md:col-span-1">
                             <div class="relative">
                                 <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                                 </svg>
                                 <input type="text" id="salesSearch" placeholder="Search..." 
-                                    class="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-slate-50"
+                                    class="w-full pl-9 pr-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-slate-50"
                                     onkeyup="filterSales()">
                             </div>
                         </div>
                         <div>
-                            <select id="salesFilterCustomer" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()">
+                            <select id="salesFilterCustomer" class="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()">
                                 <option value="">All Customers</option>
                             </select>
                         </div>
                         <div>
-                            <input type="date" id="salesDateFrom" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()" title="From Date">
+                            <input type="date" id="salesDateFrom" class="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()" title="From Date">
                         </div>
                         <div>
-                            <input type="date" id="salesDateTo" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()" title="To Date">
+                            <input type="date" id="salesDateTo" class="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()" title="To Date">
                         </div>
                         <div>
-                            <select id="salesSort" class="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()">
+                            <select id="salesSort" class="w-full p-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 bg-slate-50" onchange="filterSales()">
                                 <option value="date-desc">Newest First</option>
                                 <option value="date-asc">Oldest First</option>
                                 <option value="amount-desc">Amount (high)</option>
@@ -1925,25 +1926,26 @@
                 </div>
                 
                 <!-- Table Section -->
-                <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+                <div class="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full">
+                        <table class="w-full text-sm">
                             <thead>
                                 <tr class="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</th>
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Invoice</th>
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Customer</th>
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Truck</th>
-                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Items</th>
-                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Amount</th>
-                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Received</th>
-                                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Balance</th>
-                                    <th class="px-4 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
+                                    <th class="w-[110px] px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Date</th>
+                                    <th class="w-[150px] px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Invoice</th>
+                                    <th class="min-w-[170px] px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Customer</th>
+                                    <th class="w-[140px] px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Truck</th>
+                                    <th class="w-[120px] px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Items</th>
+                                    <th class="min-w-[230px] px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Linked Details</th>
+                                    <th class="w-[135px] px-4 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Amount</th>
+                                    <th class="w-[135px] px-4 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Received</th>
+                                    <th class="w-[140px] px-4 py-3.5 text-right text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Balance</th>
+                                    <th class="w-[190px] px-4 py-3.5 text-center text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="salesHistory" class="divide-y divide-slate-100">
                                 <tr>
-                                    <td colspan="9" class="px-4 py-12 text-center">
+                                    <td colspan="10" class="px-4 py-12 text-center">
                                         <div class="flex flex-col items-center text-slate-400">
                                             <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
@@ -1956,7 +1958,7 @@
                             </tbody>
                         </table>
                     </div>
-                    <div id="salesPagination" class="pagination-container border-t border-slate-100"></div>
+                    <div id="salesPagination" class="pagination-container border-t border-slate-100 px-4 py-3"></div>
                 </div>
             </div>
 
