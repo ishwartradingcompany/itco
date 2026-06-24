@@ -4648,7 +4648,7 @@ function deleteAllMasters() {
             if (filteredPurchases.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="9" class="px-4 py-12 text-center">
+                        <td colspan="10" class="px-4 py-12 text-center">
                             <div class="flex flex-col items-center text-slate-400">
                                 <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
@@ -4679,9 +4679,20 @@ function deleteAllMasters() {
                         return String(lp.purchaseId) === String(purchase.id);
                     });
                 });
-                var linkedInvoices = Array.from(new Set(linkedSales.map(function(s) {
-                    return s.invoice || ('Sale #' + s.id);
-                })));
+                var linkedDetails = linkedSales.map(function(s) {
+                    var normalizedLinks = normalizeLinkedPurchasesForItems(s.linkedPurchases || [], s.items || []);
+                    var qty = normalizedLinks.reduce(function(sum, lp) {
+                        return String(lp.purchaseId) === String(purchase.id) ? (sum + getLinkedQtyValue(lp)) : sum;
+                    }, 0);
+                    var bags = normalizedLinks.reduce(function(sum, lp) {
+                        return String(lp.purchaseId) === String(purchase.id) ? (sum + getLinkedBagsValue(lp)) : sum;
+                    }, 0);
+                    return {
+                        invoice: s.invoice || ('Sale #' + s.id),
+                        qty: qty,
+                        bags: bags
+                    };
+                });
                 var purchaseColdLots = (appData.coldStorageLots || []).filter(function(lot) {
                     return String(lot && lot.purchaseId || '') === String(purchase.id);
                 });
@@ -4700,44 +4711,53 @@ function deleteAllMasters() {
                         : 'Moved to Cold';
                     statusBadges.push('<span class="inline-block mr-1 mb-1 px-1.5 py-0.5 rounded text-xs font-medium bg-cyan-100 text-cyan-800" title="Cold storage status for this purchase">' + escapeHtml(coldStatusText) + '</span>');
                 }
-                if (linkedInvoices.length > 0) {
-                    statusBadges.push('<span class="inline-block mr-1 mb-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Linked to sale invoice(s): ' + escapeHtml(linkedInvoices.join(', ')) + '">Linked to: ' + escapeHtml(linkedInvoices.join(', ')) + '</span>');
-                }
-                var statusBadgesHtml = statusBadges.length > 0
+                var linkedDetailsHtml = linkedDetails.length > 0
+                    ? linkedDetails.map(function(entry) {
+                        return '<div class="mb-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">' +
+                            '<div class="font-semibold">' + escapeHtml(entry.invoice) + '</div>' +
+                            '<div>Qty: ' + Number(entry.qty || 0).toFixed(2) + ' kg | Bags: ' + Number(entry.bags || 0).toFixed(2) + '</div>' +
+                            '</div>';
+                    }).join('')
+                    : '<span class="text-xs text-slate-400">-</span>';
+                var extraBadgesHtml = statusBadges.length > 0
                     ? '<div class="mt-1">' + statusBadges.join('') + '</div>'
                     : '';
                 
                 const row = document.createElement('tr');
-                row.className = 'hover:bg-blue-50/50 transition-colors';
+                row.className = 'hover:bg-blue-50/50 transition-colors align-top';
                 row.innerHTML = `
-                    <td class="px-4 py-3 text-sm">
-                        <span class="text-slate-600">${escapeHtml(purchaseDateText)}</span>
+                    <td class="px-4 py-3.5 text-sm whitespace-nowrap">
+                        <span class="text-slate-600 font-medium">${escapeHtml(purchaseDateText)}</span>
                     </td>
-                    <td class="px-4 py-3">
-                        <span class="font-mono text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">${purchase.masterInvoice || purchase.invoice}</span>${statusBadgesHtml}
+                    <td class="px-4 py-3.5 whitespace-nowrap">
+                        <span class="font-mono text-sm font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded">${purchase.masterInvoice || purchase.invoice}</span>
                     </td>
-                    <td class="px-4 py-3">
+                    <td class="px-4 py-3.5">
                         <span class="font-medium text-slate-700 text-sm">${escapeHtml(purchase.supplierName)}</span>
                     </td>
-                    <td class="px-4 py-3 text-sm text-slate-500">${escapeHtml(purchaseTruckText)}</td>
-                    <td class="px-4 py-3">
+                    <td class="px-4 py-3.5 text-sm text-slate-500 whitespace-nowrap">${escapeHtml(purchaseTruckText)}</td>
+                    <td class="px-4 py-3.5">
                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
                             ${itemsText}
                         </span>
                     </td>
-                    <td class="px-4 py-3 text-right">
+                    <td class="px-4 py-3.5 min-w-[220px]">
+                        ${linkedDetailsHtml}
+                        ${extraBadgesHtml}
+                    </td>
+                    <td class="px-4 py-3.5 text-right whitespace-nowrap">
                         <span class="font-semibold text-slate-800">${RU}${grandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
                     </td>
-                    <td class="px-4 py-3 text-right">
+                    <td class="px-4 py-3.5 text-right whitespace-nowrap">
                         <span class="text-green-600 font-medium">${RU}${paid.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
                     </td>
-                    <td class="px-4 py-3 text-right">
+                    <td class="px-4 py-3.5 text-right whitespace-nowrap">
                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${currentBalance > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}">
                             ${currentBalance > 0 ? RU + currentBalance.toLocaleString('en-IN', {minimumFractionDigits: 2}) : 'Paid ' + CHECK}
                         </span>
                     </td>
-                    <td class="px-4 py-3">
-                        <div class="flex items-center justify-center gap-1">
+                    <td class="px-4 py-3.5">
+                        <div class="flex items-center justify-center gap-1.5">
                             <button onclick="viewPurchase(${purchase.id})" class="action-btn action-view" title="View"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg></button>
                             <button onclick="printPurchaseInvoice(${purchase.id})" class="action-btn action-print" title="Print"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
                             <button onclick="downloadPurchaseInvoiceWithLedgerJpg(${purchase.id})" class="action-btn" title="Download Invoice + Ledger JPG"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 14a1 1 0 011-1h3a1 1 0 110 2H5v1h10v-1h-2a1 1 0 110-2h3a1 1 0 011 1v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2zm7-12a1 1 0 011 1v6.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 9.586V3a1 1 0 011-1z" clip-rule="evenodd"/></svg></button>
@@ -9565,7 +9585,7 @@ function deleteAllMasters() {
             if (filteredSales.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="9" class="px-4 py-12 text-center">
+                        <td colspan="10" class="px-4 py-12 text-center">
                             <div class="flex flex-col items-center text-slate-400">
                                 <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
@@ -9592,56 +9612,59 @@ function deleteAllMasters() {
                 const saleDateText = summarizeMultiValue(sale.multiDates || [sale.date], sale.date || '-');
                 const saleTruckText = summarizeMultiValue(sale.multiTrucks || [sale.truck], sale.truck || '-');
                 const linkedRows = normalizeLinkedPurchasesForItems((sale && sale.linkedPurchases) ? sale.linkedPurchases : [], sale.items || []);
-                const linkedPurchaseSummary = [];
-                const linkedSeen = {};
+                const linkedPurchaseMap = {};
                 linkedRows.forEach(function(lp) {
                     const purchase = (appData.purchases || []).find(function(p) { return String(p.id) === String(lp.purchaseId); });
                     const invoice = purchase ? (purchase.invoice || lp.purchaseId) : (lp.purchaseId || '-');
                     const key = String(invoice);
-                    if (linkedSeen[key]) return;
-                    linkedSeen[key] = true;
-                    linkedPurchaseSummary.push(invoice);
+                    if (!linkedPurchaseMap[key]) linkedPurchaseMap[key] = { invoice: invoice, qty: 0, bags: 0 };
+                    linkedPurchaseMap[key].qty += getLinkedQtyValue(lp);
+                    linkedPurchaseMap[key].bags += getLinkedBagsValue(lp);
                 });
-                const linkedPurchaseHtml = linkedPurchaseSummary.length
-                    ? linkedPurchaseSummary.map(function(inv) {
-                        return `<div class="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-0.5 mb-1 inline-block mr-1">${escapeHtml(inv)}</div>`;
+                const linkedPurchaseGroups = Object.values(linkedPurchaseMap);
+                const linkedPurchaseDetailsHtml = linkedPurchaseGroups.length
+                    ? linkedPurchaseGroups.map(function(row) {
+                        return `<div class="mb-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-800">
+                            <div class="font-semibold">${escapeHtml(row.invoice)}</div>
+                            <div>Qty: ${Number(row.qty || 0).toFixed(2)} kg | Bags: ${Number(row.bags || 0).toFixed(2)}</div>
+                        </div>`;
                     }).join('')
-                    : '';
-                const invoiceLinkedHtml = linkedPurchaseHtml
-                    ? `<div class="mt-1">${linkedPurchaseHtml}</div>`
-                    : '';
+                    : '<span class="text-xs text-slate-400">-</span>';
                 
                 const row = document.createElement('tr');
-                row.className = 'hover:bg-green-50/50 transition-colors';
+                row.className = 'hover:bg-green-50/50 transition-colors align-top';
                 row.innerHTML = `
-                    <td class="px-4 py-3 text-sm">
-                        <span class="text-slate-600">${escapeHtml(saleDateText)}</span>
+                    <td class="px-4 py-3.5 text-sm whitespace-nowrap">
+                        <span class="text-slate-600 font-medium">${escapeHtml(saleDateText)}</span>
                     </td>
-                    <td class="px-4 py-3">
-                        <span class="font-mono text-sm font-medium text-green-600 bg-green-50 px-2 py-1 rounded">${sale.masterInvoice || sale.invoice}</span>${invoiceLinkedHtml}
+                    <td class="px-4 py-3.5 whitespace-nowrap">
+                        <span class="font-mono text-sm font-semibold text-green-600 bg-green-50 px-2 py-1 rounded">${sale.masterInvoice || sale.invoice}</span>
                     </td>
-                    <td class="px-4 py-3">
+                    <td class="px-4 py-3.5">
                         <span class="font-medium text-slate-700 text-sm">${escapeHtml(sale.customerName)}</span>
                     </td>
-                    <td class="px-4 py-3 text-sm text-slate-500">${escapeHtml(saleTruckText)}</td>
-                    <td class="px-4 py-3">
+                    <td class="px-4 py-3.5 text-sm text-slate-500 whitespace-nowrap">${escapeHtml(saleTruckText)}</td>
+                    <td class="px-4 py-3.5">
                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
                             ${itemsText}
                         </span>
                     </td>
-                    <td class="px-4 py-3 text-right">
+                    <td class="px-4 py-3.5 min-w-[220px]">
+                        ${linkedPurchaseDetailsHtml}
+                    </td>
+                    <td class="px-4 py-3.5 text-right whitespace-nowrap">
                         <span class="font-semibold text-slate-800">${RU}${grandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
                     </td>
-                    <td class="px-4 py-3 text-right">
+                    <td class="px-4 py-3.5 text-right whitespace-nowrap">
                         <span class="text-green-600 font-medium">${RU}${received.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
                     </td>
-                    <td class="px-4 py-3 text-right">
+                    <td class="px-4 py-3.5 text-right whitespace-nowrap">
                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${currentBalance > 0 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}">
                             ${currentBalance > 0 ? RU + currentBalance.toLocaleString('en-IN', {minimumFractionDigits: 2}) : 'Received ' + CHECK}
                         </span>
                     </td>
-                    <td class="px-4 py-3">
-                        <div class="flex items-center justify-center gap-1">
+                    <td class="px-4 py-3.5">
+                        <div class="flex items-center justify-center gap-1.5">
                             <button onclick="viewSale(${sale.id})" class="action-btn action-view" title="View"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg></button>
                             <button onclick="printSaleInvoice(${sale.id})" class="action-btn action-print" title="Print Invoice"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
                             <button onclick="downloadSaleInvoiceWithLedgerJpg(${sale.id})" class="action-btn" title="Download Invoice + Ledger JPG"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 14a1 1 0 011-1h3a1 1 0 110 2H5v1h10v-1h-2a1 1 0 110-2h3a1 1 0 011 1v2a2 2 0 01-2 2H5a2 2 0 01-2-2v-2zm7-12a1 1 0 011 1v6.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 9.586V3a1 1 0 011-1z" clip-rule="evenodd"/></svg></button>
