@@ -1206,3 +1206,60 @@
         /* Margins */
         .mb-4 { margin-bottom: 12px !important; }
         .mb-6 { margin-bottom: 14px !important; }
+
+        /* Purchase + Sales history polish (scoped) */
+        #purchase > div,
+        #sales > div {
+            max-width: 1500px !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+        }
+
+        @media (min-width: 1024px) {
+            #purchase > div,
+            #sales > div {
+                padding-left: 24px !important;
+                padding-right: 24px !important;
+            }
+        }
+
+        #purchaseHistoryView table thead th,
+        #salesHistoryView table thead th {
+            padding: 14px 16px !important;
+            font-size: 0.72rem !important;
+            letter-spacing: 0.08em !important;
+        }
+
+        #purchaseHistoryView table tbody td,
+        #salesHistoryView table tbody td {
+            padding: 14px 16px !important;
+            font-size: 0.84rem !important;
+            vertical-align: top !important;
+        }
+
+        #purchaseHistoryView .pagination-container,
+        #salesHistoryView .pagination-container {
+            padding: 12px 16px !important;
+            margin-top: 0 !important;
+        }
+
+        #purchaseHistoryView .action-btn,
+        #salesHistoryView .action-btn {
+            width: 34px;
+            height: 34px;
+        }
+
+        #purchaseHistoryView .action-btn svg,
+        #salesHistoryView .action-btn svg {
+            width: 15px;
+            height: 15px;
+        }
+
+        #purchaseHistoryView td .bg-amber-50,
+        #salesHistoryView td .bg-blue-50 {
+            border-radius: 10px;
+            line-height: 1.35;
+            word-break: break-word;
+        }
