@@ -563,7 +563,6 @@
     }
 
 /* Pagination */
-<style>
     /* Pagination Styles */
     .pagination-container {
         display: flex;
@@ -676,7 +675,6 @@
     }
 
 /* Loading animation */
-<style>
     @keyframes loading-bar {
         0% { width: 0%; margin-left: 0; }
         50% { width: 60%; margin-left: 20%; }
@@ -687,7 +685,6 @@
     }
 
 /* Responsive & page content */
-    <style>
         /* Enhanced Input Styling */
         input[type="text"],
         input[type="number"],
@@ -1644,5 +1641,287 @@
 
             #ledger #ledgerSummaryCards .ledger-summary-value {
                 font-size: 1.15rem;
+            }
+        }
+
+        /* Profit & Loss corporate polish */
+        #pnl .pnl-page-shell {
+            max-width: 1360px;
+        }
+
+        #pnl .pnl-panel {
+            border: 1px solid #dbe5f0;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        }
+
+        #pnl .pnl-panel-title {
+            font-size: 1.05rem;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            color: #334155;
+            margin-bottom: 1.15rem;
+        }
+
+        #pnl .pnl-filter-grid {
+            gap: 0.85rem;
+        }
+
+        #pnl .pnl-control {
+            border-color: #cbd5e1;
+            background: #fff;
+            min-height: 46px;
+            font-weight: 500;
+            color: #1e293b;
+        }
+
+        #pnl .pnl-control:hover {
+            border-color: #94a3b8;
+        }
+
+        #pnl .pnl-generate-btn {
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            box-shadow: 0 8px 16px rgba(22, 163, 74, 0.25);
+        }
+
+        #pnl #customDateRange.pnl-custom-date-range {
+            margin-top: 0.85rem !important;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            padding: 0.72rem;
+            border: 1px solid #dbe5f0;
+            border-radius: 12px;
+            background: #f8fafc;
+        }
+
+        #pnl .pnl-custom-date-label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #475569;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+
+        #pnl .pnl-custom-date-input {
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 0.4rem 0.55rem;
+            color: #1e293b;
+            background: #fff;
+        }
+
+        #pnl .pnl-custom-date-apply {
+            border: 0;
+            border-radius: 9px;
+            padding: 0.45rem 0.9rem;
+            background: #334155;
+            color: #fff;
+            font-size: 0.78rem;
+            font-weight: 700;
+            transition: background-color 0.16s ease;
+        }
+
+        #pnl .pnl-custom-date-apply:hover {
+            background: #1e293b;
+        }
+
+        #pnl .pnl-kpi-grid-main,
+        #pnl .pnl-kpi-grid-breakdown {
+            gap: 1rem;
+        }
+
+        #pnl .pnl-kpi-card {
+            border-top: 1px solid #e2e8f0;
+            border-right: 1px solid #e2e8f0;
+            border-bottom: 1px solid #dbe5f0;
+            border-radius: 14px;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+            background: linear-gradient(165deg, #ffffff 0%, #f8fafc 70%, #f1f5f9 100%);
+            padding: 1rem 1rem 0.95rem;
+        }
+
+        #pnl .pnl-kpi-card h4 {
+            margin-bottom: 0.38rem;
+            font-size: 0.84rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: #64748b;
+            line-height: 1.35;
+        }
+
+        #pnl .pnl-kpi-card p {
+            margin-top: 0.25rem;
+            letter-spacing: 0.01em;
+        }
+
+        #pnl .pnl-kpi-main p {
+            font-size: 1.58rem;
+            font-weight: 800;
+        }
+
+        #pnl .pnl-kpi-breakdown p {
+            font-size: 1.3rem;
+            font-weight: 800;
+        }
+
+        #pnl .pnl-tab-strip {
+            padding: 0.45rem;
+            margin-bottom: 0.95rem;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        }
+
+        #pnl .pnl-tab-wrap {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.2rem;
+            border-radius: 11px;
+            background: #f1f5f9;
+        }
+
+        #pnl .pnl-tab-btn {
+            min-height: 36px;
+            padding: 0.5rem 0.9rem;
+            border: 1px solid transparent;
+            transition: all 0.16s ease;
+        }
+
+        #pnl .pnl-details-panel,
+        #pnl .pnl-summary-panel {
+            padding: 1.15rem;
+        }
+
+        #pnl .pnl-section-head {
+            margin-bottom: 0.9rem;
+            padding-bottom: 0.58rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        #pnl .pnl-details-actions {
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        #pnl .pnl-group-toggle {
+            background: #f8fafc;
+            border: 1px solid #dbe5f0;
+            border-radius: 9px;
+            padding: 0.36rem 0.55rem;
+        }
+
+        #pnl .pnl-export-btn {
+            font-weight: 700;
+            border: 1px solid transparent;
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+        }
+
+        #pnl .pnl-table-wrap {
+            border: 1px solid #dbe5f0;
+            border-radius: 12px;
+            background: #fff;
+        }
+
+        #pnl table.pnl-statement-table thead tr,
+        #pnl table.pnl-summary-table thead tr {
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+        }
+
+        #pnl table.pnl-statement-table thead th,
+        #pnl table.pnl-summary-table thead th {
+            border-bottom: 1px solid #dbe5f0;
+            color: #334155;
+            font-size: 0.76rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            background: transparent !important;
+        }
+
+        #pnl table.pnl-statement-table tbody td,
+        #pnl table.pnl-summary-table tbody td {
+            border-bottom: 1px solid #edf2f7;
+            font-size: 0.88rem;
+            color: #1f2937;
+            line-height: 1.45;
+        }
+
+        #pnl table.pnl-statement-table tbody tr:hover,
+        #pnl table.pnl-summary-table tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        #pnl table.pnl-statement-table .pnl-cell-purchase {
+            background: #f8fbff;
+        }
+
+        #pnl table.pnl-statement-table .pnl-cell-sale {
+            background: #f7fcf9;
+        }
+
+        #pnl table.pnl-statement-table .pnl-cell-profit {
+            background: #fffaf0;
+        }
+
+        #pnl table.pnl-statement-table .pnl-cell-divider {
+            border-right: 2px solid #cbd5e1;
+        }
+
+        #pnl table.pnl-statement-table .pnl-grand-total-label {
+            background: #dbeafe;
+            color: #1e3a8a;
+        }
+
+        #pnl table.pnl-statement-table .pnl-grand-total-purchase {
+            background: #dbeafe;
+            color: #1e3a8a;
+        }
+
+        #pnl table.pnl-statement-table .pnl-grand-total-sale {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        #pnl table.pnl-statement-table .pnl-grand-total-profit {
+            background: #fef3c7;
+        }
+
+        #pnl .pnl-generate-btn:focus-visible,
+        #pnl .pnl-control:focus-visible,
+        #pnl .pnl-custom-date-input:focus-visible,
+        #pnl .pnl-custom-date-apply:focus-visible,
+        #pnl .pnl-tab-btn:focus-visible,
+        #pnl .pnl-export-btn:focus-visible {
+            outline: 2px solid #2f5f8f;
+            outline-offset: 2px;
+        }
+
+        @media (max-width: 900px) {
+            #pnl .pnl-filters-panel,
+            #pnl .pnl-details-panel,
+            #pnl .pnl-summary-panel {
+                padding: 1rem;
+            }
+
+            #pnl .pnl-section-head {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.7rem;
+            }
+
+            #pnl .pnl-details-actions {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            #pnl .pnl-kpi-main p {
+                font-size: 1.35rem;
+            }
+
+            #pnl .pnl-kpi-breakdown p {
+                font-size: 1.18rem;
             }
         }
