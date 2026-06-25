@@ -156,7 +156,8 @@ function runAutoAudit() {
         '<div><strong>Net Movement:</strong> ' + formatAuditINR(bank.summary.totalNetMovement) + '</div>' +
         '<div><strong>Purchases Created:</strong> ' + formatAuditINR(ps.totalPurchases) + '</div>' +
         '<div><strong>Sales Created:</strong> ' + formatAuditINR(ps.totalSales) + '</div>' +
-        '<div><strong>Net Profit/Loss (approx):</strong> ' + formatAuditINR(ps.netProfitLike) + '</div>';
+        '<div><strong>Cold Storage + Damage + Company Expense Impact:</strong> ' + formatAuditINR(ps.totalAdditionalExpenses) + '</div>' +
+        '<div><strong>Net Profit/Loss (inclusive):</strong> ' + formatAuditINR(ps.netProfitLikeInclusive) + '</div>';
     }
 
     // Checks
@@ -225,7 +226,17 @@ function runAutoAudit() {
         '<div><strong>Total Sales:</strong> ' + formatAuditINR(ps2.totalSales) + '</div>' +
         '<div><strong>Total Brokerage:</strong> ' + formatAuditINR(ps2.totalBrokerage) + '</div>' +
         '<div><strong>Total Deductions:</strong> ' + formatAuditINR(ps2.totalDeductions) + '</div>' +
-        '<div><strong>Net Profit/Loss (approx):</strong> ' + formatAuditINR(ps2.netProfitLike) + '</div>' +
+        '<div><strong>Purchase Item Cold Storage Cost:</strong> ' + formatAuditINR(ps2.purchaseItemColdStorageCost) + '</div>' +
+        '<div><strong>Lot Estimated Cold Storage Cost:</strong> ' + formatAuditINR(ps2.lotEstimatedColdStorageCost) + '</div>' +
+        '<div><strong>Periodic Cold Storage Charges:</strong> ' + formatAuditINR(ps2.periodicColdStorageCharge) + '</div>' +
+        '<div><strong>Total Cold Storage Expense:</strong> ' + formatAuditINR(ps2.totalColdStorageExpense) + '</div>' +
+        '<div><strong>Company Cold Move Expense:</strong> ' + formatAuditINR(ps2.companyColdMoveExpense) + '</div>' +
+        '<div><strong>Cold Damage Loss (Our Share):</strong> ' + formatAuditINR(ps2.coldDamageLoss) + '</div>' +
+        '<div><strong>Cold Damage Recovery:</strong> ' + formatAuditINR(ps2.coldDamageRecovery) + '</div>' +
+        '<div><strong>Total Additional Expense Impact:</strong> ' + formatAuditINR(ps2.totalAdditionalExpenses) + '</div>' +
+        '<div><strong>Total Costs (inclusive):</strong> ' + formatAuditINR(ps2.totalCostsInclusive) + '</div>' +
+        '<div><strong>Net Profit/Loss (inclusive):</strong> ' + formatAuditINR(ps2.netProfitLikeInclusive) + '</div>' +
+        '<div><strong>Net Profit/Loss (base model):</strong> ' + formatAuditINR(ps2.netProfitLike) + '</div>' +
         '<div><strong>Supplier Payments Outflow:</strong> ' + formatAuditINR(ps2.supplierPaymentOutflow) + '</div>' +
         '<div><strong>Customer Receipts Inflow:</strong> ' + formatAuditINR(ps2.customerReceiptInflow) + '</div>';
     }
