@@ -1325,27 +1325,324 @@
             color: #b91c1c;
         }
 
-        /* Ledger summary cards */
+        /* Ledger management corporate polish */
+        #ledger .ledger-page-shell {
+            max-width: 1360px;
+        }
+
+        #ledger .ledger-page-title-wrap h2 {
+            letter-spacing: 0.01em;
+        }
+
+        #ledger .ledger-panel {
+            border: 1px solid #dbe5f0;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+        }
+
+        #ledger .ledger-panel-title {
+            font-size: 1.05rem;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            color: #334155;
+            margin-bottom: 1.15rem;
+        }
+
+        #ledger #ledgerSummaryCards.ledger-summary-grid {
+            gap: 1rem;
+            margin-bottom: 1.6rem;
+        }
+
         #ledger #ledgerSummaryCards .ledger-summary-card {
-            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-            border: 1px solid #e2e8f0;
-            border-radius: 14px;
+            width: 100%;
+            text-align: left;
+            cursor: pointer;
+            background: linear-gradient(165deg, #ffffff 0%, #f8fafc 70%, #f1f5f9 100%);
+            border: 1px solid #d5e1ec;
+            border-radius: 15px;
             padding: 14px 16px;
-            box-shadow: 0 3px 12px rgba(15, 23, 42, 0.06);
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.07);
+        }
+
+        #ledger #ledgerSummaryCards .ledger-summary-trigger:hover {
+            transform: translateY(-2px);
+            border-color: #9fb6ce;
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.14);
+        }
+
+        #ledger #ledgerSummaryCards .ledger-summary-trigger:focus-visible,
+        #ledger .ledger-action-btn:focus-visible,
+        #ledger .ledger-control:focus-visible,
+        #ledgerSummaryDrilldownModal .ledger-drilldown-close:focus-visible {
+            outline: 2px solid #2f5f8f;
+            outline-offset: 2px;
+        }
+
+        #ledger #ledgerSummaryCards .ledger-summary-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        #ledger #ledgerSummaryCards .ledger-summary-chip {
+            display: inline-flex;
+            align-items: center;
+            height: 1.5rem;
+            border-radius: 999px;
+            padding: 0 0.55rem;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            background: #e2e8f0;
+            color: #334155;
+        }
+
+        #ledger #ledgerSummaryCards .ledger-summary-arrow {
+            color: #64748b;
+            font-size: 0.95rem;
+            font-weight: 700;
         }
 
         #ledger #ledgerSummaryCards .ledger-summary-label {
             margin: 0;
-            font-size: 0.7rem;
+            font-size: 0.73rem;
             font-weight: 700;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.07em;
             text-transform: uppercase;
             color: #64748b;
         }
 
         #ledger #ledgerSummaryCards .ledger-summary-value {
-            margin: 8px 0 0;
-            font-size: 1.25rem;
+            margin: 0.45rem 0 0.1rem;
+            font-size: 1.34rem;
             font-weight: 800;
             line-height: 1.2;
+        }
+
+        #ledger #ledgerSummaryCards .ledger-summary-meta {
+            margin: 0;
+            color: #64748b;
+            font-size: 0.76rem;
+            font-weight: 600;
+        }
+
+        #ledger #ledgerSummaryCards .ledger-summary-value-suppliers { color: #b91c1c; }
+        #ledger #ledgerSummaryCards .ledger-summary-value-customers { color: #047857; }
+        #ledger #ledgerSummaryCards .ledger-summary-value-brokers { color: #6d28d9; }
+        #ledger #ledgerSummaryCards .ledger-summary-value-cold { color: #b45309; }
+
+        #ledger .ledger-filters-panel,
+        #ledger .ledger-statement-panel {
+            padding: 1.35rem 1.35rem 1.25rem;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        }
+
+        #ledger .ledger-filter-grid {
+            gap: 0.85rem;
+        }
+
+        #ledger .ledger-control {
+            border-color: #cbd5e1;
+            background: #fff;
+            min-height: 46px;
+            font-weight: 500;
+            color: #1e293b;
+        }
+
+        #ledger .ledger-control:hover {
+            border-color: #94a3b8;
+        }
+
+        #ledger .ledger-generate-btn {
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            box-shadow: 0 8px 16px rgba(22, 163, 74, 0.25);
+        }
+
+        #ledger #ledgerEntityDropdown.ledger-entity-dropdown {
+            border-color: #cbd5e1;
+            border-radius: 12px;
+            box-shadow: 0 16px 28px rgba(15, 23, 42, 0.18);
+            margin-top: 0.28rem;
+        }
+
+        #ledger .ledger-statement-head {
+            margin-bottom: 1rem;
+            padding-bottom: 0.6rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        #ledger .ledger-actions-wrap {
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        #ledger .ledger-action-btn {
+            font-weight: 700;
+            border: 1px solid transparent;
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+        }
+
+        #ledger .ledger-table-wrap {
+            border: 1px solid #dbe5f0;
+            border-radius: 12px;
+            background: #ffffff;
+        }
+
+        #ledger table.ledger-statement-table thead tr {
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+        }
+
+        #ledger table.ledger-statement-table thead th {
+            border-bottom: 1px solid #dbe5f0;
+            color: #334155;
+            font-size: 0.76rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        #ledger table.ledger-statement-table tbody td {
+            border-bottom: 1px solid #edf2f7;
+            font-size: 0.88rem;
+            color: #1f2937;
+            line-height: 1.45;
+        }
+
+        #ledger table.ledger-statement-table tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        #ledger .ledger-balance-card {
+            border-radius: 14px;
+            box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.08), 0 8px 20px rgba(59, 130, 246, 0.1);
+        }
+
+        #ledgerSummaryDrilldownModal.ledger-drilldown-overlay {
+            backdrop-filter: blur(2px);
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-shell {
+            border: 1px solid #d8e3ee;
+            box-shadow: 0 22px 52px rgba(15, 23, 42, 0.28);
+            border-radius: 16px;
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-header {
+            padding: 0.9rem 1.05rem;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-header h3 {
+            letter-spacing: 0.015em;
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-close {
+            width: 2rem;
+            height: 2rem;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.16s ease;
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-close:hover {
+            background: rgba(255, 255, 255, 0.14);
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-body {
+            background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+            padding: 0.9rem;
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-row {
+            display: grid;
+            grid-template-columns: 34px 1fr auto;
+            align-items: center;
+            gap: 0.65rem;
+            padding: 0.58rem 0.72rem;
+            border: 1px solid #dde7f2;
+            border-radius: 11px;
+            background: #fff;
+            transition: border-color 0.16s ease, box-shadow 0.16s ease;
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-row:hover {
+            border-color: #adc3da;
+            box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-rank {
+            width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #475569;
+            background: #e2e8f0;
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-name {
+            color: #334155;
+            font-weight: 600;
+            font-size: 0.91rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-amount {
+            color: #0f172a;
+            font-weight: 800;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-empty {
+            border: 1px dashed #cbd5e1;
+            border-radius: 11px;
+            padding: 0.9rem;
+            font-size: 0.82rem;
+            color: #64748b;
+            background: #fff;
+            text-align: center;
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-footer {
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+            padding: 0.82rem 1.05rem;
+        }
+
+        @media (max-width: 900px) {
+            #ledger .ledger-filters-panel,
+            #ledger .ledger-statement-panel {
+                padding: 1rem;
+            }
+
+            #ledger .ledger-statement-head {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.75rem;
+            }
+
+            #ledger .ledger-actions-wrap {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            #ledger #ledgerSummaryCards .ledger-summary-value {
+                font-size: 1.15rem;
+            }
         }
