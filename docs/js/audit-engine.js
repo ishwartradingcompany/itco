@@ -331,7 +331,11 @@ function computePeriodSummary(data, fromDateStr, toDateStr) {
     coldDamageRecovery += (parseFloat(dmg && dmg.payableReduction) || 0);
   });
 
-  var totalColdStorageExpense = purchaseItemColdStorageCost + lotEstimatedColdStorageCost + periodicColdStorageCharge;
+  // Avoid double counting move-in cold storage cost:
+  // - purchaseItemColdStorageCost and lotEstimatedColdStorageCost often represent the same base amount.
+  // - Prefer lot-based value when available; fallback to purchase-item value for legacy/no-lot data.
+  var coldStorageMoveInBase = lotEstimatedColdStorageCost > 0 ? lotEstimatedColdStorageCost : purchaseItemColdStorageCost;
+  var totalColdStorageExpense = coldStorageMoveInBase + periodicColdStorageCharge;
   var totalAdditionalExpenses = totalColdStorageExpense + companyColdMoveExpense + coldDamageLoss - coldDamageRecovery;
   var totalCostsInclusive = totalPurchases + totalBrokerage + totalDeductions + totalAdditionalExpenses;
 
@@ -354,6 +358,7 @@ function computePeriodSummary(data, fromDateStr, toDateStr) {
     totalDeductions: totalDeductions,
     purchaseItemColdStorageCost: purchaseItemColdStorageCost,
     lotEstimatedColdStorageCost: lotEstimatedColdStorageCost,
+    coldStorageMoveInBase: coldStorageMoveInBase,
     periodicColdStorageCharge: periodicColdStorageCharge,
     totalColdStorageExpense: totalColdStorageExpense,
     companyColdMoveExpense: companyColdMoveExpense,
