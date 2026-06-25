@@ -1279,6 +1279,7 @@ function deleteAllMasters() {
                 if (typeof updateLedgerOptions === 'function') updateLedgerOptions();
                 if (typeof initLedgerEntitySearch === 'function') initLedgerEntitySearch();
                 if (typeof syncLedgerEntityDisplay === 'function') syncLedgerEntityDisplay();
+                if (typeof renderLedgerSummaryCards === 'function') renderLedgerSummaryCards();
             }
             
             // Update records count
@@ -2912,6 +2913,192 @@ function deleteAllMasters() {
             }
             return [];
         }
+
+        function calculateLedgerSummaryTotals() {
+            var toAmount = function(value) {
+                return Math.max(0, parseFloat(value) || 0);
+            };
+            var toId = function(value) {
+                return String(value == null ? '' : value).trim();
+            };
+
+            var purchaseById = {};
+            (appData.purchases || []).forEach(function(purchase) {
+                purchaseById[toId(purchase.id)] = purchase;
+            });
+            var saleById = {};
+            (appData.sales || []).forEach(function(sale) {
+                saleById[toId(sale.id)] = sale;
+            });
+            var brokerageById = {};
+            (appData.brokerage || []).forEach(function(entry) {
+                brokerageById[toId(entry.id)] = entry;
+            });
+            var lotById = {};
+            (appData.coldStorageLots || []).forEach(function(lot) {
+                lotById[toId(lot.id)] = lot;
+            });
+
+            var supplierIdSet = {};
+            (appData.suppliers || []).forEach(function(s) { supplierIdSet[toId(s.id)] = true; });
+            (appData.purchases || []).forEach(function(p) { supplierIdSet[toId(p.supplierId)] = true; });
+            (appData.openingBalances || []).forEach(function(ob) { if (ob.entityType === 'supplier') supplierIdSet[toId(ob.entityId)] = true; });
+            (appData.adjustments || []).forEach(function(adj) { if (adj.type === 'supplier_adjustment') supplierIdSet[toId(adj.entityId)] = true; });
+            (appData.payments || []).forEach(function(payment) {
+                if (payment.type === 'ledger_payment' && payment.entityType === 'supplier') supplierIdSet[toId(payment.entityId)] = true;
+                if (payment.type === 'purchase') {
+                    var pur = purchaseById[toId(payment.invoiceId)];
+                    if (pur) supplierIdSet[toId(pur.supplierId)] = true;
+                }
+            });
+
+            var customerIdSet = {};
+            (appData.customers || []).forEach(function(c) { customerIdSet[toId(c.id)] = true; });
+            (appData.sales || []).forEach(function(s) { customerIdSet[toId(s.customerId)] = true; });
+            (appData.openingBalances || []).forEach(function(ob) { if (ob.entityType === 'customer') customerIdSet[toId(ob.entityId)] = true; });
+            (appData.deductions || []).forEach(function(d) { customerIdSet[toId(d.customerId)] = true; });
+            (appData.payments || []).forEach(function(payment) {
+                if (payment.type === 'ledger_receipt' && payment.entityType === 'customer') customerIdSet[toId(payment.entityId)] = true;
+                if (payment.type === 'sale') {
+                    var sale = saleById[toId(payment.invoiceId)];
+                    if (sale) customerIdSet[toId(sale.customerId)] = true;
+                }
+            });
+
+            var brokerIdSet = {};
+            (appData.brokers || []).forEach(function(b) { brokerIdSet[toId(b.id)] = true; });
+            (appData.brokerage || []).forEach(function(entry) { brokerIdSet[toId(entry.brokerId)] = true; });
+            (appData.adjustments || []).forEach(function(adj) { if (adj.type === 'broker_adjustment') brokerIdSet[toId(adj.entityId)] = true; });
+            (appData.payments || []).forEach(function(payment) {
+                if (payment.type === 'ledger_payment' && payment.entityType === 'broker') brokerIdSet[toId(payment.entityId)] = true;
+                if (payment.type === 'brokerage') {
+                    var brokerageEntry = brokerageById[toId(payment.invoiceId)];
+                    if (brokerageEntry) brokerIdSet[toId(brokerageEntry.brokerId)] = true;
+                }
+            });
+
+            var suppliersPayable = 0;
+            Object.keys(supplierIdSet).forEach(function(id) {
+                if (!id) return;
+                var debit = 0;
+                var credit = 0;
+                (appData.openingBalances || []).forEach(function(ob) {
+                    if (ob.entityType === 'supplier' && toId(ob.entityId) === id) debit += toAmount(ob.amount);
+                });
+                (appData.purchases || []).forEach(function(purchase) {
+                    if (toId(purchase.supplierId) === id) debit += toAmount(purchase.grandTotal || purchase.total);
+                });
+                (appData.adjustments || []).forEach(function(adj) {
+                    if (adj.type === 'supplier_adjustment' && toId(adj.entityId) === id) credit += toAmount(adj.amount);
+                });
+                (appData.payments || []).forEach(function(payment) {
+                    var isPurchasePayment = payment.type === 'purchase' && purchaseById[toId(payment.invoiceId)] && toId(purchaseById[toId(payment.invoiceId)].supplierId) === id;
+                    var isLedgerPayment = payment.type === 'ledger_payment' && payment.entityType === 'supplier' && toId(payment.entityId) === id;
+                    if (isPurchasePayment || isLedgerPayment) credit += toAmount(payment.amount);
+                });
+                suppliersPayable += Math.max(0, debit - credit);
+            });
+
+            var customersReceivable = 0;
+            Object.keys(customerIdSet).forEach(function(id) {
+                if (!id) return;
+                var debit = 0;
+                var credit = 0;
+                (appData.openingBalances || []).forEach(function(ob) {
+                    if (ob.entityType === 'customer' && toId(ob.entityId) === id) debit += toAmount(ob.amount);
+                });
+                (appData.sales || []).forEach(function(sale) {
+                    if (toId(sale.customerId) === id) debit += toAmount(sale.grandTotal || sale.total);
+                });
+                (appData.deductions || []).forEach(function(deduction) {
+                    if (toId(deduction.customerId) === id) credit += toAmount(deduction.amount);
+                });
+                (appData.payments || []).forEach(function(payment) {
+                    var isSalePayment = payment.type === 'sale' && saleById[toId(payment.invoiceId)] && toId(saleById[toId(payment.invoiceId)].customerId) === id;
+                    var isLedgerReceipt = payment.type === 'ledger_receipt' && payment.entityType === 'customer' && toId(payment.entityId) === id;
+                    if (isSalePayment || isLedgerReceipt) credit += toAmount(payment.amount);
+                });
+                customersReceivable += Math.max(0, debit - credit);
+            });
+
+            var brokersPayable = 0;
+            Object.keys(brokerIdSet).forEach(function(id) {
+                if (!id) return;
+                var debit = 0;
+                var credit = 0;
+                (appData.brokerage || []).forEach(function(entry) {
+                    if (toId(entry.brokerId) === id) debit += toAmount(entry.amount);
+                });
+                (appData.adjustments || []).forEach(function(adj) {
+                    if (adj.type === 'broker_adjustment' && toId(adj.entityId) === id) credit += toAmount(adj.amount);
+                });
+                (appData.payments || []).forEach(function(payment) {
+                    var isBrokeragePayment = payment.type === 'brokerage' && brokerageById[toId(payment.invoiceId)] && toId(brokerageById[toId(payment.invoiceId)].brokerId) === id;
+                    var isLedgerPayment = payment.type === 'ledger_payment' && payment.entityType === 'broker' && toId(payment.entityId) === id;
+                    if (isBrokeragePayment || isLedgerPayment) credit += toAmount(payment.amount);
+                });
+                brokersPayable += Math.max(0, debit - credit);
+            });
+
+            var coldStoragePayable = 0;
+            var coldStorageEntities = getLedgerEntitiesForType('cold_storage') || [];
+            coldStorageEntities.forEach(function(entity) {
+                var selectedMatchKey = normalizedName((entity && entity.name) || '');
+                var selectedMasterId = toId(entity && entity.masterId);
+                if (!selectedMatchKey && !selectedMasterId) return;
+                var matchesLot = function(lot) {
+                    if (!lot) return false;
+                    if (selectedMasterId && toId(lot.coldStorageId) === selectedMasterId) return true;
+                    return normalizedName(lot.coldStorageName) === selectedMatchKey;
+                };
+
+                var debit = 0;
+                var credit = 0;
+                (appData.coldStorageMovements || []).forEach(function(movement) {
+                    var moveType = String(movement.type || '');
+                    if (!['move_in', 'charge_add'].includes(moveType)) return;
+                    var lot = lotById[toId(movement.lotId)];
+                    var matched = lot ? matchesLot(lot) : normalizedName(movement.coldStorageName) === selectedMatchKey;
+                    if (matched) debit += toAmount(movement.amount);
+                });
+                (appData.payments || []).forEach(function(payment) {
+                    if (String(payment.type || '').toLowerCase() !== 'cold_storage_payment') return;
+                    var lot = lotById[toId(payment.invoiceId)];
+                    var matched = lot ? matchesLot(lot) : normalizedName(payment.party) === selectedMatchKey;
+                    if (matched) credit += toAmount(payment.amount);
+                });
+                (appData.coldStorageDamages || []).forEach(function(damage) {
+                    if (toAmount(damage.vendorShareAmount) <= 0) return;
+                    var lot = lotById[toId(damage.lotId)];
+                    var matched = lot ? matchesLot(lot) : normalizedName(damage.coldStorageName) === selectedMatchKey;
+                    if (matched) credit += toAmount(damage.vendorShareAmount);
+                });
+                coldStoragePayable += Math.max(0, debit - credit);
+            });
+
+            return {
+                suppliersPayable: suppliersPayable,
+                customersReceivable: customersReceivable,
+                brokersPayable: brokersPayable,
+                coldStoragePayable: coldStoragePayable
+            };
+        }
+
+        function renderLedgerSummaryCards() {
+            var summary = calculateLedgerSummaryTotals();
+            var fmt = function(value) {
+                return RU + (Math.max(0, parseFloat(value) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            };
+            var suppliersEl = document.getElementById('ledgerSummarySuppliersPayable');
+            var customersEl = document.getElementById('ledgerSummaryCustomersReceivable');
+            var brokersEl = document.getElementById('ledgerSummaryBrokersPayable');
+            var coldStorageEl = document.getElementById('ledgerSummaryColdStoragePayable');
+            if (suppliersEl) suppliersEl.textContent = fmt(summary.suppliersPayable);
+            if (customersEl) customersEl.textContent = fmt(summary.customersReceivable);
+            if (brokersEl) brokersEl.textContent = fmt(summary.brokersPayable);
+            if (coldStorageEl) coldStorageEl.textContent = fmt(summary.coldStoragePayable);
+        }
+
         function syncLedgerEntityDisplay() {
             var sel = document.getElementById('ledgerEntity');
             var inp = document.getElementById('ledgerEntityInput');
@@ -10737,6 +10924,10 @@ function deleteAllMasters() {
                 donutMarginValue.textContent = `${profitMargin.toFixed(1)}%`;
                 donutMarginValue.className = `text-sm font-bold ${profitMargin >= 0 ? 'text-green-600' : 'text-red-600'}`;
             }
+
+            if (typeof renderLedgerSummaryCards === 'function') {
+                renderLedgerSummaryCards();
+            }
         }
 
         // Payment reminders function
@@ -11873,6 +12064,7 @@ function onPnLFilterChange() {
             
             // Render the table with pagination
             renderLedgerTable(entries);
+            if (typeof renderLedgerSummaryCards === 'function') renderLedgerSummaryCards();
             
             var printLedgerBtn = document.getElementById('printLedgerBtn');
             var sendLedgerWhatsAppBtn = document.getElementById('sendLedgerWhatsAppBtn');
@@ -14571,5 +14763,9 @@ function exportLedgerStatement() {
             const saleOthersOperation = document.getElementById('saleOthersOperation');
             if (saleOthersOperation) {
                 saleOthersOperation.addEventListener('change', calculateSaleTotals);
+            }
+
+            if (typeof renderLedgerSummaryCards === 'function') {
+                renderLedgerSummaryCards();
             }
         });
