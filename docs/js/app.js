@@ -12144,11 +12144,11 @@ function deleteAllMasters() {
             if (!tbody) return;
             const rows = summaryRows || [];
             if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Generate a report to view purchase-wise summary</td></tr>';
+                tbody.innerHTML = '<tr class="pnl-summary-row-empty"><td colspan="7" class="px-4 py-8 text-center text-slate-500">Generate a report to view purchase-wise summary</td></tr>';
                 return;
             }
             tbody.innerHTML = rows.map(function(r) {
-                return '<tr class="border-b border-slate-200 hover:bg-slate-50">' +
+                return '<tr class="pnl-summary-row border-b border-slate-200 hover:bg-slate-50">' +
                     '<td class="px-4 py-3 font-medium text-slate-800">' + escapeHtml(r.purchaseInvoice) + '</td>' +
                     '<td class="px-4 py-3 text-slate-700">' + escapeHtml(r.purchaseSupplier) + '</td>' +
                     '<td class="px-4 py-3 text-slate-700">' + escapeHtml(r.linkedSalesInvoices || '-') + '</td>' +
@@ -12171,7 +12171,7 @@ function deleteAllMasters() {
             tbody.innerHTML = '';
             
             if (pnlRows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No P&L data to display</td></tr>';
+                tbody.innerHTML = '<tr class="pnl-detail-row-empty"><td colspan="9" class="px-4 py-8 text-center text-slate-500">No P&L data to display</td></tr>';
                 document.getElementById('pnlPagination').innerHTML = '';
                 return;
             }
@@ -12207,21 +12207,21 @@ function deleteAllMasters() {
             
             paginatedRows.forEach(row => {
                 const tr = document.createElement('tr');
-                tr.className = 'border-b border-slate-200 hover:bg-slate-50';
+                tr.className = 'pnl-detail-row border-b border-slate-200 hover:bg-slate-50';
                 tr.innerHTML = `
-                    <td class="px-4 py-3 bg-blue-50/30">${row.purchaseDate || '-'}</td>
-                    <td class="px-4 py-3 bg-blue-50/30">${row.purchaseInvoice || '-'}</td>
-                    <td class="px-4 py-3 bg-blue-50/30">${row.purchaseSupplier || '-'}</td>
-                    <td class="px-4 py-3 bg-blue-50/30 border-r-2 border-r-slate-300">
+                    <td class="px-4 py-3 pnl-cell-purchase">${row.purchaseDate || '-'}</td>
+                    <td class="px-4 py-3 pnl-cell-purchase">${row.purchaseInvoice || '-'}</td>
+                    <td class="px-4 py-3 pnl-cell-purchase">${row.purchaseSupplier || '-'}</td>
+                    <td class="px-4 py-3 pnl-cell-purchase pnl-cell-divider">
                         ${row.purchaseTotal > 0 ? `${RU}${row.purchaseTotal.toFixed(2)}` : '-'}
                         ${(row.coldStorageAmount || 0) > 0 ? `<br><small class="text-xs text-cyan-700">Cold: ${RU}${(row.coldStorageAmount || 0).toFixed(2)}</small>` : ''}
                         ${(row.purchaseBaseAmount || 0) > 0 ? `<br><small class="text-xs text-slate-500">Base: ${RU}${(row.purchaseBaseAmount || 0).toFixed(2)}</small>` : ''}
                     </td>
-                    <td class="px-4 py-3 bg-green-50/30">${row.saleDate || '-'}</td>
-                    <td class="px-4 py-3 bg-green-50/30">${row.saleInvoice || '-'}</td>
-                    <td class="px-4 py-3 bg-green-50/30">${row.saleCustomer || '-'}</td>
-                    <td class="px-4 py-3 bg-green-50/30 border-r-2 border-r-slate-300">${row.saleTotal > 0 ? `${RU}${row.saleTotal.toFixed(2)}` : '-'}</td>
-                    <td class="px-4 py-3 bg-amber-50/30 ${row.profitLoss >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}">
+                    <td class="px-4 py-3 pnl-cell-sale">${row.saleDate || '-'}</td>
+                    <td class="px-4 py-3 pnl-cell-sale">${row.saleInvoice || '-'}</td>
+                    <td class="px-4 py-3 pnl-cell-sale">${row.saleCustomer || '-'}</td>
+                    <td class="px-4 py-3 pnl-cell-sale pnl-cell-divider">${row.saleTotal > 0 ? `${RU}${row.saleTotal.toFixed(2)}` : '-'}</td>
+                    <td class="px-4 py-3 pnl-cell-profit ${row.profitLoss >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}">
                         ${row.profitLoss >= 0 ? '+' : ''}${RU}${row.profitLoss.toFixed(2)}
                         ${row.quantityUsed ? `<br><small class="text-xs text-slate-500">(${row.quantityUsed} kg)</small>` : ''}
                         ${(row.deductionsAmount || 0) > 0 ? `<br><small class="text-xs text-red-600">Ded: ${RU}${(row.deductionsAmount || 0).toFixed(2)}</small>` : ''}
@@ -12241,13 +12241,13 @@ function deleteAllMasters() {
             const totalPages = Math.ceil(sourceRows.length / pageSize);
             if (currentPage === totalPages) {
                 const grandTotalRow = document.createElement('tr');
-                grandTotalRow.className = 'bg-slate-200 font-bold text-lg';
+                grandTotalRow.className = 'pnl-grand-total-row bg-slate-200 font-bold text-lg';
                 grandTotalRow.innerHTML = `
-                    <td colspan="3" class="px-4 py-4 text-right bg-blue-100">GRAND TOTAL:</td>
-                    <td class="px-4 py-4 bg-blue-100 border-r-2 border-r-slate-400">${RU}${totalCosts.toFixed(2)}</td>
-                    <td colspan="3" class="px-4 py-4 bg-green-100"></td>
-                    <td class="px-4 py-4 bg-green-100 border-r-2 border-r-slate-400">${RU}${totalRevenue.toFixed(2)}</td>
-                    <td class="px-4 py-4 bg-amber-100 ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}">
+                    <td colspan="3" class="px-4 py-4 text-right pnl-grand-total-label">GRAND TOTAL:</td>
+                    <td class="px-4 py-4 pnl-grand-total-purchase pnl-cell-divider">${RU}${totalCosts.toFixed(2)}</td>
+                    <td colspan="3" class="px-4 py-4 pnl-grand-total-sale"></td>
+                    <td class="px-4 py-4 pnl-grand-total-sale pnl-cell-divider">${RU}${totalRevenue.toFixed(2)}</td>
+                    <td class="px-4 py-4 pnl-grand-total-profit ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}">
                         ${netProfit >= 0 ? '+' : ''}${RU}${netProfit.toFixed(2)}
                     </td>
                 `;
