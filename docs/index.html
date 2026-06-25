@@ -2758,6 +2758,25 @@
     <div id="ledger" class="page-content hidden">
         <div class="max-w-7xl mx-auto px-4 py-8">
             <div class="mb-8 border-l-4 border-blue-600 pl-4"><h2 class="text-3xl font-bold text-slate-900">Ledger Management</h2></div>
+
+            <div id="ledgerSummaryCards" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+                <div class="ledger-summary-card">
+                    <p class="ledger-summary-label">Total to be paid to suppliers</p>
+                    <p id="ledgerSummarySuppliersPayable" class="ledger-summary-value text-rose-700">&#8377;0.00</p>
+                </div>
+                <div class="ledger-summary-card">
+                    <p class="ledger-summary-label">To be received from Customers</p>
+                    <p id="ledgerSummaryCustomersReceivable" class="ledger-summary-value text-emerald-700">&#8377;0.00</p>
+                </div>
+                <div class="ledger-summary-card">
+                    <p class="ledger-summary-label">To be paid to brokers</p>
+                    <p id="ledgerSummaryBrokersPayable" class="ledger-summary-value text-violet-700">&#8377;0.00</p>
+                </div>
+                <div class="ledger-summary-card">
+                    <p class="ledger-summary-label">To be paid to Cold storage</p>
+                    <p id="ledgerSummaryColdStoragePayable" class="ledger-summary-value text-amber-700">&#8377;0.00</p>
+                </div>
+            </div>
             
             <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
                 <h3 class="text-xl font-semibold mb-6 text-primary">Ledger Filters</h3>
