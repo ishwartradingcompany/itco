@@ -5504,7 +5504,334 @@ function deleteAllMasters() {
             const damaged = Math.max(0, parseFloat(lot.damageQtyTotal) || 0);
             const shrinkage = Math.max(0, parseFloat(lot.shrinkageQtyTotal) || 0);
             const paid = Math.max(0, parseFloat(lot.paidTotal) || 0);
-            return periodic <= 0 && released <= 0 && damaged <= 0 && shrinkage <= 0 && paid <= 0;
+            const payableAdjustments = Math.max(0, parseFloat(lot.payableAdjustmentTotal) || 0);
+            return periodic <= 0 && released <= 0 && damaged <= 0 && shrinkage <= 0 && paid <= 0 && payableAdjustments <= 0;
+        }
+
+        function hasAutoColdLotDownstreamActivity(lot) {
+            if (!lot) return false;
+            const periodic = Math.max(0, parseFloat(lot.periodicChargeTotal) || 0);
+            const released = Math.max(0, parseFloat(lot.releaseQtyTotal) || 0);
+            const damaged = Math.max(0, parseFloat(lot.damageQtyTotal) || 0);
+            const shrinkage = Math.max(0, parseFloat(lot.shrinkageQtyTotal) || 0);
+            const paid = Math.max(0, parseFloat(lot.paidTotal) || 0);
+            const payableAdjustments = Math.max(0, parseFloat(lot.payableAdjustmentTotal) || 0);
+            return periodic > 0 || released > 0 || damaged > 0 || shrinkage > 0 || paid > 0 || payableAdjustments > 0;
+        }
+
+        function updateAutoColdLotFromPurchaseItem(existingLot, purchase, purchaseItem, itemIndex) {
+            if (!existingLot || !purchase || !purchaseItem) return false;
+            const lineQty = Math.max(0, parseFloat(purchaseItem.grossWeight ?? purchaseItem.quantity ?? 0) || 0);
+            const desiredQty = Math.max(0, parseFloat(purchaseItem.coldMoveQty ?? lineQty) || 0);
+            if (desiredQty <= 0) return false;
+            const lineBags = Math.max(0, parseFloat(purchaseItem.bags) || 0);
+            const desiredBags = Math.max(0, parseFloat(purchaseItem.coldMoveBags ?? lineBags) || 0);
+            const rentPerKg = Math.max(0, parseFloat(purchaseItem.coldStorageRentPerKg) || 0);
+            const inPerBag = Math.max(0, parseFloat(purchaseItem.coldStorageInPerBag) || Math.max(0, parseFloat(purchaseItem.coldStorageInOutPerBag) || 0));
+            const outPerBag = Math.max(0, parseFloat(purchaseItem.coldStorageOutPerBag) || 0);
+            const inOutPerBag = inPerBag + outPerBag;
+            const otherCharge = Math.max(0, parseFloat(purchaseItem.coldStorageOtherCharge) || 0);
+            const companyExpenseAtMove = Math.max(0, parseFloat(purchaseItem.coldStorageCompanyExpense) || 0);
+            const companyExpenseReason = String(purchaseItem.coldStorageCompanyExpenseReason || '').trim();
+            const estimatedTotalCharge = Math.max(
+                0,
+                parseFloat(purchaseItem.coldStorageCost) || ((desiredQty * rentPerKg) + (desiredBags * (inPerBag + outPerBag)) + otherCharge)
+            );
+            const lineTotalInventoryCost = Math.max(0, (parseFloat(purchaseItem.total) || 0) + (parseFloat(purchaseItem.coldStorageCost) || 0));
+            const sourceKey = getPurchaseAutoColdSourceKey(purchase.id, purchaseItem, itemIndex);
+            const coldStorageId = String(purchaseItem.coldStorageId || '').trim();
+            const coldStorageName = String(getColdStorageMasterNameById(coldStorageId) || purchaseItem.coldStorageName || '').trim() || 'Auto from Purchase';
+            const vendorName = String(purchaseItem.coldStorageVendorName || purchaseItem.supplierName || purchase.supplierName || '').trim() || 'Unknown Vendor';
+            const moveDate = purchaseItem.date || purchase.date || '';
+            const remarks = String(purchaseItem.coldStorageRemarks || '').trim();
+            const lotReference = String(purchaseItem.coldStorageReference || purchaseItem.kaantaParchi || '').trim();
+            const supplierName = String(purchaseItem.supplierName || purchase.supplierName || '').trim() || '-';
+            const lockQtyAndBags = hasAutoColdLotDownstreamActivity(existingLot);
+            const qtyForLot = lockQtyAndBags ? Math.max(0, parseFloat(existingLot.qtyInCold) || 0) : desiredQty;
+            const bagsForLot = lockQtyAndBags ? Math.max(0, parseFloat(existingLot.bagsInCold) || 0) : desiredBags;
+            const sourceInventoryCost = lockQtyAndBags
+                ? Math.max(0, parseFloat(existingLot.sourceInventoryCost) || 0)
+                : (lineQty > 0
+                    ? Math.max(0, lineTotalInventoryCost * Math.min(1, qtyForLot / lineQty))
+                    : Math.max(0, lineTotalInventoryCost));
+
+            const lotBefore = JSON.stringify({
+                date: existingLot.date || '',
+                itemId: existingLot.itemId || '',
+                itemName: existingLot.itemName || '',
+                unit: existingLot.unit || '',
+                coldStorageId: existingLot.coldStorageId || '',
+                coldStorageName: existingLot.coldStorageName || '',
+                vendorName: existingLot.vendorName || '',
+                supplierName: existingLot.supplierName || '',
+                qtyInCold: +Math.max(0, parseFloat(existingLot.qtyInCold) || 0).toFixed(2),
+                bagsInCold: +Math.max(0, parseFloat(existingLot.bagsInCold) || 0).toFixed(2),
+                rentPerKg: +Math.max(0, parseFloat(existingLot.rentPerKg) || 0).toFixed(2),
+                inOutPerBag: +Math.max(0, parseFloat(existingLot.inOutPerBag) || 0).toFixed(2),
+                otherCharge: +Math.max(0, parseFloat(existingLot.otherCharge) || 0).toFixed(2),
+                companyExpenseAtMove: +Math.max(0, parseFloat(existingLot.companyExpenseAtMove) || 0).toFixed(2),
+                companyExpenseReason: String(existingLot.companyExpenseReason || ''),
+                estimatedTotalCharge: +Math.max(0, parseFloat(existingLot.estimatedTotalCharge) || 0).toFixed(2),
+                lotReference: String(existingLot.lotReference || ''),
+                remarks: String(existingLot.remarks || ''),
+                sourceInventoryCost: +Math.max(0, parseFloat(existingLot.sourceInventoryCost) || 0).toFixed(2),
+                sourceKey: String(existingLot.sourceKey || ''),
+                purchaseId: String(existingLot.purchaseId || ''),
+                purchaseInvoice: String(existingLot.purchaseInvoice || ''),
+                purchaseItemId: existingLot.purchaseItemId == null ? '' : String(existingLot.purchaseItemId)
+            });
+
+            existingLot.date = moveDate;
+            existingLot.itemId = purchaseItem.itemId;
+            existingLot.itemName = purchaseItem.itemName || getItemNameById(purchaseItem.itemId);
+            existingLot.unit = getItemUnitById(purchaseItem.itemId);
+            existingLot.coldStorageId = coldStorageId;
+            existingLot.coldStorageName = coldStorageName;
+            existingLot.vendorName = vendorName;
+            existingLot.supplierName = supplierName;
+            existingLot.qtyInCold = +qtyForLot.toFixed(2);
+            existingLot.bagsInCold = +bagsForLot.toFixed(2);
+            existingLot.rentPerKg = rentPerKg;
+            existingLot.inOutPerBag = inOutPerBag;
+            existingLot.otherCharge = otherCharge;
+            existingLot.companyExpenseAtMove = +companyExpenseAtMove.toFixed(2);
+            existingLot.companyExpenseReason = companyExpenseReason;
+            existingLot.estimatedTotalCharge = +estimatedTotalCharge.toFixed(2);
+            existingLot.lotReference = lotReference;
+            existingLot.remarks = remarks;
+            existingLot.sourceInventoryCost = +sourceInventoryCost.toFixed(2);
+            existingLot.source = 'purchase_auto';
+            existingLot.sourceKey = sourceKey;
+            existingLot.purchaseId = purchase.id;
+            existingLot.purchaseInvoice = purchase.invoice || '';
+            existingLot.purchaseItemId = purchaseItem.id != null ? purchaseItem.id : null;
+            recalculateColdLotPayables(existingLot);
+
+            const lotAfter = JSON.stringify({
+                date: existingLot.date || '',
+                itemId: existingLot.itemId || '',
+                itemName: existingLot.itemName || '',
+                unit: existingLot.unit || '',
+                coldStorageId: existingLot.coldStorageId || '',
+                coldStorageName: existingLot.coldStorageName || '',
+                vendorName: existingLot.vendorName || '',
+                supplierName: existingLot.supplierName || '',
+                qtyInCold: +Math.max(0, parseFloat(existingLot.qtyInCold) || 0).toFixed(2),
+                bagsInCold: +Math.max(0, parseFloat(existingLot.bagsInCold) || 0).toFixed(2),
+                rentPerKg: +Math.max(0, parseFloat(existingLot.rentPerKg) || 0).toFixed(2),
+                inOutPerBag: +Math.max(0, parseFloat(existingLot.inOutPerBag) || 0).toFixed(2),
+                otherCharge: +Math.max(0, parseFloat(existingLot.otherCharge) || 0).toFixed(2),
+                companyExpenseAtMove: +Math.max(0, parseFloat(existingLot.companyExpenseAtMove) || 0).toFixed(2),
+                companyExpenseReason: String(existingLot.companyExpenseReason || ''),
+                estimatedTotalCharge: +Math.max(0, parseFloat(existingLot.estimatedTotalCharge) || 0).toFixed(2),
+                lotReference: String(existingLot.lotReference || ''),
+                remarks: String(existingLot.remarks || ''),
+                sourceInventoryCost: +Math.max(0, parseFloat(existingLot.sourceInventoryCost) || 0).toFixed(2),
+                sourceKey: String(existingLot.sourceKey || ''),
+                purchaseId: String(existingLot.purchaseId || ''),
+                purchaseInvoice: String(existingLot.purchaseInvoice || ''),
+                purchaseItemId: existingLot.purchaseItemId == null ? '' : String(existingLot.purchaseItemId)
+            });
+
+            let changed = lotBefore !== lotAfter;
+            if (changed) {
+                Object.assign(existingLot, getAuditMeta(false));
+            }
+
+            appData.coldStorageMovements = appData.coldStorageMovements || [];
+            let moveEntry = appData.coldStorageMovements.find(function(m) {
+                return String(m.type || '') === 'move_in' && String(m.source || '') === 'purchase_auto' && String(m.sourceKey || '') === String(sourceKey);
+            });
+            if (!moveEntry) {
+                moveEntry = appData.coldStorageMovements.find(function(m) {
+                    return String(m.type || '') === 'move_in' && String(m.lotId || '') === String(existingLot.id);
+                });
+            }
+            if (!moveEntry) {
+                moveEntry = {
+                    id: Date.now() + Math.floor(Math.random() * 1000) + itemIndex,
+                    date: existingLot.date,
+                    type: 'move_in',
+                    lotId: existingLot.id,
+                    itemId: existingLot.itemId,
+                    itemName: existingLot.itemName,
+                    coldStorageName: existingLot.coldStorageName,
+                    vendorName: existingLot.vendorName,
+                    supplierName: existingLot.supplierName || '-',
+                    qty: existingLot.qtyInCold,
+                    bags: existingLot.bagsInCold,
+                    amount: existingLot.estimatedTotalCharge,
+                    paidAmount: 0,
+                    reference: existingLot.lotReference || '',
+                    source: 'purchase_auto',
+                    sourceKey: sourceKey,
+                    purchaseId: purchase.id,
+                    purchaseInvoice: purchase.invoice || '',
+                    remarks: existingLot.remarks || ''
+                };
+                appData.coldStorageMovements.push(moveEntry);
+                changed = true;
+            } else {
+                const moveBefore = JSON.stringify({
+                    date: moveEntry.date || '',
+                    lotId: String(moveEntry.lotId || ''),
+                    itemId: String(moveEntry.itemId || ''),
+                    itemName: String(moveEntry.itemName || ''),
+                    coldStorageName: String(moveEntry.coldStorageName || ''),
+                    vendorName: String(moveEntry.vendorName || ''),
+                    supplierName: String(moveEntry.supplierName || ''),
+                    qty: +Math.max(0, parseFloat(moveEntry.qty) || 0).toFixed(2),
+                    bags: +Math.max(0, parseFloat(moveEntry.bags) || 0).toFixed(2),
+                    amount: +Math.max(0, parseFloat(moveEntry.amount) || 0).toFixed(2),
+                    paidAmount: +Math.max(0, parseFloat(moveEntry.paidAmount) || 0).toFixed(2),
+                    reference: String(moveEntry.reference || ''),
+                    source: String(moveEntry.source || ''),
+                    sourceKey: String(moveEntry.sourceKey || ''),
+                    purchaseId: String(moveEntry.purchaseId || ''),
+                    purchaseInvoice: String(moveEntry.purchaseInvoice || ''),
+                    remarks: String(moveEntry.remarks || '')
+                });
+                moveEntry.date = existingLot.date;
+                moveEntry.lotId = existingLot.id;
+                moveEntry.itemId = existingLot.itemId;
+                moveEntry.itemName = existingLot.itemName;
+                moveEntry.coldStorageName = existingLot.coldStorageName;
+                moveEntry.vendorName = existingLot.vendorName;
+                moveEntry.supplierName = existingLot.supplierName || '-';
+                if (!lockQtyAndBags) {
+                    moveEntry.qty = existingLot.qtyInCold;
+                    moveEntry.bags = existingLot.bagsInCold;
+                }
+                moveEntry.amount = existingLot.estimatedTotalCharge;
+                moveEntry.reference = existingLot.lotReference || '';
+                moveEntry.source = 'purchase_auto';
+                moveEntry.sourceKey = sourceKey;
+                moveEntry.purchaseId = purchase.id;
+                moveEntry.purchaseInvoice = purchase.invoice || '';
+                moveEntry.remarks = existingLot.remarks || '';
+                const moveAfter = JSON.stringify({
+                    date: moveEntry.date || '',
+                    lotId: String(moveEntry.lotId || ''),
+                    itemId: String(moveEntry.itemId || ''),
+                    itemName: String(moveEntry.itemName || ''),
+                    coldStorageName: String(moveEntry.coldStorageName || ''),
+                    vendorName: String(moveEntry.vendorName || ''),
+                    supplierName: String(moveEntry.supplierName || ''),
+                    qty: +Math.max(0, parseFloat(moveEntry.qty) || 0).toFixed(2),
+                    bags: +Math.max(0, parseFloat(moveEntry.bags) || 0).toFixed(2),
+                    amount: +Math.max(0, parseFloat(moveEntry.amount) || 0).toFixed(2),
+                    paidAmount: +Math.max(0, parseFloat(moveEntry.paidAmount) || 0).toFixed(2),
+                    reference: String(moveEntry.reference || ''),
+                    source: String(moveEntry.source || ''),
+                    sourceKey: String(moveEntry.sourceKey || ''),
+                    purchaseId: String(moveEntry.purchaseId || ''),
+                    purchaseInvoice: String(moveEntry.purchaseInvoice || ''),
+                    remarks: String(moveEntry.remarks || '')
+                });
+                if (moveBefore !== moveAfter) changed = true;
+            }
+
+            let companyExpenseEntry = appData.coldStorageMovements.find(function(m) {
+                return String(m.type || '') === 'company_expense' && String(m.source || '') === 'purchase_auto' && String(m.sourceKey || '') === String(sourceKey);
+            });
+            if (!companyExpenseEntry) {
+                companyExpenseEntry = appData.coldStorageMovements.find(function(m) {
+                    if (String(m.type || '') !== 'company_expense') return false;
+                    if (moveEntry && String(m.linkedMoveMovementId || '') === String(moveEntry.id)) return true;
+                    return String(m.lotId || '') === String(existingLot.id);
+                });
+            }
+            if (companyExpenseAtMove > 0) {
+                if (!companyExpenseEntry) {
+                    appData.coldStorageMovements.push({
+                        id: Date.now() + Math.floor(Math.random() * 1000) + itemIndex,
+                        date: existingLot.date,
+                        type: 'company_expense',
+                        lotId: existingLot.id,
+                        itemId: existingLot.itemId,
+                        itemName: existingLot.itemName,
+                        coldStorageName: existingLot.coldStorageName,
+                        vendorName: existingLot.vendorName,
+                        supplierName: existingLot.supplierName || '-',
+                        qty: 0,
+                        bags: 0,
+                        amount: +companyExpenseAtMove.toFixed(2),
+                        paidAmount: 0,
+                        reference: existingLot.lotReference || '',
+                        linkedMoveMovementId: moveEntry ? moveEntry.id : '',
+                        source: 'purchase_auto',
+                        sourceKey: sourceKey,
+                        purchaseId: purchase.id,
+                        purchaseInvoice: purchase.invoice || '',
+                        remarks: companyExpenseReason || existingLot.remarks || 'Company cold move expense'
+                    });
+                    changed = true;
+                } else {
+                    const companyBefore = JSON.stringify({
+                        date: String(companyExpenseEntry.date || ''),
+                        lotId: String(companyExpenseEntry.lotId || ''),
+                        itemId: String(companyExpenseEntry.itemId || ''),
+                        itemName: String(companyExpenseEntry.itemName || ''),
+                        coldStorageName: String(companyExpenseEntry.coldStorageName || ''),
+                        vendorName: String(companyExpenseEntry.vendorName || ''),
+                        supplierName: String(companyExpenseEntry.supplierName || ''),
+                        qty: +Math.max(0, parseFloat(companyExpenseEntry.qty) || 0).toFixed(2),
+                        bags: +Math.max(0, parseFloat(companyExpenseEntry.bags) || 0).toFixed(2),
+                        amount: +Math.max(0, parseFloat(companyExpenseEntry.amount) || 0).toFixed(2),
+                        reference: String(companyExpenseEntry.reference || ''),
+                        linkedMoveMovementId: String(companyExpenseEntry.linkedMoveMovementId || ''),
+                        source: String(companyExpenseEntry.source || ''),
+                        sourceKey: String(companyExpenseEntry.sourceKey || ''),
+                        purchaseId: String(companyExpenseEntry.purchaseId || ''),
+                        purchaseInvoice: String(companyExpenseEntry.purchaseInvoice || ''),
+                        remarks: String(companyExpenseEntry.remarks || '')
+                    });
+                    companyExpenseEntry.date = existingLot.date;
+                    companyExpenseEntry.lotId = existingLot.id;
+                    companyExpenseEntry.itemId = existingLot.itemId;
+                    companyExpenseEntry.itemName = existingLot.itemName;
+                    companyExpenseEntry.coldStorageName = existingLot.coldStorageName;
+                    companyExpenseEntry.vendorName = existingLot.vendorName;
+                    companyExpenseEntry.supplierName = existingLot.supplierName || '-';
+                    companyExpenseEntry.qty = 0;
+                    companyExpenseEntry.bags = 0;
+                    companyExpenseEntry.amount = +companyExpenseAtMove.toFixed(2);
+                    companyExpenseEntry.reference = existingLot.lotReference || '';
+                    companyExpenseEntry.linkedMoveMovementId = moveEntry ? moveEntry.id : (companyExpenseEntry.linkedMoveMovementId || '');
+                    companyExpenseEntry.source = 'purchase_auto';
+                    companyExpenseEntry.sourceKey = sourceKey;
+                    companyExpenseEntry.purchaseId = purchase.id;
+                    companyExpenseEntry.purchaseInvoice = purchase.invoice || '';
+                    companyExpenseEntry.remarks = companyExpenseReason || existingLot.remarks || 'Company cold move expense';
+                    const companyAfter = JSON.stringify({
+                        date: String(companyExpenseEntry.date || ''),
+                        lotId: String(companyExpenseEntry.lotId || ''),
+                        itemId: String(companyExpenseEntry.itemId || ''),
+                        itemName: String(companyExpenseEntry.itemName || ''),
+                        coldStorageName: String(companyExpenseEntry.coldStorageName || ''),
+                        vendorName: String(companyExpenseEntry.vendorName || ''),
+                        supplierName: String(companyExpenseEntry.supplierName || ''),
+                        qty: +Math.max(0, parseFloat(companyExpenseEntry.qty) || 0).toFixed(2),
+                        bags: +Math.max(0, parseFloat(companyExpenseEntry.bags) || 0).toFixed(2),
+                        amount: +Math.max(0, parseFloat(companyExpenseEntry.amount) || 0).toFixed(2),
+                        reference: String(companyExpenseEntry.reference || ''),
+                        linkedMoveMovementId: String(companyExpenseEntry.linkedMoveMovementId || ''),
+                        source: String(companyExpenseEntry.source || ''),
+                        sourceKey: String(companyExpenseEntry.sourceKey || ''),
+                        purchaseId: String(companyExpenseEntry.purchaseId || ''),
+                        purchaseInvoice: String(companyExpenseEntry.purchaseInvoice || ''),
+                        remarks: String(companyExpenseEntry.remarks || '')
+                    });
+                    if (companyBefore !== companyAfter) changed = true;
+                }
+            } else if (companyExpenseEntry) {
+                const companyId = String(companyExpenseEntry.id || '');
+                appData.coldStorageMovements = appData.coldStorageMovements.filter(function(m) {
+                    return String(m.id || '') !== companyId;
+                });
+                changed = true;
+            }
+            return changed;
         }
 
         function createAutoColdLotFromPurchaseItem(purchase, purchaseItem, itemIndex) {
@@ -5685,8 +6012,12 @@ function deleteAllMasters() {
 
             Object.keys(desiredKeys).forEach(function(sourceKey) {
                 const existingLot = existingLotsByKey[sourceKey];
-                if (existingLot) return;
                 const payload = desiredKeys[sourceKey];
+                if (existingLot) {
+                    const updated = updateAutoColdLotFromPurchaseItem(existingLot, payload.purchase, payload.item, payload.itemIndex);
+                    if (updated) changed = true;
+                    return;
+                }
                 const created = createAutoColdLotFromPurchaseItem(payload.purchase, payload.item, payload.itemIndex);
                 if (created) changed = true;
             });
