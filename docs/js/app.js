@@ -2771,6 +2771,8 @@ function deleteAllMasters() {
                 safe.damageQtyTotal = Math.max(0, parseFloat(safe.damageQtyTotal) || 0);
                 safe.damageBagsTotal = Math.max(0, parseFloat(safe.damageBagsTotal) || 0);
                 safe.shrinkageQtyTotal = Math.max(0, parseFloat(safe.shrinkageQtyTotal) || 0);
+                safe.companyExpenseAtMove = Math.max(0, parseFloat(safe.companyExpenseAtMove) || 0);
+                safe.companyExpenseReason = String(safe.companyExpenseReason || '').trim();
                 return safe;
             });
         }
@@ -5265,6 +5267,8 @@ function deleteAllMasters() {
                 rentPerKg: rentPerKg,
                 inOutPerBag: inOutPerBag,
                 otherCharge: otherCharge,
+                companyExpenseAtMove: 0,
+                companyExpenseReason: '',
                 periodicChargeTotal: 0,
                 estimatedTotalCharge: +estimatedTotalCharge.toFixed(2),
                 paidAtMove: 0,
@@ -5546,6 +5550,8 @@ function deleteAllMasters() {
             const rentEl = document.getElementById('coldMoveRentPerKg');
             const inOutEl = document.getElementById('coldMoveInOutPerBag');
             const otherEl = document.getElementById('coldMoveOtherCharge');
+            const companyExpenseEl = document.getElementById('coldMoveCompanyExpense');
+            const companyExpenseReasonEl = document.getElementById('coldMoveCompanyExpenseReason');
             const paidEl = document.getElementById('coldMovePaidAtMove');
             const referenceEl = document.getElementById('coldMoveReference');
             const remarksEl = document.getElementById('coldMoveRemarks');
@@ -5558,6 +5564,8 @@ function deleteAllMasters() {
             if (rentEl) rentEl.value = '';
             if (inOutEl) inOutEl.value = '';
             if (otherEl) otherEl.value = '';
+            if (companyExpenseEl) companyExpenseEl.value = '';
+            if (companyExpenseReasonEl) companyExpenseReasonEl.value = '';
             if (paidEl) paidEl.value = '';
             if (referenceEl) referenceEl.value = '';
             if (remarksEl) remarksEl.value = '';
@@ -5577,6 +5585,8 @@ function deleteAllMasters() {
             const rentPerKg = Math.max(0, parseFloat(document.getElementById('coldMoveRentPerKg') && document.getElementById('coldMoveRentPerKg').value) || 0);
             const inOutPerBag = Math.max(0, parseFloat(document.getElementById('coldMoveInOutPerBag') && document.getElementById('coldMoveInOutPerBag').value) || 0);
             const otherCharge = Math.max(0, parseFloat(document.getElementById('coldMoveOtherCharge') && document.getElementById('coldMoveOtherCharge').value) || 0);
+            const companyExpense = Math.max(0, parseFloat(document.getElementById('coldMoveCompanyExpense') && document.getElementById('coldMoveCompanyExpense').value) || 0);
+            const companyExpenseReason = String((document.getElementById('coldMoveCompanyExpenseReason') && document.getElementById('coldMoveCompanyExpenseReason').value) || '').trim();
             const paidAtMove = Math.max(0, parseFloat(document.getElementById('coldMovePaidAtMove') && document.getElementById('coldMovePaidAtMove').value) || 0);
             const lotReference = String((document.getElementById('coldMoveReference') && document.getElementById('coldMoveReference').value) || '').trim();
             const remarks = (document.getElementById('coldMoveRemarks') && document.getElementById('coldMoveRemarks').value || '').trim();
@@ -5621,6 +5631,8 @@ function deleteAllMasters() {
                 lot.rentPerKg = rentPerKg;
                 lot.inOutPerBag = inOutPerBag;
                 lot.otherCharge = otherCharge;
+                lot.companyExpenseAtMove = +companyExpense.toFixed(2);
+                lot.companyExpenseReason = companyExpenseReason;
                 lot.estimatedTotalCharge = +estimatedTotalCharge.toFixed(2);
                 lot.paidAtMove = +paidAtMove.toFixed(2);
                 lot.paidTotal = +paidAtMove.toFixed(2);
@@ -5645,6 +5657,48 @@ function deleteAllMasters() {
                     moveEntry.paidAmount = lot.paidAtMove;
                     moveEntry.reference = lotReference;
                     moveEntry.remarks = lot.remarks;
+                }
+                const existingCompanyExpenseEntry = (appData.coldStorageMovements || []).find(function(m) {
+                    if (String(m.type || '') !== 'company_expense') return false;
+                    if (moveEntry && String(m.linkedMoveMovementId || '') === String(moveEntry.id)) return true;
+                    return String(m.lotId || '') === String(lot.id || '');
+                });
+                if (companyExpense > 0) {
+                    if (existingCompanyExpenseEntry) {
+                        existingCompanyExpenseEntry.date = lot.date;
+                        existingCompanyExpenseEntry.itemName = lot.itemName;
+                        existingCompanyExpenseEntry.coldStorageName = lot.coldStorageName;
+                        existingCompanyExpenseEntry.vendorName = lot.vendorName;
+                        existingCompanyExpenseEntry.supplierName = lot.supplierName || '-';
+                        existingCompanyExpenseEntry.qty = 0;
+                        existingCompanyExpenseEntry.bags = 0;
+                        existingCompanyExpenseEntry.amount = +companyExpense.toFixed(2);
+                        existingCompanyExpenseEntry.reference = lotReference;
+                        existingCompanyExpenseEntry.remarks = companyExpenseReason || lot.remarks || 'Company cold move expense';
+                    } else {
+                        appData.coldStorageMovements.push({
+                            id: Date.now() + Math.floor(Math.random() * 1000),
+                            date: lot.date,
+                            type: 'company_expense',
+                            lotId: lot.id,
+                            itemId: lot.itemId,
+                            itemName: lot.itemName,
+                            coldStorageName: lot.coldStorageName,
+                            vendorName: lot.vendorName,
+                            supplierName: lot.supplierName || '-',
+                            qty: 0,
+                            bags: 0,
+                            amount: +companyExpense.toFixed(2),
+                            paidAmount: 0,
+                            reference: lotReference,
+                            linkedMoveMovementId: moveEntry ? moveEntry.id : '',
+                            remarks: companyExpenseReason || lot.remarks || 'Company cold move expense'
+                        });
+                    }
+                } else if (existingCompanyExpenseEntry) {
+                    appData.coldStorageMovements = (appData.coldStorageMovements || []).filter(function(m) {
+                        return String(m.id) !== String(existingCompanyExpenseEntry.id);
+                    });
                 }
 
                 appData.payments = appData.payments || [];
@@ -5711,6 +5765,8 @@ function deleteAllMasters() {
                 rentPerKg: rentPerKg,
                 inOutPerBag: inOutPerBag,
                 otherCharge: otherCharge,
+                companyExpenseAtMove: +companyExpense.toFixed(2),
+                companyExpenseReason: companyExpenseReason,
                 periodicChargeTotal: 0,
                 estimatedTotalCharge: estimatedTotalCharge,
                 paidAtMove: paidAtMove,
@@ -5735,7 +5791,7 @@ function deleteAllMasters() {
             recalculateColdLotPayables(lot);
             appData.coldStorageLots.push(lot);
             appData.coldStorageMovements = appData.coldStorageMovements || [];
-            appData.coldStorageMovements.push({
+            const moveMovement = {
                 id: Date.now() + Math.floor(Math.random() * 1000),
                 date: date,
                 type: 'move_in',
@@ -5751,7 +5807,28 @@ function deleteAllMasters() {
                 paidAmount: paidAtMove,
                 reference: lotReference,
                 remarks: remarks
-            });
+            };
+            appData.coldStorageMovements.push(moveMovement);
+            if (companyExpense > 0) {
+                appData.coldStorageMovements.push({
+                    id: Date.now() + Math.floor(Math.random() * 1000),
+                    date: date,
+                    type: 'company_expense',
+                    lotId: lot.id,
+                    itemId: itemId,
+                    itemName: lot.itemName,
+                    coldStorageName: coldStorageName,
+                    vendorName: vendorName,
+                    supplierName: lot.supplierName,
+                    qty: 0,
+                    bags: 0,
+                    amount: +companyExpense.toFixed(2),
+                    paidAmount: 0,
+                    reference: lotReference,
+                    linkedMoveMovementId: moveMovement.id,
+                    remarks: companyExpenseReason || remarks || 'Company cold move expense'
+                });
+            }
 
             if (paidAtMove > 0) {
                 appData.payments = appData.payments || [];
@@ -6620,6 +6697,9 @@ function deleteAllMasters() {
                     linkedRelease.shrinkageQty = 0;
                     delete linkedRelease.linkedShrinkageMovementId;
                 }
+            } else if (type === 'company_expense') {
+                const companyExpense = Math.max(0, parseFloat(movement.amount) || 0);
+                lot.companyExpenseAtMove = +Math.max(0, (parseFloat(lot.companyExpenseAtMove) || 0) - companyExpense).toFixed(2);
             } else {
                 alert('Delete is not supported for this movement type.');
                 return;
@@ -6783,6 +6863,8 @@ function deleteAllMasters() {
             if (document.getElementById('coldMoveRentPerKg')) document.getElementById('coldMoveRentPerKg').value = Number(lot.rentPerKg || 0).toFixed(2);
             if (document.getElementById('coldMoveInOutPerBag')) document.getElementById('coldMoveInOutPerBag').value = Number(lot.inOutPerBag || 0).toFixed(2);
             if (document.getElementById('coldMoveOtherCharge')) document.getElementById('coldMoveOtherCharge').value = Number(lot.otherCharge || 0).toFixed(2);
+            if (document.getElementById('coldMoveCompanyExpense')) document.getElementById('coldMoveCompanyExpense').value = Number(lot.companyExpenseAtMove || 0).toFixed(2);
+            if (document.getElementById('coldMoveCompanyExpenseReason')) document.getElementById('coldMoveCompanyExpenseReason').value = lot.companyExpenseReason || '';
             if (document.getElementById('coldMovePaidAtMove')) document.getElementById('coldMovePaidAtMove').value = Number(lot.paidAtMove || 0).toFixed(2);
             if (document.getElementById('coldMoveReference')) document.getElementById('coldMoveReference').value = lot.lotReference || '';
             if (document.getElementById('coldMoveRemarks')) document.getElementById('coldMoveRemarks').value = lot.remarks || '';
@@ -7189,6 +7271,7 @@ function deleteAllMasters() {
                 const lot = (appData.coldStorageLots || []).find(function(l) { return String(l.id || '') === String(m.lotId || ''); });
                 const typeMap = {
                     move_in: 'Move In',
+                    company_expense: 'Company Expense',
                     charge_add: 'Periodic Charge',
                     release_out: 'Release',
                     shrinkage: 'Shrinkage',
@@ -7404,7 +7487,7 @@ function deleteAllMasters() {
                 const m = (appData.coldStorageMovements || []).find(function(x) { return String(x.id) === String(movementId); });
                 if (!m) return;
                 const lotMatch = (appData.coldStorageLots || []).find(function(l) { return String(l.id || '') === String(m.lotId || ''); });
-                const map = { move_in: 'Move In', charge_add: 'Periodic Charge', release_out: 'Release', shrinkage: 'Shrinkage', damage: 'Damage' };
+                const map = { move_in: 'Move In', company_expense: 'Company Expense', charge_add: 'Periodic Charge', release_out: 'Release', shrinkage: 'Shrinkage', damage: 'Damage' };
                 row = {
                     date: m.date || '-',
                     type: map[m.type] || (m.type || 'Movement'),
@@ -11111,6 +11194,14 @@ function deleteAllMasters() {
             const totalLotColdStorageCost = (appData.coldStorageLots || []).reduce((sum, lot) => {
                 return sum + (parseFloat(lot.estimatedTotalCharge) || 0);
             }, 0);
+            const totalCompanyColdMoveExpense = (appData.coldStorageMovements || []).reduce((sum, movement) => {
+                if (String(movement.type || '') !== 'company_expense') return sum;
+                if (startDate) {
+                    const movementDate = movement.date ? new Date(movement.date) : null;
+                    if (!movementDate || movementDate < startDate || movementDate > endDate) return sum;
+                }
+                return sum + (parseFloat(movement.amount) || 0);
+            }, 0);
             const totalColdDamageUsShare = filteredColdDamages.reduce((sum, row) => {
                 return sum + (parseFloat(row.usShareAmount) || 0);
             }, 0);
@@ -11118,7 +11209,7 @@ function deleteAllMasters() {
                 return sum + (parseFloat(row.payableReduction) || 0);
             }, 0);
             const totalEffectivePurchaseCost = totalBasePurchaseCost + totalColdStorageCost;
-            const totalCosts = totalEffectivePurchaseCost + totalColdDamageUsShare - totalColdDamageVendorRecovery;
+            const totalCosts = totalEffectivePurchaseCost + totalCompanyColdMoveExpense + totalColdDamageUsShare - totalColdDamageVendorRecovery;
             const totalBrokerage = filteredBrokerage.reduce((sum, entry) => sum + (entry.amount || 0), 0);
             const totalDeductionsAmount = filteredDeductions.reduce((sum, d) => {
                 var amt = parseFloat(d.amount) || 0;
@@ -11136,11 +11227,13 @@ function deleteAllMasters() {
             var effectivePurchaseCostEl = document.getElementById('pnlEffectivePurchaseCost');
             var coldDamageLossEl = document.getElementById('pnlColdDamageLoss');
             var coldDamageRecoveryEl = document.getElementById('pnlColdDamageRecovery');
+            var companyColdMoveExpenseEl = document.getElementById('pnlCompanyColdMoveExpense');
             if (basePurchaseCostEl) basePurchaseCostEl.textContent = `${RU}${totalBasePurchaseCost.toFixed(2)}`;
             if (coldStorageCostEl) coldStorageCostEl.textContent = `${RU}${(totalColdStorageCost + totalLotColdStorageCost).toFixed(2)}`;
             if (effectivePurchaseCostEl) effectivePurchaseCostEl.textContent = `${RU}${totalEffectivePurchaseCost.toFixed(2)}`;
             if (coldDamageLossEl) coldDamageLossEl.textContent = `${RU}${totalColdDamageUsShare.toFixed(2)}`;
             if (coldDamageRecoveryEl) coldDamageRecoveryEl.textContent = `${RU}${totalColdDamageVendorRecovery.toFixed(2)}`;
+            if (companyColdMoveExpenseEl) companyColdMoveExpenseEl.textContent = `${RU}${totalCompanyColdMoveExpense.toFixed(2)}`;
             
             // Helper: deduction totals for a sale (by linkedSale.saleId or invoice match). Uses lossAmount for P&L so adjustment (supplier/broker share) is respected.
             function getDeductionsForSale(sale) {
@@ -11547,6 +11640,7 @@ function deleteAllMasters() {
             var effectivePurchaseCostEl = document.getElementById('pnlEffectivePurchaseCost');
             var coldDamageLossEl = document.getElementById('pnlColdDamageLoss');
             var coldDamageRecoveryEl = document.getElementById('pnlColdDamageRecovery');
+            var companyColdMoveExpenseEl = document.getElementById('pnlCompanyColdMoveExpense');
             var totalRevenue = totalRevenueEl ? (totalRevenueEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
             var totalCosts = totalCostsEl ? (totalCostsEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
             var netProfit = netProfitEl ? (netProfitEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
@@ -11555,12 +11649,14 @@ function deleteAllMasters() {
             var effectivePurchaseCost = effectivePurchaseCostEl ? (effectivePurchaseCostEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
             var coldDamageLoss = coldDamageLossEl ? (coldDamageLossEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
             var coldDamageRecovery = coldDamageRecoveryEl ? (coldDamageRecoveryEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
+            var companyColdMoveExpense = companyColdMoveExpenseEl ? (companyColdMoveExpenseEl.textContent || '').replace(RU, '').replace(/,/g, '') : '0';
             csv += 'SUMMARY\n';
             csv += 'Total Revenue,' + totalRevenue + '\n';
             csv += 'Total Costs,' + totalCosts + '\n';
             csv += 'Base Purchase Cost,' + basePurchaseCost + '\n';
             csv += 'Cold Storage Cost,' + coldStorageCost + '\n';
             csv += 'Effective Purchase Cost,' + effectivePurchaseCost + '\n';
+            csv += 'Company Cold Move Expense,' + companyColdMoveExpense + '\n';
             csv += 'Cold Damage Loss (Our Share),' + coldDamageLoss + '\n';
             csv += 'Cold Damage Recovery (Vendor Share),' + coldDamageRecovery + '\n';
             csv += 'Net Profit,' + netProfit + '\n\n';
