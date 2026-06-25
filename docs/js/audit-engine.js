@@ -258,6 +258,9 @@ function computePeriodSummary(data, fromDateStr, toDateStr) {
   var payments = (data && data.payments) ? data.payments : [];
   var deductions = (data && data.deductions) ? data.deductions : [];
   var brokerage = (data && data.brokerage) ? data.brokerage : [];
+  var coldStorageLots = (data && data.coldStorageLots) ? data.coldStorageLots : [];
+  var coldStorageMovements = (data && data.coldStorageMovements) ? data.coldStorageMovements : [];
+  var coldStorageDamages = (data && data.coldStorageDamages) ? data.coldStorageDamages : [];
 
   var fromTs = __auditToTs(fromDateStr);
   var toTs = __auditToTs(toDateStr);
@@ -292,6 +295,46 @@ function computePeriodSummary(data, fromDateStr, toDateStr) {
     totalDeductions += (parseFloat(d.amount) || 0);
   });
 
+  // Keep cold-storage costs fully visible in Auto Audit.
+  var purchaseItemColdStorageCost = 0;
+  purchases.forEach(function(p) {
+    if (!inPeriod(p.date)) return;
+    (p.items || []).forEach(function(item) {
+      purchaseItemColdStorageCost += (parseFloat(item && item.coldStorageCost) || 0);
+    });
+  });
+
+  var lotEstimatedColdStorageCost = 0;
+  coldStorageLots.forEach(function(lot) {
+    if (!inPeriod(lot && lot.date)) return;
+    lotEstimatedColdStorageCost += (parseFloat(lot && lot.estimatedTotalCharge) || 0);
+  });
+
+  var periodicColdStorageCharge = 0;
+  var companyColdMoveExpense = 0;
+  coldStorageMovements.forEach(function(movement) {
+    if (!inPeriod(movement && movement.date)) return;
+    var type = String(movement && movement.type || '').trim().toLowerCase();
+    var amount = parseFloat(movement && movement.amount) || 0;
+    if (type === 'charge_add') {
+      periodicColdStorageCharge += amount;
+    } else if (type === 'company_expense') {
+      companyColdMoveExpense += amount;
+    }
+  });
+
+  var coldDamageLoss = 0;
+  var coldDamageRecovery = 0;
+  coldStorageDamages.forEach(function(dmg) {
+    if (!inPeriod(dmg && dmg.date)) return;
+    coldDamageLoss += (parseFloat(dmg && dmg.usShareAmount) || 0);
+    coldDamageRecovery += (parseFloat(dmg && dmg.payableReduction) || 0);
+  });
+
+  var totalColdStorageExpense = purchaseItemColdStorageCost + lotEstimatedColdStorageCost + periodicColdStorageCharge;
+  var totalAdditionalExpenses = totalColdStorageExpense + companyColdMoveExpense + coldDamageLoss - coldDamageRecovery;
+  var totalCostsInclusive = totalPurchases + totalBrokerage + totalDeductions + totalAdditionalExpenses;
+
   var supplierPaymentOutflow = 0;
   var customerReceiptInflow = 0;
   payments.forEach(function(p) {
@@ -302,13 +345,24 @@ function computePeriodSummary(data, fromDateStr, toDateStr) {
   });
 
   var netProfitLike = totalSales - totalPurchases - totalBrokerage - totalDeductions;
+  var netProfitLikeInclusive = totalSales - totalCostsInclusive;
 
   return {
     totalPurchases: totalPurchases,
     totalSales: totalSales,
     totalBrokerage: totalBrokerage,
     totalDeductions: totalDeductions,
+    purchaseItemColdStorageCost: purchaseItemColdStorageCost,
+    lotEstimatedColdStorageCost: lotEstimatedColdStorageCost,
+    periodicColdStorageCharge: periodicColdStorageCharge,
+    totalColdStorageExpense: totalColdStorageExpense,
+    companyColdMoveExpense: companyColdMoveExpense,
+    coldDamageLoss: coldDamageLoss,
+    coldDamageRecovery: coldDamageRecovery,
+    totalAdditionalExpenses: totalAdditionalExpenses,
+    totalCostsInclusive: totalCostsInclusive,
     netProfitLike: netProfitLike,
+    netProfitLikeInclusive: netProfitLikeInclusive,
     supplierPaymentOutflow: supplierPaymentOutflow,
     customerReceiptInflow: customerReceiptInflow
   };
