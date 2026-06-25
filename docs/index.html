@@ -2780,69 +2780,89 @@
 
     <!-- Page 9: Ledger -->
     <div id="ledger" class="page-content hidden">
-        <div class="max-w-7xl mx-auto px-4 py-8">
-            <div class="mb-8 border-l-4 border-blue-600 pl-4"><h2 class="text-3xl font-bold text-slate-900">Ledger Management</h2></div>
+        <div class="max-w-7xl mx-auto px-4 py-8 ledger-page-shell">
+            <div class="mb-8 border-l-4 border-blue-600 pl-4 ledger-page-title-wrap"><h2 class="text-3xl font-bold text-slate-900">Ledger Management</h2></div>
 
-            <div id="ledgerSummaryCards" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-                <button type="button" class="ledger-summary-card ledger-summary-trigger" onclick="openLedgerSummaryDrilldown('supplier')">
+            <div id="ledgerSummaryCards" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6 ledger-summary-grid">
+                <button type="button" class="ledger-summary-card ledger-summary-trigger" onclick="openLedgerSummaryDrilldown('supplier')" aria-label="Open suppliers outstanding breakdown">
+                    <div class="ledger-summary-head">
+                        <span class="ledger-summary-chip">Suppliers</span>
+                        <span class="ledger-summary-arrow" aria-hidden="true">&#8599;</span>
+                    </div>
                     <p class="ledger-summary-label">Total to be paid to suppliers</p>
-                    <p id="ledgerSummarySuppliersPayable" class="ledger-summary-value text-rose-700">&#8377;0.00</p>
+                    <p id="ledgerSummarySuppliersPayable" class="ledger-summary-value ledger-summary-value-suppliers">&#8377;0.00</p>
+                    <p id="ledgerSummarySuppliersMeta" class="ledger-summary-meta">0 entities</p>
                 </button>
-                <button type="button" class="ledger-summary-card ledger-summary-trigger" onclick="openLedgerSummaryDrilldown('customer')">
+                <button type="button" class="ledger-summary-card ledger-summary-trigger" onclick="openLedgerSummaryDrilldown('customer')" aria-label="Open customers outstanding breakdown">
+                    <div class="ledger-summary-head">
+                        <span class="ledger-summary-chip">Customers</span>
+                        <span class="ledger-summary-arrow" aria-hidden="true">&#8599;</span>
+                    </div>
                     <p class="ledger-summary-label">To be received from Customers</p>
-                    <p id="ledgerSummaryCustomersReceivable" class="ledger-summary-value text-emerald-700">&#8377;0.00</p>
+                    <p id="ledgerSummaryCustomersReceivable" class="ledger-summary-value ledger-summary-value-customers">&#8377;0.00</p>
+                    <p id="ledgerSummaryCustomersMeta" class="ledger-summary-meta">0 entities</p>
                 </button>
-                <button type="button" class="ledger-summary-card ledger-summary-trigger" onclick="openLedgerSummaryDrilldown('broker')">
+                <button type="button" class="ledger-summary-card ledger-summary-trigger" onclick="openLedgerSummaryDrilldown('broker')" aria-label="Open brokers outstanding breakdown">
+                    <div class="ledger-summary-head">
+                        <span class="ledger-summary-chip">Brokers</span>
+                        <span class="ledger-summary-arrow" aria-hidden="true">&#8599;</span>
+                    </div>
                     <p class="ledger-summary-label">To be paid to brokers</p>
-                    <p id="ledgerSummaryBrokersPayable" class="ledger-summary-value text-violet-700">&#8377;0.00</p>
+                    <p id="ledgerSummaryBrokersPayable" class="ledger-summary-value ledger-summary-value-brokers">&#8377;0.00</p>
+                    <p id="ledgerSummaryBrokersMeta" class="ledger-summary-meta">0 entities</p>
                 </button>
-                <button type="button" class="ledger-summary-card ledger-summary-trigger" onclick="openLedgerSummaryDrilldown('cold_storage')">
+                <button type="button" class="ledger-summary-card ledger-summary-trigger" onclick="openLedgerSummaryDrilldown('cold_storage')" aria-label="Open cold storage outstanding breakdown">
+                    <div class="ledger-summary-head">
+                        <span class="ledger-summary-chip">Cold Storage</span>
+                        <span class="ledger-summary-arrow" aria-hidden="true">&#8599;</span>
+                    </div>
                     <p class="ledger-summary-label">To be paid to Cold storage</p>
-                    <p id="ledgerSummaryColdStoragePayable" class="ledger-summary-value text-amber-700">&#8377;0.00</p>
+                    <p id="ledgerSummaryColdStoragePayable" class="ledger-summary-value ledger-summary-value-cold">&#8377;0.00</p>
+                    <p id="ledgerSummaryColdStorageMeta" class="ledger-summary-meta">0 entities</p>
                 </button>
             </div>
             
-            <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
-                <h3 class="text-xl font-semibold mb-6 text-primary">Ledger Filters</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    <select id="ledgerType" onchange="updateLedgerOptions()" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-8 ledger-panel ledger-filters-panel">
+                <h3 class="text-xl font-semibold mb-6 text-primary ledger-panel-title">Ledger Filters</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 ledger-filter-grid">
+                    <select id="ledgerType" onchange="updateLedgerOptions()" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent ledger-control">
                         <option value="">Select Ledger Type</option>
                         <option value="supplier">Supplier Ledger</option>
                         <option value="customer">Customer Ledger</option>
                         <option value="broker">Broker Ledger</option>
                         <option value="cold_storage">Cold Storage Ledger</option>
                     </select>
-                    <div class="relative">
-                        <select id="ledgerEntity" onchange="syncLedgerEntityDisplay()" class="hidden p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    <div class="relative ledger-control-wrap">
+                        <select id="ledgerEntity" onchange="syncLedgerEntityDisplay()" class="hidden p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent ledger-control">
                             <option value="">Select Entity</option>
                         </select>
-                        <input type="text" id="ledgerEntityInput" placeholder="Click to view all, type to search entity" autocomplete="off" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
-                        <div id="ledgerEntityDropdown" class="absolute left-0 right-0 top-full mt-0 bg-white border border-slate-300 rounded-lg shadow-lg z-[120] max-h-48 overflow-y-auto hidden"></div>
+                        <input type="text" id="ledgerEntityInput" placeholder="Click to view all, type to search entity" autocomplete="off" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent ledger-control">
+                        <div id="ledgerEntityDropdown" class="absolute left-0 right-0 top-full mt-0 bg-white border border-slate-300 rounded-lg shadow-lg z-[120] max-h-48 overflow-y-auto hidden ledger-entity-dropdown"></div>
                     </div>
                     <div class="flex items-center gap-2">
                         <label class="text-sm text-slate-600 whitespace-nowrap">From</label>
-                        <input type="date" id="ledgerFromDate" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent flex-1">
+                        <input type="date" id="ledgerFromDate" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent flex-1 ledger-control">
                     </div>
                     <div class="flex items-center gap-2">
                         <label class="text-sm text-slate-600 whitespace-nowrap">To</label>
-                        <input type="date" id="ledgerToDate" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent flex-1">
+                        <input type="date" id="ledgerToDate" class="p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent flex-1 ledger-control">
                     </div>
-                    <button onclick="generateLedger()" class="bg-primary text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors">Generate Ledger</button>
+                    <button onclick="generateLedger()" class="bg-primary text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors ledger-generate-btn">Generate Ledger</button>
                 </div>
             </div>
 
-            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
-                <div class="flex justify-between items-center mb-4">
+            <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6 ledger-panel ledger-statement-panel">
+                <div class="flex justify-between items-center mb-4 ledger-statement-head">
                     <h3 class="text-xl font-semibold text-primary">Ledger Statement</h3>
-                    <div class="flex gap-2">
-                        <button onclick="printLedgerStatement()" class="bg-slate-600 text-white px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors" id="printLedgerBtn" style="display: none;">Print</button>
-                        <button onclick="exportLedgerStatement()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportLedgerBtn" style="display: none;">Export to CSV</button>
-                        <button onclick="sendLedgerWhatsApp()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="sendLedgerWhatsAppBtn" style="display: none;">Send WhatsApp</button>
+                    <div class="flex gap-2 ledger-actions-wrap">
+                        <button onclick="printLedgerStatement()" class="bg-slate-600 text-white px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors ledger-action-btn ledger-action-btn-neutral" id="printLedgerBtn" style="display: none;">Print</button>
+                        <button onclick="exportLedgerStatement()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors ledger-action-btn ledger-action-btn-primary" id="exportLedgerBtn" style="display: none;">Export to CSV</button>
+                        <button onclick="sendLedgerWhatsApp()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors ledger-action-btn ledger-action-btn-success" id="sendLedgerWhatsAppBtn" style="display: none;">Send WhatsApp</button>
                     </div>
                 </div>
                 
                 <!-- Balance Display Section -->
-                <div id="ledgerBalanceSection" class="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200" style="display: none;">
+                <div id="ledgerBalanceSection" class="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 ledger-balance-card" style="display: none;">
                     <div class="flex justify-between items-center">
                         <div class="flex items-center space-x-4">
                             <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
@@ -2867,8 +2887,8 @@
                     </div>
                 </div>
                 
-                <div class="overflow-x-auto">
-                    <table class="w-full table-auto">
+                <div class="overflow-x-auto ledger-table-wrap">
+                    <table class="w-full table-auto ledger-statement-table">
                         <thead>
                             <tr class="bg-slate-50">
                                 <th class="px-4 py-3 text-left text-sm font-medium text-slate-700 cursor-pointer select-none hover:bg-slate-100" onclick="setLedgerSort('date')" title="Sort by date">Date<span id="ledgerSortInd_date"></span></th>
@@ -3514,19 +3534,19 @@
     </div>
 
     <!-- Ledger Summary Drilldown Modal -->
-    <div id="ledgerSummaryDrilldownModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-xl max-w-xl w-full max-h-[85vh] overflow-hidden">
-            <div class="bg-gradient-to-r from-slate-700 to-slate-800 p-4 flex items-center justify-between">
+    <div id="ledgerSummaryDrilldownModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4 ledger-drilldown-overlay" role="dialog" aria-modal="true" aria-labelledby="ledgerSummaryDrilldownTitle">
+        <div class="bg-white rounded-xl shadow-xl max-w-xl w-full max-h-[85vh] overflow-hidden ledger-drilldown-shell">
+            <div class="bg-gradient-to-r from-slate-700 to-slate-800 p-4 flex items-center justify-between ledger-drilldown-header">
                 <h3 class="text-lg font-bold text-white" id="ledgerSummaryDrilldownTitle">Outstanding Details</h3>
-                <button type="button" onclick="closeLedgerSummaryDrilldown()" class="text-white hover:text-slate-200 text-2xl font-bold leading-none">&times;</button>
+                <button type="button" onclick="closeLedgerSummaryDrilldown()" class="text-white hover:text-slate-200 text-2xl font-bold leading-none ledger-drilldown-close" aria-label="Close outstanding details">&times;</button>
             </div>
-            <div class="p-4 overflow-y-auto max-h-[60vh]">
-                <div id="ledgerSummaryDrilldownList" class="space-y-2">
+            <div class="p-4 overflow-y-auto max-h-[60vh] ledger-drilldown-body">
+                <div id="ledgerSummaryDrilldownList" class="space-y-2 ledger-drilldown-list">
                     <p class="text-sm text-slate-500">No rows to display.</p>
                 </div>
             </div>
-            <div class="border-t border-slate-200 bg-slate-50 px-4 py-3 flex items-center justify-between">
-                <span class="text-sm font-semibold text-slate-700">Total</span>
+            <div class="border-t border-slate-200 bg-slate-50 px-4 py-3 flex items-center justify-between ledger-drilldown-footer">
+                <span class="text-sm font-semibold text-slate-700">Total <span id="ledgerSummaryDrilldownCount" class="text-xs font-medium text-slate-500 ml-1"></span></span>
                 <span id="ledgerSummaryDrilldownTotal" class="text-base font-bold text-slate-900">&#8377;0.00</span>
             </div>
         </div>
