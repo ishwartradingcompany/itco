@@ -3086,19 +3086,282 @@ function deleteAllMasters() {
             };
         }
 
+        function getLedgerSummaryBreakdowns() {
+            var toAmount = function(value) {
+                return Math.max(0, parseFloat(value) || 0);
+            };
+            var toId = function(value) {
+                return String(value == null ? '' : value).trim();
+            };
+            var toName = function(value, fallback) {
+                var v = String(value || '').trim();
+                return v || fallback;
+            };
+
+            var purchaseById = {};
+            (appData.purchases || []).forEach(function(purchase) { purchaseById[toId(purchase.id)] = purchase; });
+            var saleById = {};
+            (appData.sales || []).forEach(function(sale) { saleById[toId(sale.id)] = sale; });
+            var brokerageById = {};
+            (appData.brokerage || []).forEach(function(entry) { brokerageById[toId(entry.id)] = entry; });
+            var lotById = {};
+            (appData.coldStorageLots || []).forEach(function(lot) { lotById[toId(lot.id)] = lot; });
+
+            var supplierNameById = {};
+            (appData.suppliers || []).forEach(function(s) { supplierNameById[toId(s.id)] = toName(s.name, 'Unknown Supplier'); });
+            var customerNameById = {};
+            (appData.customers || []).forEach(function(c) { customerNameById[toId(c.id)] = toName(c.name, 'Unknown Customer'); });
+            var brokerNameById = {};
+            (appData.brokers || []).forEach(function(b) { brokerNameById[toId(b.id)] = toName(b.name, 'Unknown Broker'); });
+
+            var supplierIdSet = {};
+            (appData.suppliers || []).forEach(function(s) { supplierIdSet[toId(s.id)] = true; });
+            (appData.purchases || []).forEach(function(p) { supplierIdSet[toId(p.supplierId)] = true; });
+            (appData.openingBalances || []).forEach(function(ob) { if (ob.entityType === 'supplier') supplierIdSet[toId(ob.entityId)] = true; });
+            (appData.adjustments || []).forEach(function(adj) { if (adj.type === 'supplier_adjustment') supplierIdSet[toId(adj.entityId)] = true; });
+            (appData.payments || []).forEach(function(payment) {
+                if (payment.type === 'ledger_payment' && payment.entityType === 'supplier') supplierIdSet[toId(payment.entityId)] = true;
+                if (payment.type === 'purchase') {
+                    var pur = purchaseById[toId(payment.invoiceId)];
+                    if (pur) supplierIdSet[toId(pur.supplierId)] = true;
+                }
+            });
+
+            var customerIdSet = {};
+            (appData.customers || []).forEach(function(c) { customerIdSet[toId(c.id)] = true; });
+            (appData.sales || []).forEach(function(s) { customerIdSet[toId(s.customerId)] = true; });
+            (appData.openingBalances || []).forEach(function(ob) { if (ob.entityType === 'customer') customerIdSet[toId(ob.entityId)] = true; });
+            (appData.deductions || []).forEach(function(d) { customerIdSet[toId(d.customerId)] = true; });
+            (appData.payments || []).forEach(function(payment) {
+                if (payment.type === 'ledger_receipt' && payment.entityType === 'customer') customerIdSet[toId(payment.entityId)] = true;
+                if (payment.type === 'sale') {
+                    var sale = saleById[toId(payment.invoiceId)];
+                    if (sale) customerIdSet[toId(sale.customerId)] = true;
+                }
+            });
+
+            var brokerIdSet = {};
+            (appData.brokers || []).forEach(function(b) { brokerIdSet[toId(b.id)] = true; });
+            (appData.brokerage || []).forEach(function(entry) { brokerIdSet[toId(entry.brokerId)] = true; });
+            (appData.adjustments || []).forEach(function(adj) { if (adj.type === 'broker_adjustment') brokerIdSet[toId(adj.entityId)] = true; });
+            (appData.payments || []).forEach(function(payment) {
+                if (payment.type === 'ledger_payment' && payment.entityType === 'broker') brokerIdSet[toId(payment.entityId)] = true;
+                if (payment.type === 'brokerage') {
+                    var brokerageEntry = brokerageById[toId(payment.invoiceId)];
+                    if (brokerageEntry) brokerIdSet[toId(brokerageEntry.brokerId)] = true;
+                }
+            });
+
+            var supplierRows = [];
+            Object.keys(supplierIdSet).forEach(function(id) {
+                if (!id) return;
+                var debit = 0;
+                var credit = 0;
+                (appData.openingBalances || []).forEach(function(ob) {
+                    if (ob.entityType === 'supplier' && toId(ob.entityId) === id) debit += toAmount(ob.amount);
+                });
+                (appData.purchases || []).forEach(function(purchase) {
+                    if (toId(purchase.supplierId) === id) debit += toAmount(purchase.grandTotal || purchase.total);
+                });
+                (appData.adjustments || []).forEach(function(adj) {
+                    if (adj.type === 'supplier_adjustment' && toId(adj.entityId) === id) credit += toAmount(adj.amount);
+                });
+                (appData.payments || []).forEach(function(payment) {
+                    var isPurchasePayment = payment.type === 'purchase' && purchaseById[toId(payment.invoiceId)] && toId(purchaseById[toId(payment.invoiceId)].supplierId) === id;
+                    var isLedgerPayment = payment.type === 'ledger_payment' && payment.entityType === 'supplier' && toId(payment.entityId) === id;
+                    if (isPurchasePayment || isLedgerPayment) credit += toAmount(payment.amount);
+                });
+                var outstanding = Math.max(0, debit - credit);
+                if (outstanding <= 0) return;
+                supplierRows.push({ id: id, name: supplierNameById[id] || ('Supplier ' + id), amount: +outstanding.toFixed(2) });
+            });
+
+            var customerRows = [];
+            Object.keys(customerIdSet).forEach(function(id) {
+                if (!id) return;
+                var debit = 0;
+                var credit = 0;
+                (appData.openingBalances || []).forEach(function(ob) {
+                    if (ob.entityType === 'customer' && toId(ob.entityId) === id) debit += toAmount(ob.amount);
+                });
+                (appData.sales || []).forEach(function(sale) {
+                    if (toId(sale.customerId) === id) debit += toAmount(sale.grandTotal || sale.total);
+                });
+                (appData.deductions || []).forEach(function(deduction) {
+                    if (toId(deduction.customerId) === id) credit += toAmount(deduction.amount);
+                });
+                (appData.payments || []).forEach(function(payment) {
+                    var isSalePayment = payment.type === 'sale' && saleById[toId(payment.invoiceId)] && toId(saleById[toId(payment.invoiceId)].customerId) === id;
+                    var isLedgerReceipt = payment.type === 'ledger_receipt' && payment.entityType === 'customer' && toId(payment.entityId) === id;
+                    if (isSalePayment || isLedgerReceipt) credit += toAmount(payment.amount);
+                });
+                var outstanding = Math.max(0, debit - credit);
+                if (outstanding <= 0) return;
+                customerRows.push({ id: id, name: customerNameById[id] || ('Customer ' + id), amount: +outstanding.toFixed(2) });
+            });
+
+            var brokerRows = [];
+            Object.keys(brokerIdSet).forEach(function(id) {
+                if (!id) return;
+                var debit = 0;
+                var credit = 0;
+                (appData.brokerage || []).forEach(function(entry) {
+                    if (toId(entry.brokerId) === id) debit += toAmount(entry.amount);
+                });
+                (appData.adjustments || []).forEach(function(adj) {
+                    if (adj.type === 'broker_adjustment' && toId(adj.entityId) === id) credit += toAmount(adj.amount);
+                });
+                (appData.payments || []).forEach(function(payment) {
+                    var isBrokeragePayment = payment.type === 'brokerage' && brokerageById[toId(payment.invoiceId)] && toId(brokerageById[toId(payment.invoiceId)].brokerId) === id;
+                    var isLedgerPayment = payment.type === 'ledger_payment' && payment.entityType === 'broker' && toId(payment.entityId) === id;
+                    if (isBrokeragePayment || isLedgerPayment) credit += toAmount(payment.amount);
+                });
+                var outstanding = Math.max(0, debit - credit);
+                if (outstanding <= 0) return;
+                brokerRows.push({ id: id, name: brokerNameById[id] || ('Broker ' + id), amount: +outstanding.toFixed(2) });
+            });
+
+            var coldStorageRows = [];
+            var coldStorageEntities = getLedgerEntitiesForType('cold_storage') || [];
+            coldStorageEntities.forEach(function(entity) {
+                var selectedMatchKey = normalizedName((entity && entity.name) || '');
+                var selectedMasterId = toId(entity && entity.masterId);
+                if (!selectedMatchKey && !selectedMasterId) return;
+                var matchesLot = function(lot) {
+                    if (!lot) return false;
+                    if (selectedMasterId && toId(lot.coldStorageId) === selectedMasterId) return true;
+                    return normalizedName(lot.coldStorageName) === selectedMatchKey;
+                };
+                var debit = 0;
+                var credit = 0;
+                (appData.coldStorageMovements || []).forEach(function(movement) {
+                    var moveType = String(movement.type || '');
+                    if (!['move_in', 'charge_add'].includes(moveType)) return;
+                    var lot = lotById[toId(movement.lotId)];
+                    var matched = lot ? matchesLot(lot) : normalizedName(movement.coldStorageName) === selectedMatchKey;
+                    if (matched) debit += toAmount(movement.amount);
+                });
+                (appData.payments || []).forEach(function(payment) {
+                    if (String(payment.type || '').toLowerCase() !== 'cold_storage_payment') return;
+                    var lot = lotById[toId(payment.invoiceId)];
+                    var matched = lot ? matchesLot(lot) : normalizedName(payment.party) === selectedMatchKey;
+                    if (matched) credit += toAmount(payment.amount);
+                });
+                (appData.coldStorageDamages || []).forEach(function(damage) {
+                    if (toAmount(damage.vendorShareAmount) <= 0) return;
+                    var lot = lotById[toId(damage.lotId)];
+                    var matched = lot ? matchesLot(lot) : normalizedName(damage.coldStorageName) === selectedMatchKey;
+                    if (matched) credit += toAmount(damage.vendorShareAmount);
+                });
+                var outstanding = Math.max(0, debit - credit);
+                if (outstanding <= 0) return;
+                coldStorageRows.push({
+                    id: toId(entity.id),
+                    name: toName(entity.name, 'Cold Storage'),
+                    amount: +outstanding.toFixed(2)
+                });
+            });
+
+            var byAmountDesc = function(a, b) {
+                if (b.amount !== a.amount) return b.amount - a.amount;
+                return String(a.name || '').localeCompare(String(b.name || ''));
+            };
+            supplierRows.sort(byAmountDesc);
+            customerRows.sort(byAmountDesc);
+            brokerRows.sort(byAmountDesc);
+            coldStorageRows.sort(byAmountDesc);
+
+            var sumRows = function(rows) {
+                return rows.reduce(function(sum, row) { return sum + (parseFloat(row.amount) || 0); }, 0);
+            };
+
+            return {
+                supplier: {
+                    title: 'Payable to Suppliers',
+                    rows: supplierRows,
+                    total: +sumRows(supplierRows).toFixed(2)
+                },
+                customer: {
+                    title: 'Receivable from Customers',
+                    rows: customerRows,
+                    total: +sumRows(customerRows).toFixed(2)
+                },
+                broker: {
+                    title: 'Payable to Brokers',
+                    rows: brokerRows,
+                    total: +sumRows(brokerRows).toFixed(2)
+                },
+                cold_storage: {
+                    title: 'Payable to Cold Storage',
+                    rows: coldStorageRows,
+                    total: +sumRows(coldStorageRows).toFixed(2)
+                }
+            };
+        }
+
+        function formatLedgerSummaryAmount(value) {
+            return RU + (Math.max(0, parseFloat(value) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function closeLedgerSummaryDrilldown() {
+            var modal = document.getElementById('ledgerSummaryDrilldownModal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function openLedgerSummaryDrilldown(type) {
+            var breakdown = getLedgerSummaryBreakdowns();
+            var block = breakdown[String(type || '')];
+            if (!block) return;
+            var modal = document.getElementById('ledgerSummaryDrilldownModal');
+            var titleEl = document.getElementById('ledgerSummaryDrilldownTitle');
+            var listEl = document.getElementById('ledgerSummaryDrilldownList');
+            var totalEl = document.getElementById('ledgerSummaryDrilldownTotal');
+            if (!modal || !titleEl || !listEl || !totalEl) return;
+
+            titleEl.textContent = block.title;
+            if (!block.rows.length) {
+                listEl.innerHTML = '<p class="text-sm text-slate-500">No outstanding entities found.</p>';
+            } else {
+                listEl.innerHTML = block.rows.map(function(row) {
+                    return '<div class="ledger-drilldown-row">' +
+                        '<span class="ledger-drilldown-name">' + escapeHtml(row.name || '-') + '</span>' +
+                        '<span class="ledger-drilldown-amount">' + formatLedgerSummaryAmount(row.amount) + '</span>' +
+                    '</div>';
+                }).join('');
+            }
+            totalEl.textContent = formatLedgerSummaryAmount(block.total);
+            modal.classList.remove('hidden');
+        }
+
+        function initLedgerSummaryDrilldownModal() {
+            if (document.body && document.body.dataset.ledgerDrilldownInit === '1') return;
+            if (document.body) document.body.dataset.ledgerDrilldownInit = '1';
+            document.addEventListener('click', function(e) {
+                var modal = document.getElementById('ledgerSummaryDrilldownModal');
+                if (!modal || modal.classList.contains('hidden')) return;
+                if (e.target === modal) closeLedgerSummaryDrilldown();
+            });
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') closeLedgerSummaryDrilldown();
+            });
+        }
+
         function renderLedgerSummaryCards() {
-            var summary = calculateLedgerSummaryTotals();
-            var fmt = function(value) {
-                return RU + (Math.max(0, parseFloat(value) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            var breakdown = getLedgerSummaryBreakdowns();
+            var summary = {
+                suppliersPayable: (breakdown.supplier && breakdown.supplier.total) || 0,
+                customersReceivable: (breakdown.customer && breakdown.customer.total) || 0,
+                brokersPayable: (breakdown.broker && breakdown.broker.total) || 0,
+                coldStoragePayable: (breakdown.cold_storage && breakdown.cold_storage.total) || 0
             };
             var suppliersEl = document.getElementById('ledgerSummarySuppliersPayable');
             var customersEl = document.getElementById('ledgerSummaryCustomersReceivable');
             var brokersEl = document.getElementById('ledgerSummaryBrokersPayable');
             var coldStorageEl = document.getElementById('ledgerSummaryColdStoragePayable');
-            if (suppliersEl) suppliersEl.textContent = fmt(summary.suppliersPayable);
-            if (customersEl) customersEl.textContent = fmt(summary.customersReceivable);
-            if (brokersEl) brokersEl.textContent = fmt(summary.brokersPayable);
-            if (coldStorageEl) coldStorageEl.textContent = fmt(summary.coldStoragePayable);
+            if (suppliersEl) suppliersEl.textContent = formatLedgerSummaryAmount(summary.suppliersPayable);
+            if (customersEl) customersEl.textContent = formatLedgerSummaryAmount(summary.customersReceivable);
+            if (brokersEl) brokersEl.textContent = formatLedgerSummaryAmount(summary.brokersPayable);
+            if (coldStorageEl) coldStorageEl.textContent = formatLedgerSummaryAmount(summary.coldStoragePayable);
         }
 
         function syncLedgerEntityDisplay() {
@@ -3482,6 +3745,7 @@ function deleteAllMasters() {
             const inCostDisplay = document.getElementById('purchaseColdStorageInCostDisplay');
             const outCostDisplay = document.getElementById('purchaseColdStorageOutCostDisplay');
             const otherDisplay = document.getElementById('purchaseColdStorageOtherDisplay');
+            const companyExpenseDisplay = document.getElementById('purchaseColdStorageCompanyExpenseDisplay');
             const totalDisplay = document.getElementById('purchaseColdStorageTotalDisplay');
             const rentRateDisplay = document.getElementById('purchaseColdStorageRentRateDisplay');
             const weightDisplay = document.getElementById('purchaseColdStorageWeightDisplay');
@@ -3495,6 +3759,7 @@ function deleteAllMasters() {
                 if (inCostDisplay) inCostDisplay.textContent = '0.00';
                 if (outCostDisplay) outCostDisplay.textContent = '0.00';
                 if (otherDisplay) otherDisplay.textContent = '0.00';
+                if (companyExpenseDisplay) companyExpenseDisplay.textContent = '0.00';
                 if (totalDisplay) totalDisplay.textContent = '0.00';
                 if (rentRateDisplay) rentRateDisplay.textContent = '0.00';
                 if (weightDisplay) weightDisplay.textContent = '0.00';
@@ -3514,6 +3779,7 @@ function deleteAllMasters() {
             const inPerBag = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageInPerBag') && document.getElementById('purchaseColdStorageInPerBag').value) || 0);
             const outPerBag = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageOutPerBag') && document.getElementById('purchaseColdStorageOutPerBag').value) || 0);
             const otherCharge = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageOtherCharge') && document.getElementById('purchaseColdStorageOtherCharge').value) || 0);
+            const companyExpense = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageCompanyExpense') && document.getElementById('purchaseColdStorageCompanyExpense').value) || 0);
             const rentCost = moveQty * rentPerKg;
             const inCost = moveBags * inPerBag;
             const outCost = moveBags * outPerBag;
@@ -3523,6 +3789,7 @@ function deleteAllMasters() {
             if (inCostDisplay) inCostDisplay.textContent = inCost.toFixed(2);
             if (outCostDisplay) outCostDisplay.textContent = outCost.toFixed(2);
             if (otherDisplay) otherDisplay.textContent = otherCharge.toFixed(2);
+            if (companyExpenseDisplay) companyExpenseDisplay.textContent = companyExpense.toFixed(2);
             if (totalDisplay) totalDisplay.textContent = totalCost.toFixed(2);
             if (rentRateDisplay) rentRateDisplay.textContent = rentPerKg.toFixed(2);
             if (weightDisplay) weightDisplay.textContent = moveQty.toFixed(2);
@@ -3565,24 +3832,28 @@ function deleteAllMasters() {
             const inEl = document.getElementById('purchaseColdStorageInPerBag');
             const outEl = document.getElementById('purchaseColdStorageOutPerBag');
             const otherEl = document.getElementById('purchaseColdStorageOtherCharge');
+            const companyExpenseEl = document.getElementById('purchaseColdStorageCompanyExpense');
             const costEl = document.getElementById('purchaseColdStorageCost');
             const moveQtyEl = document.getElementById('purchaseColdMoveQty');
             const moveBagsEl = document.getElementById('purchaseColdMoveBags');
             const storageNameEl = document.getElementById('purchaseColdStorageName');
             const storageVendorEl = document.getElementById('purchaseColdStorageVendorName');
             const remarksEl = document.getElementById('purchaseColdStorageRemarks');
+            const companyExpenseReasonEl = document.getElementById('purchaseColdStorageCompanyExpenseReason');
             if (toggleEl) toggleEl.checked = false;
             if (fieldsEl) fieldsEl.style.display = 'grid';
             if (rentEl) rentEl.value = '';
             if (inEl) inEl.value = '';
             if (outEl) outEl.value = '';
             if (otherEl) otherEl.value = '';
+            if (companyExpenseEl) companyExpenseEl.value = '';
             if (costEl) costEl.value = '';
             if (moveQtyEl) moveQtyEl.value = '';
             if (moveBagsEl) moveBagsEl.value = '';
             if (storageNameEl) storageNameEl.value = '';
             if (storageVendorEl) storageVendorEl.value = '';
             if (remarksEl) remarksEl.value = '';
+            if (companyExpenseReasonEl) companyExpenseReasonEl.value = '';
             if (typeof switchPurchaseItemTab === 'function') switchPurchaseItemTab('basic');
             calculatePurchaseColdStorageCost();
         }
@@ -3598,20 +3869,24 @@ function deleteAllMasters() {
                 const inEl = document.getElementById('purchaseColdStorageInPerBag');
                 const outEl = document.getElementById('purchaseColdStorageOutPerBag');
                 const otherEl = document.getElementById('purchaseColdStorageOtherCharge');
+                const companyExpenseEl = document.getElementById('purchaseColdStorageCompanyExpense');
                 const costEl = document.getElementById('purchaseColdStorageCost');
                 const moveQtyEl = document.getElementById('purchaseColdMoveQty');
                 const moveBagsEl = document.getElementById('purchaseColdMoveBags');
                 const storageNameEl = document.getElementById('purchaseColdStorageName');
                 const storageVendorEl = document.getElementById('purchaseColdStorageVendorName');
+                const companyExpenseReasonEl = document.getElementById('purchaseColdStorageCompanyExpenseReason');
                 if (rentEl) rentEl.value = '';
                 if (inEl) inEl.value = '';
                 if (outEl) outEl.value = '';
                 if (otherEl) otherEl.value = '';
+                if (companyExpenseEl) companyExpenseEl.value = '';
                 if (costEl) costEl.value = '';
                 if (moveQtyEl) moveQtyEl.value = '';
                 if (moveBagsEl) moveBagsEl.value = '';
                 if (storageNameEl) storageNameEl.value = '';
                 if (storageVendorEl) storageVendorEl.value = '';
+                if (companyExpenseReasonEl) companyExpenseReasonEl.value = '';
                 return;
             }
             calculatePurchaseColdStorageCost();
@@ -3636,6 +3911,8 @@ function deleteAllMasters() {
             const coldStorageInPerBag = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageInPerBag') && document.getElementById('purchaseColdStorageInPerBag').value) || 0);
             const coldStorageOutPerBag = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageOutPerBag') && document.getElementById('purchaseColdStorageOutPerBag').value) || 0);
             const coldStorageOtherCharge = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageOtherCharge') && document.getElementById('purchaseColdStorageOtherCharge').value) || 0);
+            const coldStorageCompanyExpense = Math.max(0, parseFloat(document.getElementById('purchaseColdStorageCompanyExpense') && document.getElementById('purchaseColdStorageCompanyExpense').value) || 0);
+            const coldStorageCompanyExpenseReason = (document.getElementById('purchaseColdStorageCompanyExpenseReason') && document.getElementById('purchaseColdStorageCompanyExpenseReason').value) ? document.getElementById('purchaseColdStorageCompanyExpenseReason').value.trim() : '';
             const coldMoveQtyInput = parseFloat(document.getElementById('purchaseColdMoveQty') && document.getElementById('purchaseColdMoveQty').value);
             const coldMoveBagsInput = parseFloat(document.getElementById('purchaseColdMoveBags') && document.getElementById('purchaseColdMoveBags').value);
             const selectedColdStorage = resolveColdStorageSelection('purchaseColdStorageName');
@@ -3736,6 +4013,8 @@ function deleteAllMasters() {
                 coldStorageOutPerBag: isColdStorage ? coldStorageOutPerBag : 0,
                 coldStorageInOutPerBag: isColdStorage ? (coldStorageInPerBag + coldStorageOutPerBag) : 0,
                 coldStorageOtherCharge: isColdStorage ? coldStorageOtherCharge : 0,
+                coldStorageCompanyExpense: isColdStorage ? +coldStorageCompanyExpense.toFixed(2) : 0,
+                coldStorageCompanyExpenseReason: isColdStorage ? coldStorageCompanyExpenseReason : '',
                 coldMoveQty: isColdStorage ? +coldMoveQty.toFixed(2) : 0,
                 coldMoveBags: isColdStorage ? +coldMoveBags.toFixed(2) : 0,
                 coldStorageId: isColdStorage ? coldStorageId : '',
@@ -3825,16 +4104,19 @@ function deleteAllMasters() {
             const coldInEl = document.getElementById('purchaseColdStorageInPerBag');
             const coldOutEl = document.getElementById('purchaseColdStorageOutPerBag');
             const coldOtherEl = document.getElementById('purchaseColdStorageOtherCharge');
+            const coldCompanyExpenseEl = document.getElementById('purchaseColdStorageCompanyExpense');
             const coldMoveQtyEl = document.getElementById('purchaseColdMoveQty');
             const coldMoveBagsEl = document.getElementById('purchaseColdMoveBags');
             const coldStorageNameEl = document.getElementById('purchaseColdStorageName');
             const coldStorageVendorEl = document.getElementById('purchaseColdStorageVendorName');
             const coldRemarksEl = document.getElementById('purchaseColdStorageRemarks');
+            const coldCompanyExpenseReasonEl = document.getElementById('purchaseColdStorageCompanyExpenseReason');
             if (coldToggleEl) coldToggleEl.checked = !!item.isColdStorage;
             if (coldRentEl) coldRentEl.value = item.coldStorageRentPerKg || 0;
             if (coldInEl) coldInEl.value = (item.coldStorageInPerBag != null ? item.coldStorageInPerBag : (item.coldStorageInOutPerBag || 0));
             if (coldOutEl) coldOutEl.value = (item.coldStorageOutPerBag != null ? item.coldStorageOutPerBag : 0);
             if (coldOtherEl) coldOtherEl.value = item.coldStorageOtherCharge || 0;
+            if (coldCompanyExpenseEl) coldCompanyExpenseEl.value = item.coldStorageCompanyExpense || 0;
             if (coldMoveQtyEl) coldMoveQtyEl.value = (item.coldMoveQty != null ? item.coldMoveQty : item.grossWeight || 0);
             if (coldMoveBagsEl) coldMoveBagsEl.value = (item.coldMoveBags != null ? item.coldMoveBags : item.bags || 0);
             if (coldStorageNameEl) {
@@ -3842,6 +4124,7 @@ function deleteAllMasters() {
             }
             if (coldStorageVendorEl) coldStorageVendorEl.value = item.coldStorageVendorName || '';
             if (coldRemarksEl) coldRemarksEl.value = item.coldStorageRemarks || '';
+            if (coldCompanyExpenseReasonEl) coldCompanyExpenseReasonEl.value = item.coldStorageCompanyExpenseReason || '';
             togglePurchaseColdStorageFields();
             calculatePurchaseColdStorageCost();
 
@@ -5236,6 +5519,8 @@ function deleteAllMasters() {
             const outPerBag = Math.max(0, parseFloat(purchaseItem.coldStorageOutPerBag) || 0);
             const inOutPerBag = inPerBag + outPerBag;
             const otherCharge = Math.max(0, parseFloat(purchaseItem.coldStorageOtherCharge) || 0);
+            const companyExpenseAtMove = Math.max(0, parseFloat(purchaseItem.coldStorageCompanyExpense) || 0);
+            const companyExpenseReason = String(purchaseItem.coldStorageCompanyExpenseReason || '').trim();
             const estimatedTotalCharge = Math.max(
                 0,
                 parseFloat(purchaseItem.coldStorageCost) || ((qty * rentPerKg) + (bags * (inPerBag + outPerBag)) + otherCharge)
@@ -5267,8 +5552,8 @@ function deleteAllMasters() {
                 rentPerKg: rentPerKg,
                 inOutPerBag: inOutPerBag,
                 otherCharge: otherCharge,
-                companyExpenseAtMove: 0,
-                companyExpenseReason: '',
+                companyExpenseAtMove: +companyExpenseAtMove.toFixed(2),
+                companyExpenseReason: companyExpenseReason,
                 periodicChargeTotal: 0,
                 estimatedTotalCharge: +estimatedTotalCharge.toFixed(2),
                 paidAtMove: 0,
@@ -5320,6 +5605,30 @@ function deleteAllMasters() {
             appData.coldStorageLots.push(lot);
             appData.coldStorageMovements = appData.coldStorageMovements || [];
             appData.coldStorageMovements.push(movement);
+            if (companyExpenseAtMove > 0) {
+                appData.coldStorageMovements.push({
+                    id: Date.now() + Math.floor(Math.random() * 1000) + itemIndex,
+                    date: moveDate,
+                    type: 'company_expense',
+                    lotId: lot.id,
+                    itemId: purchaseItem.itemId,
+                    itemName: lot.itemName,
+                    coldStorageName: lot.coldStorageName,
+                    vendorName: lot.vendorName,
+                    supplierName: lot.supplierName || '-',
+                    qty: 0,
+                    bags: 0,
+                    amount: +companyExpenseAtMove.toFixed(2),
+                    paidAmount: 0,
+                    reference: lotReference,
+                    linkedMoveMovementId: movement.id,
+                    source: 'purchase_auto',
+                    sourceKey: sourceKey,
+                    purchaseId: purchase.id,
+                    purchaseInvoice: purchase.invoice || '',
+                    remarks: companyExpenseReason || remarks || 'Company cold move expense'
+                });
+            }
             return lot;
         }
 
@@ -14787,6 +15096,7 @@ function exportLedgerStatement() {
         document.addEventListener('DOMContentLoaded', function() {
             loadData();
             initRowActionMenuHandlers();
+            initLedgerSummaryDrilldownModal();
             showPage('home');
             updateItemsList();
             updateSuppliersList();
