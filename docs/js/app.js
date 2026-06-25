@@ -3316,20 +3316,25 @@ function deleteAllMasters() {
             var titleEl = document.getElementById('ledgerSummaryDrilldownTitle');
             var listEl = document.getElementById('ledgerSummaryDrilldownList');
             var totalEl = document.getElementById('ledgerSummaryDrilldownTotal');
+            var countEl = document.getElementById('ledgerSummaryDrilldownCount');
             if (!modal || !titleEl || !listEl || !totalEl) return;
 
             titleEl.textContent = block.title;
             if (!block.rows.length) {
-                listEl.innerHTML = '<p class="text-sm text-slate-500">No outstanding entities found.</p>';
+                listEl.innerHTML = '<p class="ledger-drilldown-empty">No outstanding entities found.</p>';
             } else {
-                listEl.innerHTML = block.rows.map(function(row) {
+                listEl.innerHTML = block.rows.map(function(row, idx) {
                     return '<div class="ledger-drilldown-row">' +
-                        '<span class="ledger-drilldown-name">' + escapeHtml(row.name || '-') + '</span>' +
+                        '<span class="ledger-drilldown-rank">' + (idx + 1) + '</span>' +
+                        '<span class="ledger-drilldown-name" title="' + escapeHtml(row.name || '-') + '">' + escapeHtml(row.name || '-') + '</span>' +
                         '<span class="ledger-drilldown-amount">' + formatLedgerSummaryAmount(row.amount) + '</span>' +
                     '</div>';
                 }).join('');
             }
             totalEl.textContent = formatLedgerSummaryAmount(block.total);
+            if (countEl) {
+                countEl.textContent = '(' + block.rows.length + ' ' + (block.rows.length === 1 ? 'entity' : 'entities') + ')';
+            }
             modal.classList.remove('hidden');
         }
 
@@ -3358,10 +3363,18 @@ function deleteAllMasters() {
             var customersEl = document.getElementById('ledgerSummaryCustomersReceivable');
             var brokersEl = document.getElementById('ledgerSummaryBrokersPayable');
             var coldStorageEl = document.getElementById('ledgerSummaryColdStoragePayable');
+            var suppliersMetaEl = document.getElementById('ledgerSummarySuppliersMeta');
+            var customersMetaEl = document.getElementById('ledgerSummaryCustomersMeta');
+            var brokersMetaEl = document.getElementById('ledgerSummaryBrokersMeta');
+            var coldStorageMetaEl = document.getElementById('ledgerSummaryColdStorageMeta');
             if (suppliersEl) suppliersEl.textContent = formatLedgerSummaryAmount(summary.suppliersPayable);
             if (customersEl) customersEl.textContent = formatLedgerSummaryAmount(summary.customersReceivable);
             if (brokersEl) brokersEl.textContent = formatLedgerSummaryAmount(summary.brokersPayable);
             if (coldStorageEl) coldStorageEl.textContent = formatLedgerSummaryAmount(summary.coldStoragePayable);
+            if (suppliersMetaEl) suppliersMetaEl.textContent = ((breakdown.supplier && breakdown.supplier.rows && breakdown.supplier.rows.length) || 0) + ' entities';
+            if (customersMetaEl) customersMetaEl.textContent = ((breakdown.customer && breakdown.customer.rows && breakdown.customer.rows.length) || 0) + ' entities';
+            if (brokersMetaEl) brokersMetaEl.textContent = ((breakdown.broker && breakdown.broker.rows && breakdown.broker.rows.length) || 0) + ' entities';
+            if (coldStorageMetaEl) coldStorageMetaEl.textContent = ((breakdown.cold_storage && breakdown.cold_storage.rows && breakdown.cold_storage.rows.length) || 0) + ' entities';
         }
 
         function syncLedgerEntityDisplay() {
