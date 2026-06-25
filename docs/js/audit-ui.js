@@ -228,6 +228,7 @@ function runAutoAudit() {
         '<div><strong>Total Deductions:</strong> ' + formatAuditINR(ps2.totalDeductions) + '</div>' +
         '<div><strong>Purchase Item Cold Storage Cost:</strong> ' + formatAuditINR(ps2.purchaseItemColdStorageCost) + '</div>' +
         '<div><strong>Lot Estimated Cold Storage Cost:</strong> ' + formatAuditINR(ps2.lotEstimatedColdStorageCost) + '</div>' +
+        '<div><strong>Cold Storage Move-in Base Used:</strong> ' + formatAuditINR(ps2.coldStorageMoveInBase) + '</div>' +
         '<div><strong>Periodic Cold Storage Charges:</strong> ' + formatAuditINR(ps2.periodicColdStorageCharge) + '</div>' +
         '<div><strong>Total Cold Storage Expense:</strong> ' + formatAuditINR(ps2.totalColdStorageExpense) + '</div>' +
         '<div><strong>Company Cold Move Expense:</strong> ' + formatAuditINR(ps2.companyColdMoveExpense) + '</div>' +
