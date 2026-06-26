@@ -380,6 +380,7 @@ let linkedPurchases = []; // Store linked purchases for current sale
 let tempLinkedPurchases = []; // Temporary storage while modal is open
 let deductionLinkedPurchase = null; // Store linked purchase for deduction
 let deductionLinkedSale = null; // Store linked sale for deduction
+let linkedDetailsExpandedState = {}; // Row-wise expand/collapse state in history tables
 
 // Pagination State
 const paginationState = {
@@ -3308,6 +3309,48 @@ function deleteAllMasters() {
             if (modal) modal.classList.add('hidden');
         }
 
+        function openLedgerFromSummary(type, encodedName) {
+            var ledgerType = String(type || '').trim();
+            if (!ledgerType) return;
+            var entityName = '';
+            try {
+                entityName = decodeURIComponent(String(encodedName || ''));
+            } catch (e) {
+                entityName = String(encodedName || '');
+            }
+            entityName = String(entityName || '').trim();
+            if (!entityName) return;
+
+            if (typeof showPage === 'function') {
+                showPage('ledger');
+            }
+            var typeEl = document.getElementById('ledgerType');
+            if (!typeEl) return;
+            typeEl.value = ledgerType;
+            if (typeof updateLedgerOptions === 'function') updateLedgerOptions();
+
+            var entities = getLedgerEntitiesForType(ledgerType) || [];
+            var normalizedTarget = typeof normalizedName === 'function'
+                ? normalizedName(entityName)
+                : String(entityName).trim().toLowerCase();
+            var match = entities.find(function(entity) {
+                var current = typeof normalizedName === 'function'
+                    ? normalizedName(entity && entity.name)
+                    : String(entity && entity.name || '').trim().toLowerCase();
+                return current === normalizedTarget;
+            }) || entities.find(function(entity) {
+                var current = typeof normalizedName === 'function'
+                    ? normalizedName(entity && entity.name)
+                    : String(entity && entity.name || '').trim().toLowerCase();
+                return current.indexOf(normalizedTarget) >= 0 || normalizedTarget.indexOf(current) >= 0;
+            });
+            if (!match) return;
+
+            chooseLedgerEntity(match.id, match.name);
+            closeLedgerSummaryDrilldown();
+            if (typeof generateLedger === 'function') generateLedger();
+        }
+
         function openLedgerSummaryDrilldown(type) {
             var breakdown = getLedgerSummaryBreakdowns();
             var block = breakdown[String(type || '')];
@@ -3324,9 +3367,11 @@ function deleteAllMasters() {
                 listEl.innerHTML = '<p class="ledger-drilldown-empty">No outstanding entities found.</p>';
             } else {
                 listEl.innerHTML = block.rows.map(function(row, idx) {
+                    var safeType = escapeHtml(String(type || ''));
+                    var encodedName = escapeHtml(encodeURIComponent(String(row.name || '')));
                     return '<div class="ledger-drilldown-row">' +
                         '<span class="ledger-drilldown-rank">' + (idx + 1) + '</span>' +
-                        '<span class="ledger-drilldown-name" title="' + escapeHtml(row.name || '-') + '">' + escapeHtml(row.name || '-') + '</span>' +
+                        '<button type="button" class="ledger-drilldown-name ledger-drilldown-name-btn" title="Open ledger: ' + escapeHtml(row.name || '-') + '" onclick="openLedgerFromSummary(\'' + safeType + '\', \'' + encodedName + '\')">' + escapeHtml(row.name || '-') + '</button>' +
                         '<span class="ledger-drilldown-amount">' + formatLedgerSummaryAmount(row.amount) + '</span>' +
                     '</div>';
                 }).join('');
@@ -5177,6 +5222,46 @@ function deleteAllMasters() {
             document.getElementById('purchaseSort').value = 'date-desc';
             filterPurchases();
         }
+
+        function toggleLinkedDetailsExpansion(rowKey) {
+            var key = String(rowKey || '');
+            if (!key) return;
+            linkedDetailsExpandedState[key] = !linkedDetailsExpandedState[key];
+            if (key.indexOf('purchase-') === 0) {
+                renderPurchaseTable();
+            } else if (key.indexOf('sale-') === 0) {
+                renderSalesTable();
+            } else {
+                renderPurchaseTable();
+                renderSalesTable();
+            }
+        }
+
+        function buildCompactLinkedDetailsHtml(entries, rowKey, tone) {
+            var rows = Array.isArray(entries) ? entries : [];
+            if (!rows.length) return '<span class="text-xs text-slate-400">-</span>';
+            var key = String(rowKey || '');
+            var expanded = !!linkedDetailsExpandedState[key];
+            var collapsedVisibleCount = 2;
+            var visibleRows = expanded ? rows : rows.slice(0, collapsedVisibleCount);
+            var remaining = Math.max(0, rows.length - visibleRows.length);
+            var itemClass = tone === 'sale'
+                ? 'linked-details-item linked-details-item-sale'
+                : 'linked-details-item linked-details-item-purchase';
+            var html = '<div class="linked-details-compact">';
+            html += visibleRows.map(function(row) {
+                return '<div class="' + itemClass + '">' +
+                    '<div class="font-semibold">' + escapeHtml(row.invoice || '-') + '</div>' +
+                    '<div>Qty: ' + Number(row.qty || 0).toFixed(2) + ' kg | Bags: ' + Number(row.bags || 0).toFixed(2) + '</div>' +
+                    '</div>';
+            }).join('');
+            if (rows.length > collapsedVisibleCount) {
+                var toggleText = expanded ? 'Show less' : ('+' + remaining + ' more');
+                html += '<button type="button" class="linked-details-toggle" onclick="toggleLinkedDetailsExpansion(\'' + escapeHtml(key) + '\')">' + escapeHtml(toggleText) + '</button>';
+            }
+            html += '</div>';
+            return html;
+        }
         
         function renderPurchaseTable() {
             const tbody = document.getElementById('purchaseHistory');
@@ -5249,16 +5334,9 @@ function deleteAllMasters() {
                         : 'Moved to Cold';
                     statusBadges.push('<span class="inline-block mr-1 mb-1 px-1.5 py-0.5 rounded text-xs font-medium bg-cyan-100 text-cyan-800" title="Cold storage status for this purchase">' + escapeHtml(coldStatusText) + '</span>');
                 }
-                var linkedDetailsHtml = linkedDetails.length > 0
-                    ? linkedDetails.map(function(entry) {
-                        return '<div class="mb-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">' +
-                            '<div class="font-semibold">' + escapeHtml(entry.invoice) + '</div>' +
-                            '<div>Qty: ' + Number(entry.qty || 0).toFixed(2) + ' kg | Bags: ' + Number(entry.bags || 0).toFixed(2) + '</div>' +
-                            '</div>';
-                    }).join('')
-                    : '<span class="text-xs text-slate-400">-</span>';
+                var linkedDetailsHtml = buildCompactLinkedDetailsHtml(linkedDetails, 'purchase-' + String(purchase.id), 'purchase');
                 var extraBadgesHtml = statusBadges.length > 0
-                    ? '<div class="mt-1">' + statusBadges.join('') + '</div>'
+                    ? '<div class="mb-1">' + statusBadges.join('') + '</div>'
                     : '';
                 
                 const row = document.createElement('tr');
@@ -5280,8 +5358,8 @@ function deleteAllMasters() {
                         </span>
                     </td>
                     <td class="px-4 py-3.5 min-w-[220px]">
-                        ${linkedDetailsHtml}
                         ${extraBadgesHtml}
+                        ${linkedDetailsHtml}
                     </td>
                     <td class="px-4 py-3.5 text-right whitespace-nowrap">
                         <span class="font-semibold text-slate-800">${RU}${grandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
@@ -10606,14 +10684,7 @@ function deleteAllMasters() {
                     linkedPurchaseMap[key].bags += getLinkedBagsValue(lp);
                 });
                 const linkedPurchaseGroups = Object.values(linkedPurchaseMap);
-                const linkedPurchaseDetailsHtml = linkedPurchaseGroups.length
-                    ? linkedPurchaseGroups.map(function(row) {
-                        return `<div class="mb-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-800">
-                            <div class="font-semibold">${escapeHtml(row.invoice)}</div>
-                            <div>Qty: ${Number(row.qty || 0).toFixed(2)} kg | Bags: ${Number(row.bags || 0).toFixed(2)}</div>
-                        </div>`;
-                    }).join('')
-                    : '<span class="text-xs text-slate-400">-</span>';
+                const linkedPurchaseDetailsHtml = buildCompactLinkedDetailsHtml(linkedPurchaseGroups, 'sale-' + String(sale.id), 'sale');
                 
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-green-50/50 transition-colors align-top';
