@@ -1261,6 +1261,49 @@
             word-break: break-word;
         }
 
+        #purchaseHistoryView .linked-details-compact,
+        #salesHistoryView .linked-details-compact {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        #purchaseHistoryView .linked-details-item,
+        #salesHistoryView .linked-details-item {
+            border-radius: 10px;
+            line-height: 1.35;
+            word-break: break-word;
+            font-size: 0.75rem;
+            padding: 5px 8px;
+            border: 1px solid transparent;
+        }
+
+        #purchaseHistoryView .linked-details-item-purchase {
+            border-color: #fde68a;
+            background: #fffbeb;
+            color: #92400e;
+        }
+
+        #salesHistoryView .linked-details-item-sale {
+            border-color: #bfdbfe;
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+
+        #purchaseHistoryView .linked-details-toggle,
+        #salesHistoryView .linked-details-toggle {
+            align-self: flex-start;
+            border: 0;
+            background: transparent;
+            color: #2563eb;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 0;
+            cursor: pointer;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+
         #purchaseHistoryView .row-action-menu-wrap,
         #salesHistoryView .row-action-menu-wrap {
             position: relative;
@@ -1598,6 +1641,29 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-name-btn {
+            border: 0;
+            background: transparent;
+            text-align: left;
+            cursor: pointer;
+            text-decoration: underline;
+            text-decoration-color: transparent;
+            text-underline-offset: 2px;
+            transition: color 0.16s ease, text-decoration-color 0.16s ease;
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-name-btn:hover {
+            color: #1d4ed8;
+            text-decoration-color: #1d4ed8;
+        }
+
+        #ledgerSummaryDrilldownModal .ledger-drilldown-name-btn:focus-visible {
+            outline: 2px solid #2f5f8f;
+            outline-offset: 2px;
+            border-radius: 4px;
+            text-decoration-color: #1d4ed8;
         }
 
         #ledgerSummaryDrilldownModal .ledger-drilldown-amount {
