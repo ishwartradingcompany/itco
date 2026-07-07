@@ -838,12 +838,22 @@ function normalizeExportRowsForPage(pageKey) {
     }
     if (key === 'brokerage') {
         var brRows = (filteredBrokerage || []).map(function(b) {
+            var refDetails = getBrokerageReferenceDetails(b);
             return {
-                date: b.date || '', broker: b.brokerName || '', item: b.itemName || '', type: b.type || '', amount: (parseFloat(b.amount) || 0).toFixed(2), reference: b.reference || ''
+                date: b.date || '',
+                broker: b.brokerName || '',
+                item: b.itemName || '',
+                supplier: refDetails.supplierName || '-',
+                truckNo: refDetails.truckNo || '-',
+                qtyBags: (parseFloat(refDetails.qty) || 0).toFixed(2) + ' kg | ' + (parseFloat(refDetails.bags) || 0).toFixed(2) + ' bags',
+                type: b.type || '',
+                amount: (parseFloat(b.amount) || 0).toFixed(2),
+                reference: b.reference || ''
             };
         });
         return { title: 'Brokerage Register', filename: 'Brokerage_Register_' + stamp, sheetName: 'Brokerage', columns: [
-            { key: 'date', label: 'Date' }, { key: 'broker', label: 'Broker' }, { key: 'item', label: 'Item' }, { key: 'type', label: 'Type' }, { key: 'amount', label: 'Amount' }, { key: 'reference', label: 'Reference' }
+            { key: 'date', label: 'Date' }, { key: 'broker', label: 'Broker' }, { key: 'item', label: 'Item' }, { key: 'supplier', label: 'Supplier' },
+            { key: 'truckNo', label: 'Truck No' }, { key: 'qtyBags', label: 'Qty / Bags' }, { key: 'type', label: 'Type' }, { key: 'amount', label: 'Amount' }, { key: 'reference', label: 'Reference' }
         ], rows: brRows };
     }
     if (key === 'deductions') {
@@ -11448,7 +11458,16 @@ function deleteAllMasters() {
             filteredBrokerage = appData.brokerage.filter(b => {
                 // Search filter
                 if (search) {
-                    const searchFields = [b.brokerName, b.itemName, b.reference || ''].join(' ').toLowerCase();
+                    const refDetails = getBrokerageReferenceDetails(b);
+                    const searchFields = [
+                        b.brokerName,
+                        b.itemName,
+                        b.reference || '',
+                        refDetails.supplierName || '',
+                        refDetails.truckNo || '',
+                        (parseFloat(refDetails.qty) || 0).toFixed(2),
+                        (parseFloat(refDetails.bags) || 0).toFixed(2)
+                    ].join(' ').toLowerCase();
                     if (!searchFields.includes(search)) return false;
                 }
                 // Broker filter
@@ -11490,13 +11509,86 @@ function deleteAllMasters() {
             document.getElementById('brokerageSort').value = 'date-desc';
             filterBrokerage();
         }
+
+        function getBrokerageReferenceDetails(entry) {
+            var safe = entry || {};
+            var ref = String(safe.reference || '').trim();
+            var typeLower = String(safe.type || '').toLowerCase();
+            var details = {
+                supplierName: '-',
+                truckNo: '-',
+                qty: 0,
+                bags: 0
+            };
+            if (!ref) return details;
+
+            if (typeLower === 'purchase') {
+                var purchase = (appData.purchases || []).find(function(p) { return String(p.invoice || '').trim() === ref; });
+                if (!purchase) return details;
+                details.supplierName = purchase.supplierName || '-';
+                details.truckNo = purchase.truck || (purchase.multiTrucks && purchase.multiTrucks[0]) || '-';
+                (purchase.items || []).forEach(function(item) {
+                    if (String(item && item.itemId || '') !== String(safe.itemId || '')) return;
+                    details.qty += parseFloat(item && (item.grossWeight ?? item.quantity ?? 0)) || 0;
+                    details.bags += parseFloat(item && item.bags) || 0;
+                });
+                return details;
+            }
+
+            if (typeLower === 'sale') {
+                var sale = (appData.sales || []).find(function(s) { return String(s.invoice || '').trim() === ref; });
+                if (!sale) return details;
+                details.supplierName = sale.customerName || '-';
+                details.truckNo = sale.truck || (sale.multiTrucks && sale.multiTrucks[0]) || '-';
+                (sale.items || []).forEach(function(item) {
+                    if (String(item && item.itemId || '') !== String(safe.itemId || '')) return;
+                    details.qty += parseFloat(item && (item.grossWeight ?? item.quantity ?? 0)) || 0;
+                    details.bags += parseFloat(item && item.bags) || 0;
+                });
+                return details;
+            }
+
+            return details;
+        }
+
+        function ensureBrokerageHistoryEnhancements() {
+            var tbody = document.getElementById('brokerageHistory');
+            var table = tbody && tbody.closest('table');
+            var headerRow = table && table.querySelector('thead tr');
+            if (!headerRow) return;
+            if (!headerRow.querySelector('[data-col="brokerage-supplier"]')) {
+                var itemTh = Array.from(headerRow.querySelectorAll('th')).find(function(th) {
+                    return String(th.textContent || '').trim().toLowerCase() === 'item';
+                });
+                if (itemTh) {
+                    var supplierTh = document.createElement('th');
+                    supplierTh.setAttribute('data-col', 'brokerage-supplier');
+                    supplierTh.className = 'px-4 py-3 text-left text-sm font-medium text-slate-700';
+                    supplierTh.textContent = 'Supplier';
+                    itemTh.insertAdjacentElement('afterend', supplierTh);
+
+                    var truckTh = document.createElement('th');
+                    truckTh.setAttribute('data-col', 'brokerage-truck');
+                    truckTh.className = 'px-4 py-3 text-left text-sm font-medium text-slate-700';
+                    truckTh.textContent = 'Truck No';
+                    supplierTh.insertAdjacentElement('afterend', truckTh);
+
+                    var qtyBagsTh = document.createElement('th');
+                    qtyBagsTh.setAttribute('data-col', 'brokerage-qtybags');
+                    qtyBagsTh.className = 'px-4 py-3 text-left text-sm font-medium text-slate-700';
+                    qtyBagsTh.textContent = 'Qty / Bags';
+                    truckTh.insertAdjacentElement('afterend', qtyBagsTh);
+                }
+            }
+        }
         
         function renderBrokerageTable() {
+            ensureBrokerageHistoryEnhancements();
             const tbody = document.getElementById('brokerageHistory');
             tbody.innerHTML = '';
             
             if (filteredBrokerage.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No brokerage entries found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No brokerage entries found</td></tr>';
                 document.getElementById('brokeragePagination').innerHTML = '';
                 return;
             }
@@ -11505,15 +11597,20 @@ function deleteAllMasters() {
             const paginatedBrokerage = getPaginatedData(filteredBrokerage, currentPage, pageSize);
             
             paginatedBrokerage.forEach(entry => {
+                var refDetails = getBrokerageReferenceDetails(entry);
+                var qtyBagsText = Number(refDetails.qty || 0).toFixed(2) + ' kg | ' + Number(refDetails.bags || 0).toFixed(2) + ' bags';
                 const row = document.createElement('tr');
                 row.className = 'border-b border-slate-200 hover:bg-slate-50';
                 row.innerHTML = `
                     <td class="px-4 py-3">${entry.date}</td>
                     <td class="px-4 py-3">${entry.brokerName}</td>
                     <td class="px-4 py-3">${entry.itemName}</td>
+                    <td class="px-4 py-3">${escapeHtml(refDetails.supplierName || '-')}</td>
+                    <td class="px-4 py-3">${escapeHtml(refDetails.truckNo || '-')}</td>
+                    <td class="px-4 py-3">${escapeHtml(qtyBagsText)}</td>
                     <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded-full ${entry.type === 'Purchase' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}">${entry.type}</span></td>
                     <td class="px-4 py-3">${RU}${entry.amount}</td>
-                    <td class="px-4 py-3">${entry.reference}</td>
+                    <td class="px-4 py-3">${escapeHtml(entry.reference || '-')}</td>
                     <td class="px-4 py-3">
                         <div class="flex items-center gap-1">
                             <button onclick="printBrokerageEntry(${entry.id})" class="action-btn action-print" title="Print"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clip-rule="evenodd"/></svg></button>
