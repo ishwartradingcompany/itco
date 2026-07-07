@@ -5172,7 +5172,7 @@ function deleteAllMasters() {
         function filterPurchases() {
             ensurePurchaseHistoryEnhancements();
             const search = (document.getElementById('purchaseSearch')?.value || '').toLowerCase();
-            const bagsLotSearch = (document.getElementById('purchaseBagsLotSearch')?.value || '').toLowerCase().trim();
+            const bagsSearch = (document.getElementById('purchaseBagsLotSearch')?.value || '').toLowerCase().trim();
             const supplierId = document.getElementById('purchaseFilterSupplier')?.value || '';
             const dateFrom = document.getElementById('purchaseDateFrom')?.value || '';
             const dateTo = document.getElementById('purchaseDateTo')?.value || '';
@@ -5184,24 +5184,17 @@ function deleteAllMasters() {
                     const searchFields = [p.invoice, p.supplierName, p.truck || ''].join(' ').toLowerCase();
                     if (!searchFields.includes(search)) return false;
                 }
-                // Dedicated Bags/Lot/Crate search
-                if (bagsLotSearch) {
-                    const itemBagsAndRefs = [];
+                // Dedicated Bags search
+                if (bagsSearch) {
+                    const itemBagTerms = [];
                     (p.items || []).forEach(function(item) {
                         const bagValue = parseFloat(item && item.bags);
                         if (!isNaN(bagValue)) {
-                            itemBagsAndRefs.push(String(+bagValue));
-                            itemBagsAndRefs.push(bagValue.toFixed(2));
+                            itemBagTerms.push(String(+bagValue));
+                            itemBagTerms.push(bagValue.toFixed(2));
                         }
-                        const inlineRef = String((item && (item.coldStorageReference || item.kaantaParchi || item.lotReference)) || '').trim().toLowerCase();
-                        if (inlineRef) itemBagsAndRefs.push(inlineRef);
                     });
-                    const lotRefs = (appData.coldStorageLots || [])
-                        .filter(function(lot) { return String(lot && lot.purchaseId || '') === String(p.id); })
-                        .map(function(lot) { return String((lot && (lot.lotReference || lot.reference || lot.id)) || '').trim().toLowerCase(); })
-                        .filter(Boolean);
-                    const bagsLotHaystack = itemBagsAndRefs.concat(lotRefs).join(' ');
-                    if (!bagsLotHaystack.includes(bagsLotSearch)) return false;
+                    if (!itemBagTerms.join(' ').includes(bagsSearch)) return false;
                 }
                 // Supplier filter
                 if (supplierId && p.supplierId != supplierId) return false;
@@ -8473,6 +8466,7 @@ function deleteAllMasters() {
                         allStockMovements.push({
                             movementId: movementSeq++,
                             date: purchase.date,
+                            purchaseId: purchase.id,
                             itemName: item.itemName,
                             itemId: item.itemId,
                             type: 'Purchase',
@@ -8495,6 +8489,7 @@ function deleteAllMasters() {
                         allStockMovements.push({
                             movementId: movementSeq++,
                             date: sale.date,
+                            saleId: sale.id,
                             itemName: item.itemName,
                             itemId: item.itemId,
                             type: 'Sale',
@@ -8582,11 +8577,85 @@ function deleteAllMasters() {
             // Apply filters
             filterStockMovement();
         }
+
+        function buildStockMovementDisplayRows(rows) {
+            const sourceRows = Array.isArray(rows) ? rows : [];
+            const linkedByPurchaseItem = {};
+            const linkedSaleItemKeys = {};
+
+            (appData.sales || []).forEach(function(sale) {
+                const normalizedLinks = normalizeLinkedPurchasesForItems((sale && sale.linkedPurchases) || [], (sale && sale.items) || []);
+                normalizedLinks.forEach(function(link) {
+                    const qty = Math.max(0, getLinkedQtyValue(link));
+                    const bags = Math.max(0, getLinkedBagsValue(link));
+                    if (qty <= 0 && bags <= 0) return;
+
+                    const purchaseId = String(link && link.purchaseId || '');
+                    const itemId = String(link && link.itemId || '');
+                    if (!purchaseId || !itemId) return;
+
+                    const purchaseItemKey = purchaseId + '|' + itemId;
+                    const saleKey = String(sale && sale.id || '') + '|' + itemId;
+                    linkedSaleItemKeys[saleKey] = true;
+
+                    if (!linkedByPurchaseItem[purchaseItemKey]) linkedByPurchaseItem[purchaseItemKey] = {};
+                    const saleIdKey = String(sale && sale.id || '');
+                    if (!linkedByPurchaseItem[purchaseItemKey][saleIdKey]) {
+                        linkedByPurchaseItem[purchaseItemKey][saleIdKey] = {
+                            saleId: sale && sale.id,
+                            invoice: (sale && sale.invoice) || ('Sale #' + String(sale && sale.id || '')),
+                            date: (sale && sale.date) || '',
+                            party: (sale && sale.customerName) || '-',
+                            qty: 0,
+                            bags: 0
+                        };
+                    }
+                    linkedByPurchaseItem[purchaseItemKey][saleIdKey].qty += qty;
+                    linkedByPurchaseItem[purchaseItemKey][saleIdKey].bags += bags;
+                });
+            });
+
+            const displayRows = [];
+            sourceRows.forEach(function(m) {
+                if (!m) return;
+                if (String(m.type || '') === 'Sale') {
+                    const saleItemKey = String(m.saleId || '') + '|' + String(m.itemId || '');
+                    if (linkedSaleItemKeys[saleItemKey]) return;
+                }
+
+                const safeQty = parseFloat(m.quantity) || 0;
+                const safeBags = parseFloat(m.bags) || 0;
+                const row = Object.assign({}, m, {
+                    outDetails: [],
+                    outQtyTotal: 0,
+                    outBagsTotal: 0,
+                    netQty: safeQty,
+                    netBags: safeBags
+                });
+
+                if (String(m.type || '') === 'Purchase') {
+                    const purchaseItemKey = String(m.purchaseId || '') + '|' + String(m.itemId || '');
+                    const linkedSalesMap = linkedByPurchaseItem[purchaseItemKey] || {};
+                    const linkedSales = Object.keys(linkedSalesMap).map(function(k) { return linkedSalesMap[k]; });
+                    linkedSales.sort(function(a, b) {
+                        return String(b.date || '').localeCompare(String(a.date || ''));
+                    });
+                    row.outDetails = linkedSales;
+                    row.outQtyTotal = linkedSales.reduce(function(sum, detail) { return sum + (parseFloat(detail.qty) || 0); }, 0);
+                    row.outBagsTotal = linkedSales.reduce(function(sum, detail) { return sum + (parseFloat(detail.bags) || 0); }, 0);
+                    row.netQty = safeQty - row.outQtyTotal;
+                    row.netBags = safeBags - row.outBagsTotal;
+                }
+                displayRows.push(row);
+            });
+
+            return displayRows;
+        }
         
         function filterStockMovement() {
             ensureStockMovementEnhancements();
             const search = (document.getElementById('stockMovementSearch')?.value || '').toLowerCase();
-            const bagsLotSearch = (document.getElementById('stockMovementBagsLotSearch')?.value || '').toLowerCase().trim();
+            const bagsSearch = (document.getElementById('stockMovementBagsLotSearch')?.value || '').toLowerCase().trim();
             const itemFilter = document.getElementById('stockMovementFilterItem')?.value || '';
             const typeFilter = document.getElementById('stockMovementFilterType')?.value || '';
             const dateFrom = document.getElementById('stockMovementDateFrom')?.value || '';
@@ -8595,19 +8664,20 @@ function deleteAllMasters() {
             // Filter
             filteredStockMovements = allStockMovements.filter(m => {
                 if (search && !String(m.itemName || '').toLowerCase().includes(search) && !String(m.reference || '').toLowerCase().includes(search)) return false;
-                if (bagsLotSearch) {
+                if (bagsSearch) {
                     const bagVal = parseFloat(m.bags) || 0;
                     const bagTerms = [String(Math.abs(+bagVal)), Math.abs(bagVal).toFixed(2), (+bagVal).toFixed(2)];
-                    const lotTerms = [
-                        String(m.reference || ''),
-                        String(m.invoice || ''),
-                        String(m.lotId || '')
-                    ];
-                    const bagsLotHaystack = bagTerms.concat(lotTerms).join(' ').toLowerCase();
-                    if (!bagsLotHaystack.includes(bagsLotSearch)) return false;
+                    if (!bagTerms.join(' ').toLowerCase().includes(bagsSearch)) return false;
                 }
                 if (itemFilter && m.itemName !== itemFilter) return false;
-                if (typeFilter && m.type !== typeFilter) return false;
+                if (typeFilter) {
+                    // For sale-focused view, keep purchase rows too so linked OUT splits remain visible in combined rows.
+                    if (typeFilter === 'Sale') {
+                        if (m.type !== 'Sale' && m.type !== 'Purchase') return false;
+                    } else if (m.type !== typeFilter) {
+                        return false;
+                    }
+                }
                 if (dateFrom && m.date < dateFrom) return false;
                 return true;
             });
@@ -8627,7 +8697,9 @@ function deleteAllMasters() {
             // Update count
             const countEl = document.getElementById('stockMovementFilterCount');
             if (countEl) {
-                countEl.textContent = `Showing ${filteredStockMovements.length} of ${allStockMovements.length} movements`;
+                const displayedCount = buildStockMovementDisplayRows(filteredStockMovements).length;
+                const totalDisplayCount = buildStockMovementDisplayRows(allStockMovements).length;
+                countEl.textContent = `Showing ${displayedCount} of ${totalDisplayCount} movements`;
             }
             
             paginationState.stockMovement.currentPage = 1;
@@ -8656,7 +8728,7 @@ function deleteAllMasters() {
                         <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                         </svg>
-                        <input type="text" id="purchaseBagsLotSearch" placeholder="Bags / Lot / Crate..."
+                        <input type="text" id="purchaseBagsLotSearch" placeholder="Bags search..."
                             class="w-full pl-9 pr-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50"
                             onkeyup="filterPurchases()">
                     </div>
@@ -8692,8 +8764,8 @@ function deleteAllMasters() {
             if (!searchCell) return;
             const bagsCell = document.createElement('div');
             bagsCell.innerHTML = `
-                <label class="block text-xs font-semibold text-slate-600 mb-1">Bags / Lot / Crate</label>
-                <input type="text" id="stockMovementBagsLotSearch" placeholder="Bags / lot / crate..."
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Bags</label>
+                <input type="text" id="stockMovementBagsLotSearch" placeholder="Bags search..."
                     class="w-full p-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white"
                     onkeyup="filterStockMovement()">
             `;
@@ -8708,8 +8780,9 @@ function deleteAllMasters() {
         function renderStockMovementTable() {
             const tbody = document.getElementById('stockMovement');
             tbody.innerHTML = '';
+            const displayRows = buildStockMovementDisplayRows(filteredStockMovements);
             
-            if (filteredStockMovements.length === 0) {
+            if (displayRows.length === 0) {
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="7" class="px-4 py-12 text-center text-slate-500">
@@ -8749,7 +8822,7 @@ function deleteAllMasters() {
             // Paginate
             const { currentPage, pageSize } = paginationState.stockMovement;
             const startIndex = (currentPage - 1) * pageSize;
-            const paginatedMovements = filteredStockMovements.slice(startIndex, startIndex + pageSize);
+            const paginatedMovements = displayRows.slice(startIndex, startIndex + pageSize);
             
             paginatedMovements.forEach(m => {
                 const qty = parseFloat(m.quantity) || 0;
@@ -8771,6 +8844,36 @@ function deleteAllMasters() {
                 const movementPill = isInward
                     ? '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-sm">IN</span>'
                     : '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 border border-rose-200 shadow-sm">OUT</span>';
+                const hasOutDetails = String(m.type || '') === 'Purchase' && Array.isArray(m.outDetails) && m.outDetails.length > 0;
+                const outDetailsHtml = hasOutDetails
+                    ? m.outDetails.map(function(d) {
+                        var qtyOut = parseFloat(d.qty) || 0;
+                        var bagsOut = parseFloat(d.bags) || 0;
+                        return '<div class="mt-1.5 text-[11px] leading-5 text-rose-700 bg-rose-50 border border-rose-100 rounded px-2 py-1">' +
+                            '<span class="font-semibold">' + escapeHtml(d.invoice || '-') + '</span>' +
+                            '<span class="block text-rose-600">' + escapeHtml(d.party || '-') + ' | Qty: -' + qtyOut.toLocaleString('en-IN', { minimumFractionDigits: 2 }) + ' ' + escapeHtml(m.unit || 'kg') + ' | Bags: -' + bagsOut.toLocaleString('en-IN', { minimumFractionDigits: 2 }) + '</span>' +
+                            '</div>';
+                    }).join('')
+                    : '<span class="mt-1.5 inline-block text-[11px] text-slate-400">No linked sale split</span>';
+                const movementSummaryHtml = hasOutDetails
+                    ? '<div class="flex flex-col gap-1">' +
+                        '<div class="flex items-center gap-2">' +
+                            '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-sm">IN</span>' +
+                            '<span class="text-[11px] text-emerald-700">Purchase</span>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2">' +
+                            '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 border border-rose-200 shadow-sm">OUT</span>' +
+                            '<span class="text-[11px] text-rose-700">' + m.outDetails.length + ' split sale(s)</span>' +
+                        '</div>' +
+                      '</div>'
+                    : '<div class="flex items-center gap-2">' +
+                        '<span class="w-6 h-6 rounded-full flex items-center justify-center ' + (isInward ? 'bg-emerald-100' : 'bg-rose-100') + '">' +
+                            '<svg class="w-3 h-3 ' + (isInward ? 'text-emerald-600' : 'text-rose-600') + '" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+                                '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="' + (isInward ? 'M7 11l5-5m0 0l5 5m-5-5v12' : 'M17 13l-5 5m0 0l-5-5m5 5V6') + '"/>' +
+                            '</svg>' +
+                        '</span>' +
+                        movementPill +
+                      '</div>';
                 tr.innerHTML = `
                     <td class="px-4 py-3 align-top">
                         <span class="text-sm font-semibold text-slate-700">${dateText}</span>
@@ -8782,41 +8885,41 @@ function deleteAllMasters() {
                         </div>
                     </td>
                     <td class="px-4 py-3 align-top">
-                        <div class="flex items-center gap-2">
-                            <span class="w-6 h-6 rounded-full flex items-center justify-center ${isInward ? 'bg-emerald-100' : 'bg-rose-100'}">
-                                <svg class="w-3 h-3 ${isInward ? 'text-emerald-600' : 'text-rose-600'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${isInward ? 'M7 11l5-5m0 0l5 5m-5-5v12' : 'M17 13l-5 5m0 0l-5-5m5 5V6'}"/>
-                                </svg>
-                            </span>
-                            ${movementPill}
-                        </div>
+                        ${movementSummaryHtml}
                     </td>
                     <td class="px-4 py-3 align-top">
                         <div class="text-xs leading-5 bg-slate-50 rounded-md px-2.5 py-1.5 border border-slate-200">
                             <span class="font-semibold text-slate-700">${m.invoice || '-'}</span>
                             <span class="text-slate-500 block">${m.reference || '-'}</span>
+                            ${outDetailsHtml}
                         </div>
                     </td>
                     <td class="px-4 py-3 text-right align-top">
-                        <span class="font-bold tabular-nums ${qty > 0 ? 'text-green-600' : 'text-red-600'}">
-                            ${qty > 0 ? '+' : ''}${qty.toLocaleString('en-IN', {minimumFractionDigits: 2})} ${m.unit}
-                        </span>
+                        <div class="flex flex-col items-end gap-1">
+                            <span class="font-bold tabular-nums ${qty > 0 ? 'text-green-600' : 'text-red-600'}">
+                                ${qty > 0 ? '+' : ''}${qty.toLocaleString('en-IN', {minimumFractionDigits: 2})} ${m.unit}
+                            </span>
+                            ${hasOutDetails ? `<span class="text-xs font-semibold text-rose-700 tabular-nums">-${m.outQtyTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})} ${m.unit}</span>` : ''}
+                        </div>
                     </td>
                     <td class="px-4 py-3 text-right align-top">
-                        <span class="font-semibold tabular-nums ${bags > 0 ? 'text-green-700' : (bags < 0 ? 'text-red-700' : 'text-slate-500')}">
-                            ${bags === 0 ? '-' : ((bags > 0 ? '+' : '') + bags.toLocaleString('en-IN', {minimumFractionDigits: 2}))}
-                        </span>
+                        <div class="flex flex-col items-end gap-1">
+                            <span class="font-semibold tabular-nums ${bags > 0 ? 'text-green-700' : (bags < 0 ? 'text-red-700' : 'text-slate-500')}">
+                                ${bags === 0 ? '-' : ((bags > 0 ? '+' : '') + bags.toLocaleString('en-IN', {minimumFractionDigits: 2}))}
+                            </span>
+                            ${hasOutDetails ? `<span class="text-xs font-semibold text-rose-700 tabular-nums">-${m.outBagsTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>` : ''}
+                        </div>
                     </td>
                     <td class="px-4 py-3 text-right align-top">
                         <span class="inline-flex font-semibold tabular-nums text-slate-800 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
-                            ${runningBalance.toLocaleString('en-IN', {minimumFractionDigits: 2})} ${m.unit}
+                            ${hasOutDetails ? m.netQty.toLocaleString('en-IN', {minimumFractionDigits: 2}) : runningBalance.toLocaleString('en-IN', {minimumFractionDigits: 2})} ${m.unit}
                         </span>
                     </td>
                 `;
                 tbody.appendChild(tr);
             });
             
-            renderPagination('stockMovementPagination', filteredStockMovements.length, currentPage, pageSize, 'changeStockMovementPage', 'changeStockMovementPageSize');
+            renderPagination('stockMovementPagination', displayRows.length, currentPage, pageSize, 'changeStockMovementPage', 'changeStockMovementPageSize');
         }
 
         // Sales functions
