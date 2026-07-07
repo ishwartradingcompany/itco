@@ -616,6 +616,401 @@ function renderPagination(containerId, totalItems, currentPage, pageSize, onPage
     container.innerHTML = paginationHTML;
 }
 
+function getExportTimestampLabel() {
+    var d = new Date();
+    var pad = function(n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes());
+}
+
+function sanitizeExportFilename(name) {
+    return String(name || 'Export').replace(/[^a-zA-Z0-9_\-]/g, '_');
+}
+
+function ensureXlsxLibraryLoaded() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    var existing = document.getElementById('xlsxLibScript');
+    if (existing && existing.getAttribute('data-loaded') === '1' && window.XLSX) return Promise.resolve(window.XLSX);
+    return new Promise(function(resolve, reject) {
+        var script = existing || document.createElement('script');
+        script.id = 'xlsxLibScript';
+        script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+        script.async = true;
+        script.onload = function() {
+            script.setAttribute('data-loaded', '1');
+            if (window.XLSX) resolve(window.XLSX);
+            else reject(new Error('XLSX loaded but not available on window'));
+        };
+        script.onerror = function() {
+            reject(new Error('Failed to load XLSX library'));
+        };
+        if (!existing) document.head.appendChild(script);
+    });
+}
+
+function exportRowsToPdf(opts) {
+    if (!(window.jspdf && window.jspdf.jsPDF)) {
+        alert('PDF library is not available. Please refresh and try again.');
+        return;
+    }
+    var title = opts && opts.title ? opts.title : 'Export';
+    var columns = Array.isArray(opts && opts.columns) ? opts.columns : [];
+    var rows = Array.isArray(opts && opts.rows) ? opts.rows : [];
+    var filename = sanitizeExportFilename((opts && opts.filename) || title) + '.pdf';
+
+    var jsPDF = window.jspdf.jsPDF;
+    var pdf = new jsPDF('p', 'pt', 'a4');
+    var pageWidth = pdf.internal.pageSize.getWidth();
+    var pageHeight = pdf.internal.pageSize.getHeight();
+    var margin = 32;
+    var lineHeight = 14;
+    var y = margin;
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(12);
+    pdf.text(title, margin, y);
+    y += 16;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.text('Exported: ' + new Date().toLocaleString(), margin, y);
+    y += 16;
+
+    var headerLine = columns.map(function(c) { return c.label; }).join(' | ');
+    pdf.setFont('courier', 'bold');
+    var headerLines = pdf.splitTextToSize(headerLine, pageWidth - margin * 2);
+    headerLines.forEach(function(line) {
+        if (y > pageHeight - margin) {
+            pdf.addPage();
+            y = margin;
+        }
+        pdf.text(line, margin, y);
+        y += lineHeight;
+    });
+    y += 4;
+
+    pdf.setFont('courier', 'normal');
+    rows.forEach(function(row) {
+        var line = columns.map(function(c) {
+            var v = row[c.key];
+            return v == null ? '' : String(v);
+        }).join(' | ');
+        var wrapped = pdf.splitTextToSize(line, pageWidth - margin * 2);
+        wrapped.forEach(function(wline) {
+            if (y > pageHeight - margin) {
+                pdf.addPage();
+                y = margin;
+            }
+            pdf.text(wline, margin, y);
+            y += lineHeight;
+        });
+    });
+
+    pdf.save(filename);
+}
+
+function exportRowsToExcel(opts) {
+    var title = opts && opts.title ? opts.title : 'Export';
+    var columns = Array.isArray(opts && opts.columns) ? opts.columns : [];
+    var rows = Array.isArray(opts && opts.rows) ? opts.rows : [];
+    var filename = sanitizeExportFilename((opts && opts.filename) || title) + '.xlsx';
+    var sheetName = String((opts && opts.sheetName) || 'Data').slice(0, 31);
+
+    return ensureXlsxLibraryLoaded().then(function(XLSX) {
+        var aoa = [];
+        aoa.push(columns.map(function(c) { return c.label; }));
+        rows.forEach(function(row) {
+            aoa.push(columns.map(function(c) {
+                var v = row[c.key];
+                return v == null ? '' : v;
+            }));
+        });
+        var ws = XLSX.utils.aoa_to_sheet(aoa);
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        XLSX.writeFile(wb, filename);
+    }).catch(function(err) {
+        console.error('Excel export failed:', err);
+        alert('Excel export is currently unavailable. Please check internet connection and try again.');
+    });
+}
+
+function getFilteredPaymentsForExport() {
+    var typeEl = document.getElementById('paymentsFilterType');
+    var fromEl = document.getElementById('paymentsDateFrom');
+    var toEl = document.getElementById('paymentsDateTo');
+    var searchEl = document.getElementById('paymentsSearch');
+    var typeFilter = typeEl ? typeEl.value : '';
+    var fromVal = fromEl ? fromEl.value : '';
+    var toVal = toEl ? toEl.value : '';
+    var searchTerm = (searchEl && searchEl.value) ? String(searchEl.value).trim().toLowerCase() : '';
+    var list = getPaymentsListForTracking().sort(function(a, b) {
+        var dA = (a.date || '').replace(/-/g, '');
+        var dB = (b.date || '').replace(/-/g, '');
+        return dB.localeCompare(dA);
+    });
+    if (typeFilter === 'purchase_payments') list = list.filter(function(p) { return p.type === 'purchase' || (p.type === 'ledger_payment' && p.entityType === 'supplier'); });
+    if (typeFilter === 'sales_payments') list = list.filter(function(p) { return p.type === 'sale' || (p.type === 'ledger_receipt' && p.entityType === 'customer'); });
+    if (fromVal) list = list.filter(function(p) { return (p.date || '') >= fromVal; });
+    if (toVal) list = list.filter(function(p) { return (p.date || '') <= toVal; });
+    if (searchTerm) {
+        list = list.filter(function(p) {
+            var party = (p.party || '').toLowerCase();
+            var invoice = (p.invoice || '').toLowerCase();
+            var mode = (p.mode || '').toLowerCase();
+            var bankAccount = (p.bankAccountName || p.bankAccountNumber || '').toLowerCase();
+            var remarks = (p.remarks != null ? String(p.remarks) : '').toLowerCase();
+            var amountStr = (p.amount != null ? String(p.amount) : '');
+            return party.indexOf(searchTerm) >= 0 || invoice.indexOf(searchTerm) >= 0 || mode.indexOf(searchTerm) >= 0 || bankAccount.indexOf(searchTerm) >= 0 || remarks.indexOf(searchTerm) >= 0 || amountStr.indexOf(searchTerm) >= 0;
+        });
+    }
+    return list;
+}
+
+function normalizeExportRowsForPage(pageKey) {
+    var key = String(pageKey || '').toLowerCase();
+    var stamp = getExportTimestampLabel();
+    if (key === 'purchases') {
+        var purchaseRows = (filteredPurchases || []).map(function(p) {
+            var total = parseFloat(p.grandTotal || p.total || 0) || 0;
+            var paid = parseFloat(p.paid || 0) || 0;
+            var bags = (p.items || []).reduce(function(sum, item) {
+                return sum + (parseFloat(item && item.bags) || 0);
+            }, 0);
+            return {
+                date: p.date || '',
+                invoice: p.masterInvoice || p.invoice || '',
+                bags: bags.toFixed(2),
+                supplier: p.supplierName || '',
+                truck: p.truck || '',
+                items: (p.items || []).length,
+                amount: total.toFixed(2),
+                paid: paid.toFixed(2),
+                balance: (total - paid).toFixed(2)
+            };
+        });
+        return { title: 'Purchase Register', filename: 'Purchase_Register_' + stamp, sheetName: 'Purchases', columns: [
+            { key: 'date', label: 'Date' }, { key: 'invoice', label: 'Invoice' }, { key: 'bags', label: 'Bags' }, { key: 'supplier', label: 'Supplier' },
+            { key: 'truck', label: 'Truck' }, { key: 'items', label: 'Items' }, { key: 'amount', label: 'Amount' }, { key: 'paid', label: 'Paid' }, { key: 'balance', label: 'Balance' }
+        ], rows: purchaseRows };
+    }
+    if (key === 'sales') {
+        var salesRows = (filteredSales || []).map(function(s) {
+            var total = parseFloat(s.grandTotal || s.total || 0) || 0;
+            var received = parseFloat(s.received || 0) || 0;
+            return {
+                date: s.date || '',
+                invoice: s.masterInvoice || s.invoice || '',
+                customer: s.customerName || '',
+                truck: s.truck || '',
+                items: (s.items || []).length,
+                amount: total.toFixed(2),
+                received: received.toFixed(2),
+                balance: (total - received).toFixed(2)
+            };
+        });
+        return { title: 'Sales Register', filename: 'Sales_Register_' + stamp, sheetName: 'Sales', columns: [
+            { key: 'date', label: 'Date' }, { key: 'invoice', label: 'Invoice' }, { key: 'customer', label: 'Customer' }, { key: 'truck', label: 'Truck' },
+            { key: 'items', label: 'Items' }, { key: 'amount', label: 'Amount' }, { key: 'received', label: 'Received' }, { key: 'balance', label: 'Balance' }
+        ], rows: salesRows };
+    }
+    if (key === 'stock_movement') {
+        var stockRows = buildStockMovementDisplayRows(filteredStockMovements || []).map(function(m) {
+            var outList = Array.isArray(m.outDetails) ? m.outDetails.map(function(d) { return (d.invoice || '-') + ' (' + (parseFloat(d.bags) || 0).toFixed(2) + ')'; }).join(' ; ') : '';
+            return {
+                date: m.date || '',
+                item: m.itemName || '',
+                movementType: m.type || '',
+                reference: m.invoice || '',
+                party: m.reference || '',
+                inQty: (parseFloat(m.quantity) > 0 ? parseFloat(m.quantity) : 0).toFixed(2),
+                inBags: (parseFloat(m.bags) > 0 ? parseFloat(m.bags) : 0).toFixed(2),
+                outInvoices: outList || '-',
+                outQty: (parseFloat(m.outQtyTotal || 0)).toFixed(2),
+                outBags: (parseFloat(m.outBagsTotal || 0)).toFixed(2),
+                netQty: (parseFloat(m.netQty != null ? m.netQty : m.quantity) || 0).toFixed(2),
+                netBags: (parseFloat(m.netBags != null ? m.netBags : m.bags) || 0).toFixed(2)
+            };
+        });
+        return { title: 'Stock Movement Register', filename: 'Stock_Movement_' + stamp, sheetName: 'StockMovement', columns: [
+            { key: 'date', label: 'Date' }, { key: 'item', label: 'Item' }, { key: 'movementType', label: 'Type' }, { key: 'reference', label: 'Reference' }, { key: 'party', label: 'Party' },
+            { key: 'inQty', label: 'In Qty' }, { key: 'inBags', label: 'In Bags' }, { key: 'outInvoices', label: 'Out Invoices' },
+            { key: 'outQty', label: 'Out Qty' }, { key: 'outBags', label: 'Out Bags' }, { key: 'netQty', label: 'Net Qty' }, { key: 'netBags', label: 'Net Bags' }
+        ], rows: stockRows };
+    }
+    if (key === 'brokerage') {
+        var brRows = (filteredBrokerage || []).map(function(b) {
+            return {
+                date: b.date || '', broker: b.brokerName || '', item: b.itemName || '', type: b.type || '', amount: (parseFloat(b.amount) || 0).toFixed(2), reference: b.reference || ''
+            };
+        });
+        return { title: 'Brokerage Register', filename: 'Brokerage_Register_' + stamp, sheetName: 'Brokerage', columns: [
+            { key: 'date', label: 'Date' }, { key: 'broker', label: 'Broker' }, { key: 'item', label: 'Item' }, { key: 'type', label: 'Type' }, { key: 'amount', label: 'Amount' }, { key: 'reference', label: 'Reference' }
+        ], rows: brRows };
+    }
+    if (key === 'deductions') {
+        var dedRows = (filteredDeductions || []).map(function(d) {
+            return {
+                date: d.date || '', customer: d.customerName || '', invoice: d.invoice || '', amount: (parseFloat(d.amount) || 0).toFixed(2), reason: d.reason || '',
+                adjustment: d.adjustmentType || '-', lossAmount: (parseFloat(d.lossAmount) || 0).toFixed(2)
+            };
+        });
+        return { title: 'Deductions Register', filename: 'Deductions_Register_' + stamp, sheetName: 'Deductions', columns: [
+            { key: 'date', label: 'Date' }, { key: 'customer', label: 'Customer' }, { key: 'invoice', label: 'Invoice' }, { key: 'amount', label: 'Amount' },
+            { key: 'reason', label: 'Reason' }, { key: 'adjustment', label: 'Adjustment' }, { key: 'lossAmount', label: 'Loss Amount' }
+        ], rows: dedRows };
+    }
+    if (key === 'payments') {
+        var payRows = getFilteredPaymentsForExport().map(function(p) {
+            var typeLabel = (p.type === 'purchase' || (p.type === 'ledger_payment' && p.entityType === 'supplier')) ? 'Purchase payment'
+                : (p.type === 'sale' || (p.type === 'ledger_receipt' && p.entityType === 'customer')) ? 'Sales payment' : (p.type || 'Other');
+            return {
+                date: p.date || '', type: typeLabel, party: p.party || '', invoice: p.invoice || '', amount: (parseFloat(p.amount) || 0).toFixed(2),
+                mode: p.mode || '-', bank: p.bankAccountName || p.bankAccountNumber || '-', remarks: p.remarks || ''
+            };
+        });
+        return { title: 'Payments Register', filename: 'Payments_Register_' + stamp, sheetName: 'Payments', columns: [
+            { key: 'date', label: 'Date' }, { key: 'type', label: 'Type' }, { key: 'party', label: 'Party' }, { key: 'invoice', label: 'Invoice/Ref' },
+            { key: 'amount', label: 'Amount' }, { key: 'mode', label: 'Mode' }, { key: 'bank', label: 'Bank Account' }, { key: 'remarks', label: 'Remarks' }
+        ], rows: payRows };
+    }
+    if (key === 'pnl') {
+        var groupedToggle = document.getElementById('pnlGroupByPurchase');
+        var useGrouped = !!(groupedToggle && groupedToggle.checked);
+        var sourceRows = useGrouped
+            ? buildPnLPurchaseSummary(currentPnLData || []).map(function(g) {
+                return { purchaseDate: '-', purchaseInvoice: g.purchaseInvoice, purchaseSupplier: g.purchaseSupplier, purchaseTotal: g.purchaseTotal, saleDate: '-', saleInvoice: g.linkedSalesInvoices || '-', saleCustomer: '-', saleTotal: g.saleTotal, profitLoss: g.profitLoss };
+            })
+            : (currentPnLData || []);
+        var pnlRows = sourceRows.map(function(r) {
+            return {
+                purchaseDate: r.purchaseDate || '-', purchaseInvoice: r.purchaseInvoice || '-', purchaseSupplier: r.purchaseSupplier || '-',
+                purchaseTotal: (parseFloat(r.purchaseTotal) || 0).toFixed(2), saleDate: r.saleDate || '-', saleInvoice: r.saleInvoice || '-',
+                saleCustomer: r.saleCustomer || '-', saleTotal: (parseFloat(r.saleTotal) || 0).toFixed(2), profitLoss: (parseFloat(r.profitLoss) || 0).toFixed(2)
+            };
+        });
+        return { title: 'P&L Register', filename: 'PnL_Register_' + stamp, sheetName: 'PnL', columns: [
+            { key: 'purchaseDate', label: 'Purchase Date' }, { key: 'purchaseInvoice', label: 'Purchase Invoice' }, { key: 'purchaseSupplier', label: 'Supplier' },
+            { key: 'purchaseTotal', label: 'Purchase Total' }, { key: 'saleDate', label: 'Sale Date' }, { key: 'saleInvoice', label: 'Sale Invoice' },
+            { key: 'saleCustomer', label: 'Customer' }, { key: 'saleTotal', label: 'Sale Total' }, { key: 'profitLoss', label: 'Profit/Loss' }
+        ], rows: pnlRows };
+    }
+    if (key === 'ledger') {
+        var ledgerRows = (currentLedgerData || []).map(function(e) {
+            return {
+                date: e.date || '', description: e.description || '', invoice: e.invoice || '-', debit: (parseFloat(e.debit) || 0).toFixed(2),
+                credit: (parseFloat(e.credit) || 0).toFixed(2), balance: (parseFloat(e.balance) || 0).toFixed(2)
+            };
+        });
+        return { title: 'Ledger Register', filename: 'Ledger_Register_' + stamp, sheetName: 'Ledger', columns: [
+            { key: 'date', label: 'Date' }, { key: 'description', label: 'Description' }, { key: 'invoice', label: 'Invoice' },
+            { key: 'debit', label: 'Debit' }, { key: 'credit', label: 'Credit' }, { key: 'balance', label: 'Balance' }
+        ], rows: ledgerRows };
+    }
+    if (key === 'opening') {
+        var openingRows = (appData.openingBalances || []).slice().sort(function(a, b) { return String(b.date || '').localeCompare(String(a.date || '')); }).map(function(e) {
+            return { date: e.date || '', type: e.type || '', entityName: e.entityName || '', amount: (parseFloat(e.amount) || 0).toFixed(2), reference: e.reference || '-', description: e.description || '-' };
+        });
+        return { title: 'Opening Balance Register', filename: 'Opening_Balances_' + stamp, sheetName: 'OpeningBalance', columns: [
+            { key: 'date', label: 'Date' }, { key: 'type', label: 'Type' }, { key: 'entityName', label: 'Entity' }, { key: 'amount', label: 'Amount' }, { key: 'reference', label: 'Reference' }, { key: 'description', label: 'Description' }
+        ], rows: openingRows };
+    }
+    if (key === 'cold_lots') {
+        var activeLots = Array.isArray(filteredColdLots) ? filteredColdLots : (appData.coldStorageLots || []).filter(function(lot) {
+            return (parseFloat(lot.qtyInCold) || 0) > 0 && (lot.status || 'active') !== 'released';
+        });
+        var lotsRows = activeLots.map(function(lot) {
+            return {
+                date: lot.date || '', item: lot.itemName || '', storage: lot.coldStorageName || '', supplier: lot.supplierName || '',
+                qtyInCold: (parseFloat(lot.qtyInCold) || 0).toFixed(2), bagsInCold: (parseFloat(lot.bagsInCold) || 0).toFixed(2),
+                totalCharge: (parseFloat(lot.estimatedTotalCharge) || 0).toFixed(2), paid: (parseFloat(lot.paidTotal) || 0).toFixed(2),
+                remaining: (parseFloat(lot.remainingPayable) || 0).toFixed(2), lotRef: lot.lotReference || '-'
+            };
+        });
+        return { title: 'Cold Lots Register', filename: 'Cold_Lots_' + stamp, sheetName: 'ColdLots', columns: [
+            { key: 'date', label: 'Date' }, { key: 'item', label: 'Item' }, { key: 'storage', label: 'Cold Storage' }, { key: 'supplier', label: 'Supplier' },
+            { key: 'qtyInCold', label: 'Qty In Cold' }, { key: 'bagsInCold', label: 'Bags In Cold' }, { key: 'totalCharge', label: 'Total Charge' }, { key: 'paid', label: 'Paid' }, { key: 'remaining', label: 'Remaining' }, { key: 'lotRef', label: 'Lot/Crate' }
+        ], rows: lotsRows };
+    }
+    if (key === 'cold_movements') {
+        var movementRows = getFilteredColdStorageMovementRows().map(function(r) {
+            return {
+                date: r.date || '', type: r.type || '', item: r.itemName || '', storage: r.coldStorageName || '', vendor: r.vendorName || '',
+                supplier: r.supplierName || '', qty: (parseFloat(r.qty) || 0).toFixed(2), bags: (parseFloat(r.bags) || 0).toFixed(2),
+                amount: (parseFloat(r.amount) || 0).toFixed(2), reference: r.reference || '-', remarks: r.remarks || '-'
+            };
+        });
+        return { title: 'Cold Movement Register', filename: 'Cold_Movements_' + stamp, sheetName: 'ColdMovements', columns: [
+            { key: 'date', label: 'Date' }, { key: 'type', label: 'Type' }, { key: 'item', label: 'Item' }, { key: 'storage', label: 'Cold Storage' },
+            { key: 'vendor', label: 'Vendor' }, { key: 'supplier', label: 'Supplier' }, { key: 'qty', label: 'Qty' }, { key: 'bags', label: 'Bags' }, { key: 'amount', label: 'Amount' }, { key: 'reference', label: 'Reference' }, { key: 'remarks', label: 'Remarks' }
+        ], rows: movementRows };
+    }
+    if (key === 'cold_vendor_payables') {
+        var rows = getFilteredColdVendorPayablesRows(getColdVendorPayablesGroupedRows()).map(function(r) {
+            return {
+                vendor: r.vendorName || '', storage: r.coldStorageName || '', invoices: Array.from(r.purchaseInvoices || []).join(', '),
+                kaantaParchi: Array.from(r.kaantaParchiNos || []).join(', '), quantity: (parseFloat(r.quantity) || 0).toFixed(2), bags: (parseFloat(r.bags) || 0).toFixed(2),
+                totalCharge: (parseFloat(r.totalCharge) || 0).toFixed(2), paid: (parseFloat(r.totalPaid) || 0).toFixed(2), adjustment: (parseFloat(r.adjustment) || 0).toFixed(2),
+                remaining: (parseFloat(r.remaining) || 0).toFixed(2)
+            };
+        });
+        return { title: 'Cold Vendor Payables Register', filename: 'Cold_Vendor_Payables_' + stamp, sheetName: 'ColdVendorPayables', columns: [
+            { key: 'vendor', label: 'Vendor' }, { key: 'storage', label: 'Cold Storage' }, { key: 'invoices', label: 'Purchase Invoices' }, { key: 'kaantaParchi', label: 'Kaanta Parchi' },
+            { key: 'quantity', label: 'Quantity' }, { key: 'bags', label: 'Bags' }, { key: 'totalCharge', label: 'Total Charge' }, { key: 'paid', label: 'Paid' }, { key: 'adjustment', label: 'Adjustment' }, { key: 'remaining', label: 'Remaining' }
+        ], rows: rows };
+    }
+    return { title: 'Export', filename: 'Export_' + stamp, sheetName: 'Export', columns: [], rows: [] };
+}
+
+function exportRegisterToPdf(pageKey) {
+    var spec = normalizeExportRowsForPage(pageKey);
+    if (!spec.rows || !spec.rows.length) {
+        alert('No data available to export.');
+        return;
+    }
+    exportRowsToPdf(spec);
+}
+
+function exportRegisterToExcel(pageKey) {
+    var spec = normalizeExportRowsForPage(pageKey);
+    if (!spec.rows || !spec.rows.length) {
+        alert('No data available to export.');
+        return;
+    }
+    exportRowsToExcel(spec);
+}
+
+function appendExportButtonsNearBody(bodyId, pageKey) {
+    var tbody = document.getElementById(bodyId);
+    if (!tbody) return;
+    var table = tbody.closest('table');
+    if (!table || !table.parentElement) return;
+    var parent = table.parentElement;
+    var wrapId = 'exportWrap_' + pageKey;
+    if (parent.parentElement && parent.parentElement.querySelector('#' + wrapId)) return;
+
+    var wrap = document.createElement('div');
+    wrap.id = wrapId;
+    wrap.className = 'flex justify-end gap-2 mb-2';
+    wrap.innerHTML = '' +
+        '<button type="button" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="exportRegisterToPdf(\'' + pageKey + '\')">Export PDF</button>' +
+        '<button type="button" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-50" onclick="exportRegisterToExcel(\'' + pageKey + '\')">Export Excel</button>';
+    parent.insertAdjacentElement('beforebegin', wrap);
+}
+
+function ensureRegisterExportButtons() {
+    appendExportButtonsNearBody('purchaseHistory', 'purchases');
+    appendExportButtonsNearBody('salesHistory', 'sales');
+    appendExportButtonsNearBody('stockMovement', 'stock_movement');
+    appendExportButtonsNearBody('brokerageHistory', 'brokerage');
+    appendExportButtonsNearBody('deductionsHistory', 'deductions');
+    appendExportButtonsNearBody('paymentsTableBody', 'payments');
+    appendExportButtonsNearBody('pnlDetails', 'pnl');
+    appendExportButtonsNearBody('ledgerEntries', 'ledger');
+    appendExportButtonsNearBody('openingBalanceHistory', 'opening');
+    appendExportButtonsNearBody('coldStorageLotsBody', 'cold_lots');
+    appendExportButtonsNearBody('coldMovementHistoryBody', 'cold_movements');
+    appendExportButtonsNearBody('coldVendorPayablesBody', 'cold_vendor_payables');
+}
+
 // Get paginated data slice
 function getPaginatedData(data, currentPage, pageSize) {
     const startIndex = (currentPage - 1) * pageSize;
@@ -15802,4 +16197,5 @@ function exportLedgerStatement() {
             if (typeof renderLedgerSummaryCards === 'function') {
                 renderLedgerSummaryCards();
             }
+            ensureRegisterExportButtons();
         });
