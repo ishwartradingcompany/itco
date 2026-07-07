@@ -5170,7 +5170,9 @@ function deleteAllMasters() {
         
         // Filter Purchases
         function filterPurchases() {
+            ensurePurchaseHistoryEnhancements();
             const search = (document.getElementById('purchaseSearch')?.value || '').toLowerCase();
+            const bagsLotSearch = (document.getElementById('purchaseBagsLotSearch')?.value || '').toLowerCase().trim();
             const supplierId = document.getElementById('purchaseFilterSupplier')?.value || '';
             const dateFrom = document.getElementById('purchaseDateFrom')?.value || '';
             const dateTo = document.getElementById('purchaseDateTo')?.value || '';
@@ -5181,6 +5183,25 @@ function deleteAllMasters() {
                 if (search) {
                     const searchFields = [p.invoice, p.supplierName, p.truck || ''].join(' ').toLowerCase();
                     if (!searchFields.includes(search)) return false;
+                }
+                // Dedicated Bags/Lot/Crate search
+                if (bagsLotSearch) {
+                    const itemBagsAndRefs = [];
+                    (p.items || []).forEach(function(item) {
+                        const bagValue = parseFloat(item && item.bags);
+                        if (!isNaN(bagValue)) {
+                            itemBagsAndRefs.push(String(+bagValue));
+                            itemBagsAndRefs.push(bagValue.toFixed(2));
+                        }
+                        const inlineRef = String((item && (item.coldStorageReference || item.kaantaParchi || item.lotReference)) || '').trim().toLowerCase();
+                        if (inlineRef) itemBagsAndRefs.push(inlineRef);
+                    });
+                    const lotRefs = (appData.coldStorageLots || [])
+                        .filter(function(lot) { return String(lot && lot.purchaseId || '') === String(p.id); })
+                        .map(function(lot) { return String((lot && (lot.lotReference || lot.reference || lot.id)) || '').trim().toLowerCase(); })
+                        .filter(Boolean);
+                    const bagsLotHaystack = itemBagsAndRefs.concat(lotRefs).join(' ');
+                    if (!bagsLotHaystack.includes(bagsLotSearch)) return false;
                 }
                 // Supplier filter
                 if (supplierId && p.supplierId != supplierId) return false;
@@ -5216,6 +5237,7 @@ function deleteAllMasters() {
         
         function clearPurchaseFilters() {
             document.getElementById('purchaseSearch').value = '';
+            if (document.getElementById('purchaseBagsLotSearch')) document.getElementById('purchaseBagsLotSearch').value = '';
             document.getElementById('purchaseFilterSupplier').value = '';
             document.getElementById('purchaseDateFrom').value = '';
             document.getElementById('purchaseDateTo').value = '';
@@ -5264,6 +5286,7 @@ function deleteAllMasters() {
         }
         
         function renderPurchaseTable() {
+            ensurePurchaseHistoryEnhancements();
             const tbody = document.getElementById('purchaseHistory');
             closeRowActionMenus();
             tbody.innerHTML = '';
@@ -5271,7 +5294,7 @@ function deleteAllMasters() {
             if (filteredPurchases.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="10" class="px-4 py-12 text-center">
+                        <td colspan="11" class="px-4 py-12 text-center">
                             <div class="flex flex-col items-center text-slate-400">
                                 <svg class="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
@@ -5294,6 +5317,11 @@ function deleteAllMasters() {
                 const grandTotal = purchase.grandTotal || purchase.total || 0;
                 const paid = purchase.paid || 0;
                 const currentBalance = grandTotal - paid;
+                const purchaseBagsTotal = (purchase.items || []).reduce(function(sum, item) {
+                    const isCoconut = !!(item && item.isCoconut);
+                    const bagsVal = isCoconut ? (parseFloat(item && item.discountQty) || 0) : (parseFloat(item && item.bags) || 0);
+                    return sum + bagsVal;
+                }, 0);
                 purchase.balance = currentBalance;
                 const purchaseDateText = summarizeMultiValue(purchase.multiDates || [purchase.date], purchase.date || '-');
                 const purchaseTruckText = summarizeMultiValue(purchase.multiTrucks || [purchase.truck], purchase.truck || '-');
@@ -5348,6 +5376,9 @@ function deleteAllMasters() {
                     <td class="px-4 py-3.5 whitespace-nowrap">
                         <span class="font-mono text-sm font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded">${purchase.masterInvoice || purchase.invoice}</span>
                     </td>
+                    <td class="px-4 py-3.5 text-sm whitespace-nowrap">
+                        <span class="font-semibold text-slate-700">${purchaseBagsTotal.toFixed(2)}</span>
+                    </td>
                     <td class="px-4 py-3.5">
                         <span class="font-medium text-slate-700 text-sm">${escapeHtml(purchase.supplierName)}</span>
                     </td>
@@ -5398,6 +5429,7 @@ function deleteAllMasters() {
         }
         
         function updatePurchaseHistory() {
+            ensurePurchaseHistoryEnhancements();
             populateFilterDropdowns();
             filteredPurchases = [...appData.purchases];
             filterPurchases();
@@ -8425,6 +8457,7 @@ function deleteAllMasters() {
         }
         
         function updateStockMovement() {
+            ensureStockMovementEnhancements();
             // Collect all stock movements from purchases, sales, and cold transfers
             allStockMovements = [];
             let movementSeq = 1;
@@ -8487,6 +8520,7 @@ function deleteAllMasters() {
                             date: m.date || '',
                             itemName: m.itemName || getItemNameById(m.itemId),
                             itemId: m.itemId,
+                            lotId: m.lotId || '',
                             type: 'MoveToCold',
                             quantity: -q,
                             bags: -b,
@@ -8506,6 +8540,7 @@ function deleteAllMasters() {
                             date: m.date || '',
                             itemName: m.itemName || getItemNameById(m.itemId),
                             itemId: m.itemId,
+                            lotId: m.lotId || '',
                             type: 'ReleaseFromCold',
                             quantity: q,
                             bags: b,
@@ -8549,7 +8584,9 @@ function deleteAllMasters() {
         }
         
         function filterStockMovement() {
+            ensureStockMovementEnhancements();
             const search = (document.getElementById('stockMovementSearch')?.value || '').toLowerCase();
+            const bagsLotSearch = (document.getElementById('stockMovementBagsLotSearch')?.value || '').toLowerCase().trim();
             const itemFilter = document.getElementById('stockMovementFilterItem')?.value || '';
             const typeFilter = document.getElementById('stockMovementFilterType')?.value || '';
             const dateFrom = document.getElementById('stockMovementDateFrom')?.value || '';
@@ -8558,6 +8595,17 @@ function deleteAllMasters() {
             // Filter
             filteredStockMovements = allStockMovements.filter(m => {
                 if (search && !String(m.itemName || '').toLowerCase().includes(search) && !String(m.reference || '').toLowerCase().includes(search)) return false;
+                if (bagsLotSearch) {
+                    const bagVal = parseFloat(m.bags) || 0;
+                    const bagTerms = [String(Math.abs(+bagVal)), Math.abs(bagVal).toFixed(2), (+bagVal).toFixed(2)];
+                    const lotTerms = [
+                        String(m.reference || ''),
+                        String(m.invoice || ''),
+                        String(m.lotId || '')
+                    ];
+                    const bagsLotHaystack = bagTerms.concat(lotTerms).join(' ').toLowerCase();
+                    if (!bagsLotHaystack.includes(bagsLotSearch)) return false;
+                }
                 if (itemFilter && m.itemName !== itemFilter) return false;
                 if (typeFilter && m.type !== typeFilter) return false;
                 if (dateFrom && m.date < dateFrom) return false;
@@ -8588,11 +8636,73 @@ function deleteAllMasters() {
         
         function clearStockMovementFilters() {
             document.getElementById('stockMovementSearch').value = '';
+            if (document.getElementById('stockMovementBagsLotSearch')) document.getElementById('stockMovementBagsLotSearch').value = '';
             document.getElementById('stockMovementFilterItem').value = '';
             document.getElementById('stockMovementFilterType').value = '';
             document.getElementById('stockMovementDateFrom').value = '';
             document.getElementById('stockMovementSort').value = 'date-desc';
             filterStockMovement();
+        }
+
+        function ensurePurchaseHistoryEnhancements() {
+            const searchInput = document.getElementById('purchaseSearch');
+            if (!searchInput) return;
+            const searchCell = searchInput.parentElement && searchInput.parentElement.parentElement;
+            if (searchCell && !document.getElementById('purchaseBagsLotSearch')) {
+                const bagsCell = document.createElement('div');
+                bagsCell.className = 'col-span-2 md:col-span-1';
+                bagsCell.innerHTML = `
+                    <div class="relative">
+                        <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <input type="text" id="purchaseBagsLotSearch" placeholder="Bags / Lot / Crate..."
+                            class="w-full pl-9 pr-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50"
+                            onkeyup="filterPurchases()">
+                    </div>
+                `;
+                searchCell.insertAdjacentElement('afterend', bagsCell);
+                var purchaseGrid = searchCell.parentElement;
+                if (purchaseGrid && purchaseGrid.classList.contains('lg:grid-cols-6')) {
+                    purchaseGrid.classList.remove('lg:grid-cols-6');
+                    purchaseGrid.classList.add('lg:grid-cols-7');
+                }
+            }
+
+            const purchaseTable = document.getElementById('purchaseHistory');
+            const headerRow = purchaseTable && purchaseTable.closest('table') && purchaseTable.closest('table').querySelector('thead tr');
+            if (headerRow && !headerRow.querySelector('[data-col="purchase-bags"]')) {
+                const invoiceTh = Array.from(headerRow.querySelectorAll('th')).find(function(th) {
+                    return String(th.textContent || '').trim().toLowerCase() === 'invoice';
+                });
+                if (invoiceTh) {
+                    const bagsTh = document.createElement('th');
+                    bagsTh.setAttribute('data-col', 'purchase-bags');
+                    bagsTh.className = 'w-[120px] px-4 py-3.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]';
+                    bagsTh.textContent = 'Bags';
+                    invoiceTh.insertAdjacentElement('afterend', bagsTh);
+                }
+            }
+        }
+
+        function ensureStockMovementEnhancements() {
+            const searchInput = document.getElementById('stockMovementSearch');
+            if (!searchInput || document.getElementById('stockMovementBagsLotSearch')) return;
+            const searchCell = searchInput.closest('div');
+            if (!searchCell) return;
+            const bagsCell = document.createElement('div');
+            bagsCell.innerHTML = `
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Bags / Lot / Crate</label>
+                <input type="text" id="stockMovementBagsLotSearch" placeholder="Bags / lot / crate..."
+                    class="w-full p-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white"
+                    onkeyup="filterStockMovement()">
+            `;
+            searchCell.insertAdjacentElement('afterend', bagsCell);
+            var stockGrid = searchCell.parentElement;
+            if (stockGrid && stockGrid.classList.contains('lg:grid-cols-5')) {
+                stockGrid.classList.remove('lg:grid-cols-5');
+                stockGrid.classList.add('lg:grid-cols-6');
+            }
         }
         
         function renderStockMovementTable() {
