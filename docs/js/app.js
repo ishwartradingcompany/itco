@@ -1045,54 +1045,11 @@ function collectFilteredInvoiceTargets(pageKey) {
     var key = String(pageKey || '');
     var purchases = [];
     var sales = [];
-    var purchaseIds = {};
-    var saleIds = {};
-
-    function addPurchase(p) {
-        if (!p || p.id == null) return;
-        var id = String(p.id);
-        if (purchaseIds[id]) return;
-        purchaseIds[id] = true;
-        purchases.push(p);
-    }
-    function addSale(s) {
-        if (!s || s.id == null) return;
-        var id = String(s.id);
-        if (saleIds[id]) return;
-        saleIds[id] = true;
-        sales.push(s);
-    }
 
     if (key === 'purchases') {
-        var dateFrom = ((document.getElementById('purchaseDateFrom') || {}).value || '');
-        var dateTo = ((document.getElementById('purchaseDateTo') || {}).value || '');
-        var purchaseList = getLiveFilteredPurchasesForBills();
-        purchaseList.forEach(function(p) {
-            addPurchase(p);
-            (appData.sales || []).forEach(function(s) {
-                if (!inBillDateRange(s.date, dateFrom, dateTo)) return;
-                if (s.linkedPurchases && s.linkedPurchases.some(function(lp) {
-                    return String(lp.purchaseId) === String(p.id);
-                })) {
-                    addSale(s);
-                }
-            });
-        });
+        purchases = getLiveFilteredPurchasesForBills();
     } else if (key === 'sales') {
-        var salesDateFrom = ((document.getElementById('salesDateFrom') || {}).value || '');
-        var salesDateTo = ((document.getElementById('salesDateTo') || {}).value || '');
-        var salesList = getLiveFilteredSalesForBills();
-        salesList.forEach(function(s) {
-            addSale(s);
-            (s.linkedPurchases || []).forEach(function(lp) {
-                var purchase = (appData.purchases || []).find(function(p) {
-                    return String(p.id) === String(lp.purchaseId);
-                });
-                if (purchase && inBillDateRange(purchase.date, salesDateFrom, salesDateTo)) {
-                    addPurchase(purchase);
-                }
-            });
-        });
+        sales = getLiveFilteredSalesForBills();
     }
 
     return { purchases: purchases, sales: sales };
@@ -1116,8 +1073,9 @@ function downloadFilteredInvoiceBillsZip(pageKey) {
         alert('No invoices available to download for the current filters.');
         return;
     }
-    var confirmMsg = 'Download ' + targets.purchases.length + ' purchase + ' + targets.sales.length +
-        ' sale invoice PDFs (' + total + ' total) for the current filters as a ZIP?';
+    var confirmMsg = (pageKey === 'sales')
+        ? ('Download ' + targets.sales.length + ' sale invoice PDFs for the current filters as a ZIP?')
+        : ('Download ' + targets.purchases.length + ' purchase invoice PDFs for the current filters as a ZIP?');
     if (!confirm(confirmMsg)) {
         return;
     }
@@ -1169,7 +1127,9 @@ function downloadFilteredInvoiceBillsZip(pageKey) {
                 btn.disabled = false;
                 btn.textContent = originalLabel;
             }
-            var msg = 'Downloaded ' + purchaseOk + ' purchase + ' + saleOk + ' sale invoices.';
+            var msg = (pageKey === 'sales')
+                ? ('Downloaded ' + saleOk + ' sale invoices.')
+                : ('Downloaded ' + purchaseOk + ' purchase invoices.');
             if (failed) msg += ' (' + failed + ' failed)';
             alert(msg);
         }).catch(function(err) {
