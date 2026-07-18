@@ -2222,6 +2222,21 @@ function deleteAllMasters() {
             window.open('https://wa.me/' + mobile + '?text=' + text, '_blank');
             return true;
         }
+        function expandRenderableWrapperToContent(wrapper) {
+            if (!wrapper) return wrapper;
+            var fitRoot = wrapper.querySelector('.render-fit-root') || wrapper;
+            var table = fitRoot.querySelector('.inv-table');
+            var tableWidth = table ? Math.ceil(table.scrollWidth || table.offsetWidth || 0) : 0;
+            var contentWidth = Math.max(
+                Math.ceil(fitRoot.scrollWidth || 0),
+                Math.ceil(fitRoot.offsetWidth || 0),
+                tableWidth + 56 // padding allowance around wide tables
+            );
+            var neededWidth = Math.max(794, contentWidth + 8);
+            wrapper.style.width = neededWidth + 'px';
+            return wrapper;
+        }
+
         function createRenderableHtmlWrapper(htmlContent) {
             var parser = new DOMParser();
             var parsedDoc = parser.parseFromString(String(htmlContent || ''), 'text/html');
@@ -2234,11 +2249,20 @@ function deleteAllMasters() {
             wrapper.style.top = '0';
             wrapper.style.pointerEvents = 'none';
             wrapper.style.zIndex = '2147483647';
-            wrapper.style.width = '794px';
+            wrapper.style.width = '1200px';
             wrapper.style.background = '#ffffff';
             wrapper.style.overflow = 'visible';
-            wrapper.innerHTML = '<style>' + styleText + '</style>' + bodyHtml;
+            // Invoice CSS targets body padding/negative header margins; remap onto the capture root
+            // and let wide tables grow so Amount / edge columns are not clipped by html2canvas.
+            var fitStyles =
+                '.render-fit-root{box-sizing:border-box;padding:28px;background:#ffffff;overflow:visible!important;}' +
+                '.render-fit-root .inv-header{margin:-28px -28px 24px -28px!important;}' +
+                '.render-fit-root .inv-table{overflow:visible!important;width:max-content!important;min-width:100%;table-layout:auto!important;}' +
+                '.render-fit-root .inv-table th,.render-fit-root .inv-table td{white-space:nowrap;}' +
+                '.render-fit-root .inv-details-wrap,.render-fit-root .signature-section,.render-fit-root .ledger-box,.render-fit-root .words-box,.render-fit-root .totals{max-width:100%;}';
+            wrapper.innerHTML = '<style>' + styleText + '\n' + fitStyles + '</style><div class="render-fit-root">' + bodyHtml + '</div>';
             document.body.appendChild(wrapper);
+            expandRenderableWrapperToContent(wrapper);
             return wrapper;
         }
 
@@ -2515,12 +2539,19 @@ function deleteAllMasters() {
             }
             var wrapper = createRenderableHtmlWrapper(htmlContent);
             return new Promise(function(resolve) { setTimeout(resolve, 120); }).then(function() {
+                expandRenderableWrapperToContent(wrapper);
+                var captureWidth = Math.max(wrapper.scrollWidth, wrapper.offsetWidth);
+                var captureHeight = Math.max(wrapper.scrollHeight, wrapper.offsetHeight);
                 return window.html2canvas(wrapper, {
                     scale: 2,
                     useCORS: true,
                     backgroundColor: '#ffffff',
-                    windowWidth: wrapper.scrollWidth,
-                    windowHeight: wrapper.scrollHeight
+                    width: captureWidth,
+                    height: captureHeight,
+                    windowWidth: captureWidth,
+                    windowHeight: captureHeight,
+                    scrollX: 0,
+                    scrollY: 0
                 }).then(function(canvas) {
                     if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
                     return canvas;
@@ -2558,8 +2589,11 @@ function deleteAllMasters() {
             if (!pdf || !canvas) return;
             var pageWidth = 210;
             var pageHeight = 297;
-            var mmPerPx = pageWidth / canvas.width;
-            var maxSliceHeightPx = Math.max(200, Math.floor(pageHeight / mmPerPx));
+            var margin = 8; // mm padding so invoice edges are not clipped by the viewer/page box
+            var contentWidth = pageWidth - margin * 2;
+            var contentHeight = pageHeight - margin * 2;
+            var mmPerPx = contentWidth / canvas.width;
+            var maxSliceHeightPx = Math.max(200, Math.floor(contentHeight / mmPerPx));
             var yOffset = 0;
             var isFirstSlice = true;
 
@@ -2581,7 +2615,8 @@ function deleteAllMasters() {
                     pdf.addPage();
                 }
                 var imgData = sliceCanvas.toDataURL('image/jpeg', 0.95);
-                pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, sliceHeight * mmPerPx);
+                var drawHeight = sliceHeight * mmPerPx;
+                pdf.addImage(imgData, 'JPEG', margin, margin, contentWidth, drawHeight);
 
                 yOffset += sliceHeight;
                 isFirstSlice = false;
