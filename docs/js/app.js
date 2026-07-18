@@ -988,6 +988,183 @@ function exportRegisterToExcel(pageKey) {
     exportRowsToExcel(spec);
 }
 
+function collectFilteredInvoiceTargets(pageKey) {
+    var key = String(pageKey || '');
+    var purchases = [];
+    var sales = [];
+    var purchaseIds = {};
+    var saleIds = {};
+
+    function addPurchase(p) {
+        if (!p || p.id == null) return;
+        var id = String(p.id);
+        if (purchaseIds[id]) return;
+        purchaseIds[id] = true;
+        purchases.push(p);
+    }
+    function addSale(s) {
+        if (!s || s.id == null) return;
+        var id = String(s.id);
+        if (saleIds[id]) return;
+        saleIds[id] = true;
+        sales.push(s);
+    }
+
+    if (key === 'purchases') {
+        (filteredPurchases || []).forEach(function(p) {
+            addPurchase(p);
+            (appData.sales || []).forEach(function(s) {
+                if (s.linkedPurchases && s.linkedPurchases.some(function(lp) {
+                    return String(lp.purchaseId) === String(p.id);
+                })) {
+                    addSale(s);
+                }
+            });
+        });
+    } else if (key === 'sales') {
+        (filteredSales || []).forEach(function(s) {
+            addSale(s);
+            (s.linkedPurchases || []).forEach(function(lp) {
+                var purchase = (appData.purchases || []).find(function(p) {
+                    return String(p.id) === String(lp.purchaseId);
+                });
+                if (purchase) addPurchase(purchase);
+            });
+        });
+    }
+
+    return { purchases: purchases, sales: sales };
+}
+
+function downloadFilteredInvoiceBillsZip(pageKey) {
+    if (typeof JSZip === 'undefined') {
+        alert('ZIP engine not loaded. Please refresh and try again.');
+        return;
+    }
+    if (typeof renderHtmlToPdfBlob !== 'function' ||
+        typeof buildPurchaseInvoiceHtml !== 'function' ||
+        typeof buildSaleInvoiceHtml !== 'function') {
+        alert('Invoice PDF engine not ready. Please refresh and try again.');
+        return;
+    }
+
+    var targets = collectFilteredInvoiceTargets(pageKey);
+    var total = targets.purchases.length + targets.sales.length;
+    if (!total) {
+        alert('No invoices available to download for the current filters.');
+        return;
+    }
+    if (total > 40 && !confirm('This will generate ' + total + ' invoice PDFs and download them as a ZIP. Continue?')) {
+        return;
+    }
+
+    var btn = document.getElementById('downloadBillsBtn_' + pageKey);
+    var originalLabel = btn ? btn.textContent : 'Download All Bills';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Preparing…';
+    }
+
+    var zip = new JSZip();
+    var purchasesFolder = zip.folder('purchases');
+    var salesFolder = zip.folder('sales');
+    var done = 0;
+    var purchaseOk = 0;
+    var saleOk = 0;
+    var failed = 0;
+
+    function updateProgress() {
+        if (btn) btn.textContent = 'Downloading ' + done + '/' + total + '…';
+    }
+
+    function safePdfName(invoice, fallback) {
+        return String(invoice || fallback || 'invoice').replace(/[^\w.-]/g, '_') + '.pdf';
+    }
+
+    function finishZip() {
+        if (purchaseOk + saleOk === 0) {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = originalLabel;
+            }
+            alert('Failed to generate invoice PDFs. Please try again.');
+            return Promise.resolve();
+        }
+        if (btn) btn.textContent = 'Packing ZIP…';
+        return zip.generateAsync({ type: 'blob' }).then(function(content) {
+            var stamp = (typeof getExportTimestampLabel === 'function') ? getExportTimestampLabel() : String(Date.now());
+            var link = document.createElement('a');
+            var objectUrl = URL.createObjectURL(content);
+            link.href = objectUrl;
+            link.download = 'Filtered_Invoices_' + stamp + '.zip';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(function() { URL.revokeObjectURL(objectUrl); }, 1000);
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = originalLabel;
+            }
+            var msg = 'Downloaded ' + purchaseOk + ' purchase + ' + saleOk + ' sale invoices.';
+            if (failed) msg += ' (' + failed + ' failed)';
+            alert(msg);
+        }).catch(function(err) {
+            console.error('ZIP generation failed:', err);
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = originalLabel;
+            }
+            alert('Failed to create ZIP. Please try again.');
+        });
+    }
+
+    function nextSale(i) {
+        if (i >= targets.sales.length) return finishZip();
+        var sale = targets.sales[i];
+        return renderHtmlToPdfBlob(buildSaleInvoiceHtml(sale)).then(function(blob) {
+            salesFolder.file(safePdfName(sale.invoice, 'sale-' + sale.id), blob);
+            saleOk++;
+            done++;
+            updateProgress();
+            return nextSale(i + 1);
+        }).catch(function(err) {
+            console.error('Sale PDF failed:', sale && sale.invoice, err);
+            failed++;
+            done++;
+            updateProgress();
+            return nextSale(i + 1);
+        });
+    }
+
+    function nextPurchase(i) {
+        if (i >= targets.purchases.length) return nextSale(0);
+        var purchase = targets.purchases[i];
+        return renderHtmlToPdfBlob(buildPurchaseInvoiceHtml(purchase)).then(function(blob) {
+            purchasesFolder.file(safePdfName(purchase.invoice, 'purchase-' + purchase.id), blob);
+            purchaseOk++;
+            done++;
+            updateProgress();
+            return nextPurchase(i + 1);
+        }).catch(function(err) {
+            console.error('Purchase PDF failed:', purchase && purchase.invoice, err);
+            failed++;
+            done++;
+            updateProgress();
+            return nextPurchase(i + 1);
+        });
+    }
+
+    updateProgress();
+    nextPurchase(0).catch(function(err) {
+        console.error('Bulk invoice download failed:', err);
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = originalLabel;
+        }
+        alert('Failed to download invoice PDFs. Please try again.');
+    });
+}
+
 function appendExportButtonsNearBody(bodyId, pageKey) {
     var tbody = document.getElementById(bodyId);
     if (!tbody) return;
@@ -1000,7 +1177,12 @@ function appendExportButtonsNearBody(bodyId, pageKey) {
     var wrap = document.createElement('div');
     wrap.id = wrapId;
     wrap.className = 'flex justify-end gap-2 mb-2';
+    var billsBtn = '';
+    if (pageKey === 'purchases' || pageKey === 'sales') {
+        billsBtn = '<button type="button" id="downloadBillsBtn_' + pageKey + '" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-sky-300 text-sky-700 hover:bg-sky-50" onclick="downloadFilteredInvoiceBillsZip(\'' + pageKey + '\')">Download All Bills</button>';
+    }
     wrap.innerHTML = '' +
+        billsBtn +
         '<button type="button" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="exportRegisterToPdf(\'' + pageKey + '\')">Export PDF</button>' +
         '<button type="button" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-50" onclick="exportRegisterToExcel(\'' + pageKey + '\')">Export Excel</button>';
     parent.insertAdjacentElement('beforebegin', wrap);
@@ -2089,6 +2271,29 @@ function deleteAllMasters() {
                     console.error('PDF generation failed:', err);
                     alert('Failed to generate PDF. Please try again.');
                     return false;
+                });
+            });
+        }
+
+        function renderHtmlToPdfBlob(htmlContent) {
+            var wrapper = createRenderableHtmlWrapper(htmlContent);
+            var pause = new Promise(function(resolve) { setTimeout(resolve, 100); });
+            if (typeof window.html2pdf === 'undefined') {
+                if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+                return Promise.reject(new Error('PDF engine not loaded'));
+            }
+            return pause.then(function() {
+                return window.html2pdf().set({
+                    margin: [0, 0, 0, 0],
+                    pagebreak: { mode: ['css', 'legacy'] },
+                    html2canvas: { scale: 2, useCORS: true },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                }).from(wrapper).outputPdf('blob').then(function(blob) {
+                    if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+                    return blob;
+                }).catch(function(err) {
+                    if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+                    throw err;
                 });
             });
         }
