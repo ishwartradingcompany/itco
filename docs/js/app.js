@@ -1142,11 +1142,18 @@ function downloadFilteredInvoiceBillsZip(pageKey) {
         });
     }
 
+    function addPdfBlobToZip(folder, fileName, blob) {
+        if (!blob || typeof blob.size !== 'number' || blob.size < 1000) {
+            throw new Error('Empty or invalid PDF blob for ' + fileName);
+        }
+        folder.file(fileName, blob, { binary: true });
+    }
+
     function nextSale(i) {
         if (i >= targets.sales.length) return finishZip();
         var sale = targets.sales[i];
         return renderHtmlToPdfBlob(buildSaleInvoiceHtml(sale)).then(function(blob) {
-            salesFolder.file(safePdfName(sale.invoice, 'sale-' + sale.id), blob);
+            addPdfBlobToZip(salesFolder, safePdfName(sale.invoice, 'sale-' + sale.id), blob);
             saleOk++;
             done++;
             updateProgress();
@@ -1164,7 +1171,7 @@ function downloadFilteredInvoiceBillsZip(pageKey) {
         if (i >= targets.purchases.length) return nextSale(0);
         var purchase = targets.purchases[i];
         return renderHtmlToPdfBlob(buildPurchaseInvoiceHtml(purchase)).then(function(blob) {
-            purchasesFolder.file(safePdfName(purchase.invoice, 'purchase-' + purchase.id), blob);
+            addPdfBlobToZip(purchasesFolder, safePdfName(purchase.invoice, 'purchase-' + purchase.id), blob);
             purchaseOk++;
             done++;
             updateProgress();
@@ -2300,25 +2307,18 @@ function deleteAllMasters() {
         }
 
         function renderHtmlToPdfBlob(htmlContent) {
-            var wrapper = createRenderableHtmlWrapper(htmlContent);
-            var pause = new Promise(function(resolve) { setTimeout(resolve, 100); });
-            if (typeof window.html2pdf === 'undefined') {
-                if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+            if (!(window.jspdf && window.jspdf.jsPDF)) {
                 return Promise.reject(new Error('PDF engine not loaded'));
             }
-            return pause.then(function() {
-                return window.html2pdf().set({
-                    margin: [0, 0, 0, 0],
-                    pagebreak: { mode: ['css', 'legacy'] },
-                    html2canvas: { scale: 2, useCORS: true },
-                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-                }).from(wrapper).outputPdf('blob').then(function(blob) {
-                    if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-                    return blob;
-                }).catch(function(err) {
-                    if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
-                    throw err;
-                });
+            return Promise.resolve(renderHtmlToCanvas(htmlContent)).then(function(canvas) {
+                if (!canvas) throw new Error('Canvas render failed');
+                var pdf = buildPdfFromCanvas(canvas);
+                if (!pdf) throw new Error('PDF build failed');
+                var blob = pdf.output('blob');
+                if (!blob || !blob.size || blob.size < 1000) {
+                    throw new Error('Generated PDF is empty');
+                }
+                return blob;
             });
         }
 
@@ -2554,43 +2554,6 @@ function deleteAllMasters() {
             ctx.drawImage(ledgerCanvas, 0, invoiceCanvas.height + gap);
             return outCanvas;
         }
-        function downloadCanvasAsPdf(canvas, fileBaseName) {
-            if (!canvas) return false;
-            if (!(window.jspdf && window.jspdf.jsPDF)) {
-                alert('PDF engine not loaded. Please refresh and try again.');
-                return false;
-            }
-            var jsPDF = window.jspdf.jsPDF;
-            var pdf = new jsPDF('p', 'mm', 'a4');
-            var pageWidth = 210;
-            var pageHeight = 297;
-            var mmPerPx = pageWidth / canvas.width;
-            var maxSliceHeightPx = Math.max(200, Math.floor(pageHeight / mmPerPx));
-            var yOffset = 0;
-            var pageIndex = 0;
-
-            while (yOffset < canvas.height) {
-                var sliceHeight = Math.min(maxSliceHeightPx, canvas.height - yOffset);
-                var sliceCanvas = document.createElement('canvas');
-                sliceCanvas.width = canvas.width;
-                sliceCanvas.height = sliceHeight;
-                var sctx = sliceCanvas.getContext('2d');
-                sctx.fillStyle = '#ffffff';
-                sctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-                sctx.drawImage(
-                    canvas,
-                    0, yOffset, canvas.width, sliceHeight,
-                    0, 0, sliceCanvas.width, sliceCanvas.height
-                );
-                var imgData = sliceCanvas.toDataURL('image/jpeg', 0.95);
-                if (pageIndex > 0) pdf.addPage();
-                pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, sliceHeight * mmPerPx);
-                yOffset += sliceHeight;
-                pageIndex += 1;
-            }
-            pdf.save(String(fileBaseName || ('invoice-ledger-' + Date.now())) + '.pdf');
-            return true;
-        }
         function appendCanvasToPdfPages(pdf, canvas, useCurrentPageForFirstSlice) {
             if (!pdf || !canvas) return;
             var pageWidth = 210;
@@ -2624,6 +2587,25 @@ function deleteAllMasters() {
                 isFirstSlice = false;
                 useCurrentPageForFirstSlice = true;
             }
+        }
+        function buildPdfFromCanvas(canvas) {
+            if (!canvas) return null;
+            if (!(window.jspdf && window.jspdf.jsPDF)) return null;
+            var jsPDF = window.jspdf.jsPDF;
+            var pdf = new jsPDF('p', 'mm', 'a4');
+            appendCanvasToPdfPages(pdf, canvas, true);
+            return pdf;
+        }
+        function downloadCanvasAsPdf(canvas, fileBaseName) {
+            var pdf = buildPdfFromCanvas(canvas);
+            if (!pdf) {
+                if (canvas && !(window.jspdf && window.jspdf.jsPDF)) {
+                    alert('PDF engine not loaded. Please refresh and try again.');
+                }
+                return false;
+            }
+            pdf.save(String(fileBaseName || ('invoice-ledger-' + Date.now())) + '.pdf');
+            return true;
         }
         function downloadInvoiceAndLedgerPdf(invoiceCanvas, ledgerCanvas, fileBaseName) {
             if (!invoiceCanvas || !ledgerCanvas) return false;
