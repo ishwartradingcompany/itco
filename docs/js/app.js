@@ -988,6 +988,59 @@ function exportRegisterToExcel(pageKey) {
     exportRowsToExcel(spec);
 }
 
+function inBillDateRange(dateStr, dateFrom, dateTo) {
+    var d = String(dateStr || '');
+    if (dateFrom && d < dateFrom) return false;
+    if (dateTo && d > dateTo) return false;
+    return true;
+}
+
+function getLiveFilteredPurchasesForBills() {
+    var search = ((document.getElementById('purchaseSearch') || {}).value || '').toLowerCase();
+    var bagsSearch = ((document.getElementById('purchaseBagsLotSearch') || {}).value || '').toLowerCase().trim();
+    var supplierId = ((document.getElementById('purchaseFilterSupplier') || {}).value || '');
+    var dateFrom = ((document.getElementById('purchaseDateFrom') || {}).value || '');
+    var dateTo = ((document.getElementById('purchaseDateTo') || {}).value || '');
+
+    return (appData.purchases || []).filter(function(p) {
+        if (search) {
+            var searchFields = [p.invoice, p.supplierName, p.truck || ''].join(' ').toLowerCase();
+            if (searchFields.indexOf(search) === -1) return false;
+        }
+        if (bagsSearch) {
+            var itemBagTerms = [];
+            (p.items || []).forEach(function(item) {
+                var bagValue = parseFloat(item && item.bags);
+                if (!isNaN(bagValue)) {
+                    itemBagTerms.push(String(+bagValue));
+                    itemBagTerms.push(bagValue.toFixed(2));
+                }
+            });
+            if (itemBagTerms.join(' ').indexOf(bagsSearch) === -1) return false;
+        }
+        if (supplierId && String(p.supplierId) !== String(supplierId)) return false;
+        if (!inBillDateRange(p.date, dateFrom, dateTo)) return false;
+        return true;
+    });
+}
+
+function getLiveFilteredSalesForBills() {
+    var search = ((document.getElementById('salesSearch') || {}).value || '').toLowerCase();
+    var customerId = ((document.getElementById('salesFilterCustomer') || {}).value || '');
+    var dateFrom = ((document.getElementById('salesDateFrom') || {}).value || '');
+    var dateTo = ((document.getElementById('salesDateTo') || {}).value || '');
+
+    return (appData.sales || []).filter(function(s) {
+        if (search) {
+            var searchFields = [s.invoice, s.customerName, s.truck || ''].join(' ').toLowerCase();
+            if (searchFields.indexOf(search) === -1) return false;
+        }
+        if (customerId && String(s.customerId) !== String(customerId)) return false;
+        if (!inBillDateRange(s.date, dateFrom, dateTo)) return false;
+        return true;
+    });
+}
+
 function collectFilteredInvoiceTargets(pageKey) {
     var key = String(pageKey || '');
     var purchases = [];
@@ -1011,9 +1064,13 @@ function collectFilteredInvoiceTargets(pageKey) {
     }
 
     if (key === 'purchases') {
-        (filteredPurchases || []).forEach(function(p) {
+        var dateFrom = ((document.getElementById('purchaseDateFrom') || {}).value || '');
+        var dateTo = ((document.getElementById('purchaseDateTo') || {}).value || '');
+        var purchaseList = getLiveFilteredPurchasesForBills();
+        purchaseList.forEach(function(p) {
             addPurchase(p);
             (appData.sales || []).forEach(function(s) {
+                if (!inBillDateRange(s.date, dateFrom, dateTo)) return;
                 if (s.linkedPurchases && s.linkedPurchases.some(function(lp) {
                     return String(lp.purchaseId) === String(p.id);
                 })) {
@@ -1022,13 +1079,18 @@ function collectFilteredInvoiceTargets(pageKey) {
             });
         });
     } else if (key === 'sales') {
-        (filteredSales || []).forEach(function(s) {
+        var salesDateFrom = ((document.getElementById('salesDateFrom') || {}).value || '');
+        var salesDateTo = ((document.getElementById('salesDateTo') || {}).value || '');
+        var salesList = getLiveFilteredSalesForBills();
+        salesList.forEach(function(s) {
             addSale(s);
             (s.linkedPurchases || []).forEach(function(lp) {
                 var purchase = (appData.purchases || []).find(function(p) {
                     return String(p.id) === String(lp.purchaseId);
                 });
-                if (purchase) addPurchase(purchase);
+                if (purchase && inBillDateRange(purchase.date, salesDateFrom, salesDateTo)) {
+                    addPurchase(purchase);
+                }
             });
         });
     }
@@ -1054,7 +1116,9 @@ function downloadFilteredInvoiceBillsZip(pageKey) {
         alert('No invoices available to download for the current filters.');
         return;
     }
-    if (total > 40 && !confirm('This will generate ' + total + ' invoice PDFs and download them as a ZIP. Continue?')) {
+    var confirmMsg = 'Download ' + targets.purchases.length + ' purchase + ' + targets.sales.length +
+        ' sale invoice PDFs (' + total + ' total) for the current filters as a ZIP?';
+    if (!confirm(confirmMsg)) {
         return;
     }
 
