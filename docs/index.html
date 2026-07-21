@@ -3248,6 +3248,18 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="bg-white rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow" onclick="showReport('gst')">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">GST Report</h3>
+                            <p class="text-slate-600 text-sm">Purchase and sales GST data</p>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="bg-white rounded-lg shadow-medium border border-slate-200 p-6">
@@ -3266,9 +3278,23 @@
                         <label class="text-sm text-slate-600">To</label>
                         <input type="date" id="reportDateTo" class="p-2 border border-slate-300 rounded-lg text-sm">
                         <button type="button" onclick="applyReportDateRange()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-sm font-medium">Apply</button>
+                        <span id="gstReportFilters" class="inline-flex flex-wrap items-center gap-2" style="display: none;">
+                            <select id="gstReportTypeFilter" onchange="applyReportDateRange()" class="p-2 border border-slate-300 rounded-lg text-sm bg-white">
+                                <option value="all">All (Purchase + Sale)</option>
+                                <option value="purchase">Purchase only</option>
+                                <option value="sale">Sale only</option>
+                            </select>
+                            <select id="gstReportSort" onchange="applyReportDateRange()" class="p-2 border border-slate-300 rounded-lg text-sm bg-white">
+                                <option value="date-desc">Newest First</option>
+                                <option value="date-asc">Oldest First</option>
+                                <option value="amount-desc">Amount High to Low</option>
+                                <option value="amount-asc">Amount Low to High</option>
+                            </select>
+                        </span>
                     </div>
                     <div class="flex gap-2">
-                        <button type="button" onclick="exportReportToPdf()" class="px-3 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 text-sm font-medium" id="exportPdfBtn" style="display: none;">Download PDF</button>
+                        <button type="button" onclick="exportReportToPdf()" class="px-3 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 text-sm font-medium" id="exportPdfBtn" style="display: none;">Print / PDF</button>
+                        <button type="button" onclick="exportGstReportToExcel()" class="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium" id="exportExcelBtn" style="display: none;">Export Excel</button>
                         <button onclick="exportReport()" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors" id="exportBtn" style="display: none;">Export to CSV</button>
                     </div>
                 </div>
@@ -3622,5 +3648,7 @@
     <script src="js/audit-ui.js" charset="UTF-8"></script>
     <script src="js/audit-export.js" charset="UTF-8"></script>
     <script src="js/auth.js" charset="UTF-8"></script>
+
+
 </body>
 </html>
