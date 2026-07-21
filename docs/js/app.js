@@ -13962,6 +13962,114 @@ function onPnLFilterChange() {
 
         // Reports functions
         var currentReportType = '';
+        var currentGstReportRows = [];
+
+        function getGstReportTruck(doc, item) {
+            var truck = (item && item.truck) || (doc && doc.truck) || '';
+            if (!truck && doc && Array.isArray(doc.multiTrucks) && doc.multiTrucks.length) {
+                truck = doc.multiTrucks.filter(Boolean).join(', ');
+            }
+            return truck || '-';
+        }
+
+        function buildGstReportRows(dateFilter) {
+            var typeEl = document.getElementById('gstReportTypeFilter');
+            var sortEl = document.getElementById('gstReportSort');
+            var typeFilter = typeEl ? (typeEl.value || 'all') : 'all';
+            var sortBy = sortEl ? (sortEl.value || 'date-desc') : 'date-desc';
+            var rows = [];
+
+            function pushPurchaseRows(purchase) {
+                if (!purchase) return;
+                var invoice = purchase.masterInvoice || purchase.invoice || ('#' + (purchase.id || ''));
+                if (purchase.items && purchase.items.length) {
+                    purchase.items.forEach(function(item) {
+                        var itemDate = item.date || purchase.date || '';
+                        if (!dateFilter(itemDate)) return;
+                        rows.push({
+                            type: 'Purchase',
+                            date: itemDate,
+                            invoice: invoice,
+                            truck: getGstReportTruck(purchase, item),
+                            itemName: item.itemName || '-',
+                            amount: parseFloat(item.total) || 0,
+                            gst: 'Exempted'
+                        });
+                    });
+                } else if (dateFilter(purchase.date || '')) {
+                    rows.push({
+                        type: 'Purchase',
+                        date: purchase.date || '',
+                        invoice: invoice,
+                        truck: getGstReportTruck(purchase, null),
+                        itemName: purchase.itemName || '-',
+                        amount: parseFloat(purchase.grandTotal || purchase.total) || 0,
+                        gst: 'Exempted'
+                    });
+                }
+            }
+
+            function pushSaleRows(sale) {
+                if (!sale) return;
+                var invoice = sale.masterInvoice || sale.invoice || ('#' + (sale.id || ''));
+                if (sale.items && sale.items.length) {
+                    sale.items.forEach(function(item) {
+                        var itemDate = item.date || sale.date || '';
+                        if (!dateFilter(itemDate)) return;
+                        rows.push({
+                            type: 'Sale',
+                            date: itemDate,
+                            invoice: invoice,
+                            truck: getGstReportTruck(sale, item),
+                            itemName: item.itemName || '-',
+                            amount: parseFloat(item.total) || 0,
+                            gst: 'Exempted'
+                        });
+                    });
+                } else if (dateFilter(sale.date || '')) {
+                    rows.push({
+                        type: 'Sale',
+                        date: sale.date || '',
+                        invoice: invoice,
+                        truck: getGstReportTruck(sale, null),
+                        itemName: sale.itemName || '-',
+                        amount: parseFloat(sale.grandTotal || sale.total) || 0,
+                        gst: 'Exempted'
+                    });
+                }
+            }
+
+            if (typeFilter === 'all' || typeFilter === 'purchase') {
+                (appData.purchases || []).forEach(pushPurchaseRows);
+            }
+            if (typeFilter === 'all' || typeFilter === 'sale') {
+                (appData.sales || []).forEach(pushSaleRows);
+            }
+
+            rows.sort(function(a, b) {
+                switch (sortBy) {
+                    case 'date-asc':
+                        return String(a.date || '').localeCompare(String(b.date || '')) || String(a.invoice).localeCompare(String(b.invoice));
+                    case 'amount-desc':
+                        return (b.amount || 0) - (a.amount || 0);
+                    case 'amount-asc':
+                        return (a.amount || 0) - (b.amount || 0);
+                    case 'date-desc':
+                    default:
+                        return String(b.date || '').localeCompare(String(a.date || '')) || String(b.invoice).localeCompare(String(a.invoice));
+                }
+            });
+
+            return rows;
+        }
+
+        function setGstReportControlsVisible(isGst) {
+            var gstFilters = document.getElementById('gstReportFilters');
+            var excelBtn = document.getElementById('exportExcelBtn');
+            if (gstFilters) gstFilters.style.display = isGst ? 'inline-flex' : 'none';
+            if (excelBtn) excelBtn.style.display = isGst ? 'block' : 'none';
+        }
+
         function getReportDateRange() {
             var fromEl = document.getElementById('reportDateFrom');
             var toEl = document.getElementById('reportDateTo');
@@ -14030,6 +14138,7 @@ function onPnLFilterChange() {
             exportBtn.style.display = 'block';
             exportBtn.setAttribute('data-report-type', reportType);
             if (exportPdfBtn) { exportPdfBtn.style.display = 'block'; }
+            setGstReportControlsVisible(reportType === 'gst');
             
             switch (reportType) {
                 case 'purchases':
@@ -14317,11 +14426,98 @@ function onPnLFilterChange() {
                         tableBody.appendChild(tr);
                     });
                     break;
+
+                case 'gst':
+                    reportTitle.textContent = 'GST Report (Purchase & Sales)';
+                    tableHead.innerHTML = `
+                        <tr class="bg-slate-50">
+                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Type</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Date</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Invoice</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Truck No</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">Item Name</th>
+                            <th class="px-4 py-3 text-right text-sm font-medium text-slate-700">Invoice Amount</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-slate-700">GST</th>
+                        </tr>
+                    `;
+                    tableBody.innerHTML = '';
+                    currentGstReportRows = buildGstReportRows(dateFilter);
+                    var gstTotal = 0;
+                    currentGstReportRows.forEach(function(row) {
+                        gstTotal += row.amount || 0;
+                        var tr = document.createElement('tr');
+                        tr.className = 'border-b border-slate-200';
+                        var typeClass = row.type === 'Sale' ? 'text-green-700' : 'text-blue-700';
+                        tr.innerHTML =
+                            '<td class="px-4 py-3 font-medium ' + typeClass + '">' + escapeHtml(row.type) + '</td>' +
+                            '<td class="px-4 py-3">' + escapeHtml(row.date) + '</td>' +
+                            '<td class="px-4 py-3">' + escapeHtml(row.invoice) + '</td>' +
+                            '<td class="px-4 py-3">' + escapeHtml(row.truck) + '</td>' +
+                            '<td class="px-4 py-3">' + escapeHtml(row.itemName) + '</td>' +
+                            '<td class="px-4 py-3 text-right">' + RU + (row.amount || 0).toFixed(2) + '</td>' +
+                            '<td class="px-4 py-3">' + escapeHtml(row.gst) + '</td>';
+                        tableBody.appendChild(tr);
+                    });
+                    if (currentGstReportRows.length) {
+                        var gstTotalRow = document.createElement('tr');
+                        gstTotalRow.className = 'bg-slate-100 border-t-2 border-slate-400 font-bold';
+                        gstTotalRow.innerHTML =
+                            '<td class="px-4 py-3" colspan="5">Total (' + currentGstReportRows.length + ' rows)</td>' +
+                            '<td class="px-4 py-3 text-right">' + RU + gstTotal.toFixed(2) + '</td>' +
+                            '<td class="px-4 py-3"></td>';
+                        tableBody.appendChild(gstTotalRow);
+                    }
+                    break;
             }
             
             if (tableBody.children.length === 0 && reportType !== 'summary' && reportType !== 'ageing') {
                 tableBody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No data available for this report</td></tr>';
             }
+        }
+
+        function exportGstReportToExcel() {
+            if (currentReportType !== 'gst') {
+                alert('Open the GST Report first, then export to Excel.');
+                return;
+            }
+            var range = getReportDateRange();
+            var dateFilter = function(d) {
+                if (range.from && d < range.from) return false;
+                if (range.to && d > range.to) return false;
+                return true;
+            };
+            var rows = buildGstReportRows(dateFilter);
+            currentGstReportRows = rows;
+            if (!rows.length) {
+                alert('No GST data available for the current filters.');
+                return;
+            }
+            var stamp = (typeof getExportTimestampLabel === 'function') ? getExportTimestampLabel() : new Date().toISOString().slice(0, 10);
+            exportRowsToExcel({
+                title: 'GST Report',
+                filename: 'GST_Report_' + stamp,
+                sheetName: 'GST Report',
+                columns: [
+                    { key: 'type', label: 'Type' },
+                    { key: 'date', label: 'Date' },
+                    { key: 'invoice', label: 'Invoice' },
+                    { key: 'truck', label: 'Truck No' },
+                    { key: 'itemName', label: 'Item Name' },
+                    { key: 'amount', label: 'Invoice Amount' },
+                    { key: 'gst', label: 'GST' }
+                ],
+                rows: rows.map(function(r) {
+                    return {
+                        type: r.type,
+                        date: r.date,
+                        invoice: r.invoice,
+                        truck: r.truck,
+                        itemName: r.itemName,
+                        amount: Number((r.amount || 0).toFixed(2)),
+                        gst: r.gst
+                    };
+                })
+            });
         }
 
         function exportReportToPdf() {
@@ -16542,4 +16738,3 @@ function exportLedgerStatement() {
             }
             ensureRegisterExportButtons();
         });
-
