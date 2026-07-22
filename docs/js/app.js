@@ -14525,8 +14525,18 @@ function onPnLFilterChange() {
             var table = document.getElementById('reportTable');
             if (!table || !reportTitleEl) return;
             var title = reportTitleEl.textContent || 'Report';
+            var company = appData.company || {};
+            var companyName = company.name || 'Ishwar Trading Company';
+            var companyGstin = company.gstin || '23DVEPS4937N1ZY';
             var win = window.open('', '_blank');
-            win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + escapeHtml(title) + '</title><style>body{font-family:Arial,sans-serif;margin:20px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #333;padding:8px;text-align:left;} th{background:#f0f0f0;}</style></head><body><h2>' + escapeHtml(title) + '</h2>' + table.outerHTML + '</body></html>');
+            win.document.write(
+                '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + escapeHtml(title) + '</title>' +
+                '<style>body{font-family:Arial,sans-serif;margin:20px;} .company-header{text-align:center;margin-bottom:16px;} .company-header h1{margin:0 0 6px;font-size:22px;} .company-header .gstin{margin:0;font-size:14px;font-weight:600;} h2{margin:0 0 12px;font-size:18px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #333;padding:8px;text-align:left;} th{background:#f0f0f0;}</style>' +
+                '</head><body>' +
+                '<div class="company-header"><h1>' + escapeHtml(companyName) + '</h1><p class="gstin">GST No: ' + escapeHtml(companyGstin) + '</p></div>' +
+                '<h2>' + escapeHtml(title) + '</h2>' + table.outerHTML +
+                '</body></html>'
+            );
             win.document.close();
             win.focus();
             setTimeout(function() { win.print(); }, 250);
@@ -14862,7 +14872,7 @@ function onPnLFilterChange() {
 
         function buildSaleInvoiceHtml(sale) {
             if (!sale) return '';
-            const company = appData.company;
+            const company = appData.company || {};
             const saleInvoiceText = sale.masterInvoice || sale.invoice;
             const saleLrText = collectUniqueNonEmpty(sale.multiLrNumbers || [sale.lrNumber]).join(', ') || (sale.lrNumber || '-');
             
@@ -14897,6 +14907,8 @@ function onPnLFilterChange() {
             const ledgerBalance = getCustomerLedgerBalance(sale.customerId);
             
             const amountInWords = numberToWords(sale.grandTotal || sale.total || 0);
+            const companyName = company.name || 'Ishwar Trading Company';
+            const companyGstin = company.gstin || '23DVEPS4937N1ZY';
             
             return `
                 <html>
@@ -14916,8 +14928,9 @@ function onPnLFilterChange() {
                 </head>
                 <body>
                     <div class="header">
-                        <h1>${company.name || 'ITCO Trade Management'}</h1>
-                        ${company.address ? `<p style="margin:6px 0 0;font-size:13px;color:#374151;">${company.address}</p>` : ''}
+                        <h1>${escapeHtml(companyName)}</h1>
+                        <p style="margin:6px 0 0;font-size:14px;font-weight:600;">GST No: ${escapeHtml(companyGstin)}</p>
+                        ${company.address ? `<p style="margin:6px 0 0;font-size:13px;color:#374151;">${escapeHtml(company.address)}</p>` : ''}
                         <h2>SALE INVOICE</h2>
                     </div>
                     
