@@ -33,6 +33,7 @@
 
         let purchaseInlineBrokerageRowIndex = 0;
         let saleInlineBrokerageRowIndex = 0;
+        let purchaseInlineOtherExpenseRowIndex = 0;
 
         function getActiveBrokerList() {
             return (appData.brokers || []).filter(function(broker) { return broker.active !== false; });
@@ -309,6 +310,154 @@
             });
         }
 
+        function renderPurchaseOtherExpenseRow(index, entry, canRemove) {
+            const remarks = entry && entry.remarks != null ? String(entry.remarks) : '';
+            const amount = entry && entry.amount != null ? Number(entry.amount) : '';
+            return `
+                <div class="purchase-inline-other-expense-row grid grid-cols-1 md:grid-cols-3 gap-3 items-end" data-index="${index}">
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Remarks</label>
+                        <input type="text" class="purchase-inline-other-expense-remarks w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent" placeholder="e.g. Toll, Freight, Unloading" value="${escapeHtml(remarks)}">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
+                        <input type="number" class="purchase-inline-other-expense-amount w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent" placeholder="Expense Amount" value="${amount !== '' ? amount : ''}" min="0" step="0.01">
+                    </div>
+                    <div>
+                        ${canRemove ? `<button type="button" onclick="removePurchaseOtherExpenseRow(${index})" class="w-full p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">Remove</button>` : '<div class="text-xs text-slate-500 px-1">At least one row required when adding other expenses</div>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        function setPurchaseOtherExpenseRows(entries) {
+            const container = document.getElementById('purchaseOtherExpenseRows');
+            if (!container) return;
+            const list = (entries && entries.length) ? entries : [];
+            purchaseInlineOtherExpenseRowIndex = 0;
+            container.innerHTML = '';
+            if (list.length === 0) return;
+            list.forEach(function(entry, idx) {
+                const rowIndex = ++purchaseInlineOtherExpenseRowIndex;
+                container.insertAdjacentHTML('beforeend', renderPurchaseOtherExpenseRow(rowIndex, entry, idx > 0));
+            });
+        }
+
+        function refreshPurchaseOtherExpenseFirstRowHint() {
+            const container = document.getElementById('purchaseOtherExpenseRows');
+            if (!container) return;
+            const rows = container.querySelectorAll('.purchase-inline-other-expense-row');
+            if (!rows.length) return;
+            const firstRow = rows[0];
+            const firstIndex = Number(firstRow.getAttribute('data-index'));
+            const firstBtnWrap = firstRow.querySelector('div:last-child');
+            if (!firstBtnWrap) return;
+            const hasMultiple = rows.length > 1;
+            firstBtnWrap.innerHTML = hasMultiple
+                ? `<button type="button" onclick="removePurchaseOtherExpenseRow(${firstIndex})" class="w-full p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">Remove</button>`
+                : '<div class="text-xs text-slate-500 px-1">At least one row required when adding other expenses</div>';
+        }
+
+        function addPurchaseOtherExpenseRow(entry) {
+            const container = document.getElementById('purchaseOtherExpenseRows');
+            if (!container) return;
+            const rowIndex = ++purchaseInlineOtherExpenseRowIndex;
+            const existingRows = container.querySelectorAll('.purchase-inline-other-expense-row').length;
+            container.insertAdjacentHTML('beforeend', renderPurchaseOtherExpenseRow(rowIndex, entry || {}, existingRows > 0));
+            refreshPurchaseOtherExpenseFirstRowHint();
+        }
+
+        function removePurchaseOtherExpenseRow(index) {
+            const row = document.querySelector('.purchase-inline-other-expense-row[data-index="' + String(index) + '"]');
+            if (!row) return;
+            row.remove();
+            refreshPurchaseOtherExpenseFirstRowHint();
+        }
+
+        function togglePurchaseOtherExpensesSection() {
+            const toggle = document.getElementById('purchaseOtherExpensesToggle');
+            const container = document.getElementById('purchaseInlineOtherExpensesContainer');
+            if (!toggle || !container) return;
+            container.classList.toggle('hidden', !toggle.checked);
+            if (toggle.checked) {
+                const hasRows = container.querySelectorAll('.purchase-inline-other-expense-row').length > 0;
+                if (!hasRows) addPurchaseOtherExpenseRow();
+            }
+        }
+
+        function getPurchaseOtherExpenseEntries() {
+            const rows = document.querySelectorAll('.purchase-inline-other-expense-row');
+            const entries = [];
+            rows.forEach(function(row) {
+                const remarksEl = row.querySelector('.purchase-inline-other-expense-remarks');
+                const amountEl = row.querySelector('.purchase-inline-other-expense-amount');
+                if (!remarksEl || !amountEl) return;
+                const remarks = String(remarksEl.value || '').trim();
+                const amount = parseFloat(amountEl.value) || 0;
+                if (!remarks || amount <= 0) return;
+                entries.push({
+                    remarks: remarks,
+                    amount: +amount.toFixed(2)
+                });
+            });
+            return entries;
+        }
+
+        function removeInlineOtherExpensesBySource(sourceKey, invoiceId) {
+            appData.otherExpenses = (appData.otherExpenses || []).filter(function(entry) {
+                return !(entry.source === sourceKey && String(entry.sourceInvoiceId) === String(invoiceId));
+            });
+        }
+
+        function pushInlineOtherExpenses(config) {
+            const entries = config.entries || [];
+            if (!entries.length) return;
+            if (!Array.isArray(appData.otherExpenses)) appData.otherExpenses = [];
+            entries.forEach(function(entry, idx) {
+                const amount = parseFloat(entry.amount) || 0;
+                const remarks = String(entry.remarks || '').trim();
+                if (amount <= 0 || !remarks) return;
+                appData.otherExpenses.push({
+                    id: Date.now() + idx + Math.floor(Math.random() * 1000),
+                    date: config.date || '',
+                    remarks: remarks,
+                    amount: +amount.toFixed(2),
+                    reference: config.reference || '',
+                    source: config.source,
+                    sourceInvoiceId: config.sourceInvoiceId,
+                    sourceInvoiceNo: config.sourceInvoiceNo
+                });
+            });
+        }
+
+        function allocateOtherExpenseEntriesByGroups(entries, groups) {
+            const safeEntries = Array.isArray(entries) ? entries : [];
+            const safeGroups = Array.isArray(groups) ? groups : [];
+            if (!safeEntries.length || !safeGroups.length) return safeGroups.map(function() { return []; });
+            const totalValue = safeGroups.reduce(function(sum, group) { return sum + (parseFloat(group.itemsTotal) || 0); }, 0);
+            const allocations = safeGroups.map(function() { return []; });
+            safeEntries.forEach(function(entry) {
+                const totalAmt = parseFloat(entry.amount) || 0;
+                const remarks = String(entry.remarks || '').trim();
+                if (totalAmt <= 0 || !remarks) return;
+                let allocated = 0;
+                safeGroups.forEach(function(group, groupIdx) {
+                    var amount;
+                    if (groupIdx === safeGroups.length - 1) {
+                        amount = +Math.max(0, totalAmt - allocated).toFixed(2);
+                    } else {
+                        var ratio = totalValue > 0 ? ((parseFloat(group.itemsTotal) || 0) / totalValue) : (1 / safeGroups.length);
+                        amount = +(totalAmt * ratio).toFixed(2);
+                        allocated += amount;
+                    }
+                    if (amount > 0) {
+                        allocations[groupIdx].push({ remarks: remarks, amount: amount });
+                    }
+                });
+            });
+            return allocations;
+        }
+
         function allocateBrokerageEntriesByGroups(entries, groups) {
             const safeEntries = Array.isArray(entries) ? entries : [];
             const safeGroups = Array.isArray(groups) ? groups : [];
@@ -363,6 +512,7 @@
             sales: [],
             inventory: {},
             brokerage: [],
+            otherExpenses: [],
             deductions: [],
             payments: [],
             adjustments: [],
@@ -1498,6 +1648,7 @@ function loadData() {
                 appData.coldStorageMovements = appData.coldStorageMovements || [];
                 appData.coldStorageDamages = appData.coldStorageDamages || [];
                 appData.coldStorages = appData.coldStorages || [];
+                appData.otherExpenses = appData.otherExpenses || [];
                 appData.settings = appData.settings || {};
                 normalizeColdStorageLotFields();
                 appData.coldStorages = appData.coldStorages.map(function(cs, idx) {
@@ -5291,6 +5442,8 @@ function deleteAllMasters() {
             const chargeMode = getPurchaseChargeMode();
             const postInlineBrokerage = !!(document.getElementById('purchasePostBrokerageToggle') && document.getElementById('purchasePostBrokerageToggle').checked);
             const inlineBrokerageEntries = postInlineBrokerage ? getPurchaseBrokerageEntries() : [];
+            const postOtherExpenses = !!(document.getElementById('purchaseOtherExpensesToggle') && document.getElementById('purchaseOtherExpensesToggle').checked);
+            const inlineOtherExpenseEntries = postOtherExpenses ? getPurchaseOtherExpenseEntries() : [];
             const purchaseMessageTargets = [];
             const affectedPurchaseIds = [];
             
@@ -5300,6 +5453,10 @@ function deleteAllMasters() {
             }
             if (postInlineBrokerage && inlineBrokerageEntries.length === 0) {
                 alert('Please add at least one valid brokerage row (broker and amount) or turn off Post to Brokerage.');
+                return;
+            }
+            if (postOtherExpenses && inlineOtherExpenseEntries.length === 0) {
+                alert('Please add at least one valid other expense row (remarks and amount) or turn off Add Other Expenses.');
                 return;
             }
 
@@ -5372,6 +5529,8 @@ function deleteAllMasters() {
                     existingPurchase.multiKaantaParchi = itemKaantaParchi;
                     existingPurchase.inlineBrokerageEnabled = postInlineBrokerage;
                     existingPurchase.inlineBrokerageEntries = postInlineBrokerage ? inlineBrokerageEntries.map(function(entry) { return { brokerId: entry.brokerId, brokerName: entry.brokerName, amount: entry.amount }; }) : [];
+                    existingPurchase.inlineOtherExpensesEnabled = postOtherExpenses;
+                    existingPurchase.inlineOtherExpenses = postOtherExpenses ? inlineOtherExpenseEntries.map(function(entry) { return { remarks: entry.remarks, amount: entry.amount }; }) : [];
                     existingPurchase.items = [...currentPurchaseItems];
                     existingPurchase.itemsTotal = itemsTotal;
                     existingPurchase.hammali = hammali;
@@ -5396,6 +5555,17 @@ function deleteAllMasters() {
                             items: existingPurchase.items || [],
                             date: existingPurchase.date || date,
                             type: 'Purchase',
+                            reference: existingPurchase.invoice || invoice,
+                            source: 'inline_purchase',
+                            sourceInvoiceId: existingPurchase.id,
+                            sourceInvoiceNo: existingPurchase.invoice || invoice
+                        });
+                    }
+                    removeInlineOtherExpensesBySource('inline_purchase', existingPurchase.id);
+                    if (postOtherExpenses) {
+                        pushInlineOtherExpenses({
+                            entries: inlineOtherExpenseEntries,
+                            date: existingPurchase.date || date,
                             reference: existingPurchase.invoice || invoice,
                             source: 'inline_purchase',
                             sourceInvoiceId: existingPurchase.id,
@@ -5468,6 +5638,7 @@ function deleteAllMasters() {
 
                 const singleSupplierEntry = allocatedGroups.length === 1;
                 const brokerageAllocations = postInlineBrokerage ? allocateBrokerageEntriesByGroups(inlineBrokerageEntries, allocatedGroups) : [];
+                const otherExpenseAllocations = postOtherExpenses ? allocateOtherExpenseEntriesByGroups(inlineOtherExpenseEntries, allocatedGroups) : [];
                 const createdPurchases = [];
                 const existingInvoiceSet = new Set(
                     (appData.purchases || []).map(function(p) {
@@ -5529,6 +5700,8 @@ function deleteAllMasters() {
                         multiKaantaParchi: groupKaantaParchi,
                         inlineBrokerageEnabled: postInlineBrokerage,
                         inlineBrokerageEntries: postInlineBrokerage ? (brokerageAllocations[idx] || []) : [],
+                        inlineOtherExpensesEnabled: postOtherExpenses,
+                        inlineOtherExpenses: postOtherExpenses ? (otherExpenseAllocations[idx] || []) : [],
                         items: [...group.items],
                         itemsTotal: +group.itemsTotal.toFixed(2),
                         hammali: +group.hammali.toFixed(2),
@@ -5561,6 +5734,18 @@ function deleteAllMasters() {
                             items: createdPurchase.items || [],
                             date: createdPurchase.date || date,
                             type: 'Purchase',
+                            reference: createdPurchase.invoice || invoice,
+                            source: 'inline_purchase',
+                            sourceInvoiceId: createdPurchase.id,
+                            sourceInvoiceNo: createdPurchase.invoice || invoice
+                        });
+                    });
+                }
+                if (postOtherExpenses) {
+                    createdPurchases.forEach(function(createdPurchase, idx) {
+                        pushInlineOtherExpenses({
+                            entries: otherExpenseAllocations[idx] || [],
+                            date: createdPurchase.date || date,
                             reference: createdPurchase.invoice || invoice,
                             source: 'inline_purchase',
                             sourceInvoiceId: createdPurchase.id,
@@ -5618,6 +5803,14 @@ function deleteAllMasters() {
             if (plr) plr.value = '';
             var pkp = document.getElementById('purchaseKaantaParchi');
             if (pkp) pkp.value = '';
+            const purchaseBrokerageToggleEarly = document.getElementById('purchasePostBrokerageToggle');
+            if (purchaseBrokerageToggleEarly) purchaseBrokerageToggleEarly.checked = false;
+            setPurchaseBrokerageRows([]);
+            togglePurchaseBrokerageSection();
+            const purchaseOtherExpensesToggleEarly = document.getElementById('purchaseOtherExpensesToggle');
+            if (purchaseOtherExpensesToggleEarly) purchaseOtherExpensesToggleEarly.checked = false;
+            setPurchaseOtherExpenseRows([]);
+            togglePurchaseOtherExpensesSection();
             document.getElementById('purchaseHammali').value = '';
             document.getElementById('purchaseAdvance').value = '';
             var pdEl = document.getElementById('purchaseDiscount');
@@ -12583,13 +12776,14 @@ function deleteAllMasters() {
             const periodValue = document.getElementById('chartPeriod')?.value || 'all';
             const today = new Date();
             
-            let periodPurchases, periodSales, periodBrokerage, periodDeductions;
+            let periodPurchases, periodSales, periodBrokerage, periodOtherExpenses, periodDeductions;
             
             if (periodValue === 'all') {
                 // All time - no date filter
                 periodPurchases = appData.purchases;
                 periodSales = appData.sales;
                 periodBrokerage = appData.brokerage;
+                periodOtherExpenses = appData.otherExpenses || [];
                 periodDeductions = appData.deductions;
             } else {
                 const days = parseInt(periodValue);
@@ -12600,6 +12794,7 @@ function deleteAllMasters() {
                 periodPurchases = appData.purchases.filter(p => new Date(p.date) >= startDate);
                 periodSales = appData.sales.filter(s => new Date(s.date) >= startDate);
                 periodBrokerage = appData.brokerage.filter(b => new Date(b.date) >= startDate);
+                periodOtherExpenses = (appData.otherExpenses || []).filter(e => new Date(e.date) >= startDate);
                 periodDeductions = appData.deductions.filter(d => new Date(d.date) >= startDate);
             }
             
@@ -12613,12 +12808,13 @@ function deleteAllMasters() {
                 return sum + saleTotal - truckAdvance;
             }, 0);
             
-            // Brokerage and deductions
+            // Brokerage, other expenses, and deductions
             const totalBrokerage = periodBrokerage.reduce((sum, b) => sum + (b.amount || 0), 0);
+            const totalOtherExpenses = periodOtherExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
             const totalDeductions = periodDeductions.reduce((sum, d) => sum + (d.amount || 0), 0);
             
-            // Net Profit = Revenue - Purchases - Brokerage - Deductions
-            const grossProfit = totalSalesInPeriod - totalPurchasesInPeriod - totalBrokerage - totalDeductions;
+            // Net Profit = Revenue - Purchases - Brokerage - Other Expenses - Deductions
+            const grossProfit = totalSalesInPeriod - totalPurchasesInPeriod - totalBrokerage - totalOtherExpenses - totalDeductions;
             const totalTransactions = periodPurchases.length + periodSales.length;
             const profitMargin = totalSalesInPeriod > 0 ? ((grossProfit / totalSalesInPeriod) * 100) : 0;
             
@@ -12782,6 +12978,7 @@ function deleteAllMasters() {
   let filteredPurchases = appData.purchases;
   let filteredSales = appData.sales;
   let filteredBrokerage = appData.brokerage;
+  let filteredOtherExpenses = appData.otherExpenses || [];
   let filteredDeductions = appData.deductions;
   let filteredColdDamages = appData.coldStorageDamages || [];
 
@@ -12825,6 +13022,7 @@ function deleteAllMasters() {
     filteredPurchases = filteredPurchases.filter(p => inRange(p.date));
     filteredSales = filteredSales.filter(s => inRange(s.date));
     filteredBrokerage = filteredBrokerage.filter(b => inRange(b.date));
+    filteredOtherExpenses = filteredOtherExpenses.filter(e => inRange(e.date));
     filteredDeductions = filteredDeductions.filter(d => inRange(d.date));
     filteredColdDamages = filteredColdDamages.filter(dmg => inRange(dmg.date));
   }
@@ -12886,16 +13084,17 @@ function deleteAllMasters() {
             const totalEffectivePurchaseCost = totalBasePurchaseCost + totalColdStorageCost;
             const totalCosts = totalEffectivePurchaseCost + totalCompanyColdMoveExpense + totalColdDamageUsShare - totalColdDamageVendorRecovery;
             const totalBrokerage = filteredBrokerage.reduce((sum, entry) => sum + (entry.amount || 0), 0);
+            const totalOtherExpenses = filteredOtherExpenses.reduce((sum, entry) => sum + (entry.amount || 0), 0);
             const totalDeductionsAmount = filteredDeductions.reduce((sum, d) => {
                 var amt = parseFloat(d.amount) || 0;
                 var loss = (d.lossAmount !== undefined && d.lossAmount !== null && d.lossAmount !== '') ? parseFloat(d.lossAmount) : amt;
                 return sum + loss;
             }, 0);
-            const netProfit = totalRevenue - totalCosts - totalBrokerage - totalDeductionsAmount;
+            const netProfit = totalRevenue - totalCosts - totalBrokerage - totalOtherExpenses - totalDeductionsAmount;
             
             // Update summary
             document.getElementById('totalRevenue').textContent = `${RU}${totalRevenue.toFixed(2)}`;
-            document.getElementById('totalCosts').textContent = `${RU}${(totalCosts + totalBrokerage).toFixed(2)}`;
+            document.getElementById('totalCosts').textContent = `${RU}${(totalCosts + totalBrokerage + totalOtherExpenses).toFixed(2)}`;
             document.getElementById('netProfit').textContent = `${RU}${netProfit.toFixed(2)}`;
             var basePurchaseCostEl = document.getElementById('pnlBasePurchaseCost');
             var coldStorageCostEl = document.getElementById('pnlColdStorageCost');
@@ -12952,6 +13151,18 @@ function deleteAllMasters() {
                     })
                     .reduce(function(sum, b) { return sum + (parseFloat(b.amount) || 0); }, 0);
             }
+
+            function getOtherExpensesForPurchase(purchase) {
+                if (!purchase || !filteredOtherExpenses || !filteredOtherExpenses.length) return 0;
+                var purchaseId = String(purchase.id);
+                var purchaseInvoice = String(purchase.invoice || '').trim();
+                return filteredOtherExpenses
+                    .filter(function(e) {
+                        if (e.sourceInvoiceId != null && String(e.sourceInvoiceId) === purchaseId) return true;
+                        return String(e.reference || '').trim() === purchaseInvoice;
+                    })
+                    .reduce(function(sum, e) { return sum + (parseFloat(e.amount) || 0); }, 0);
+            }
             
             // Create P&L rows based on linked purchases
             const pnlRows = [];
@@ -12984,6 +13195,7 @@ function deleteAllMasters() {
                             const proportionalColdStorageCost = totalPurchaseQty > 0 ? (purchaseColdStorageForPnL / totalPurchaseQty) * link.quantityUsed : 0;
                             const proportionalPurchaseCost = proportionalBasePurchaseCost + proportionalColdStorageCost;
                             const purchaseBrokerageTotal = getBrokerageForPurchase(purchase);
+                            const purchaseOtherExpenseTotal = getOtherExpensesForPurchase(purchase);
                             
                             // Calculate proportional sale amount
                             const proportionalSaleAmount = totalSaleQty > 0 ? (saleNetAmount / totalSaleQty) * link.quantityUsed : 0;
@@ -12993,8 +13205,9 @@ function deleteAllMasters() {
                             var saleBrokerageAllocation = saleBrokerageTotal * ratio;
                             var purchaseRatio = totalPurchaseQty > 0 ? (link.quantityUsed / totalPurchaseQty) : ratio;
                             var purchaseBrokerageAllocation = purchaseBrokerageTotal * purchaseRatio;
+                            var purchaseOtherExpenseAllocation = purchaseOtherExpenseTotal * purchaseRatio;
                             var brokerageAllocation = saleBrokerageAllocation + purchaseBrokerageAllocation;
-                            const profitLoss = proportionalSaleAmount - proportionalPurchaseCost - deductionAllocation - brokerageAllocation;
+                            const profitLoss = proportionalSaleAmount - proportionalPurchaseCost - deductionAllocation - brokerageAllocation - purchaseOtherExpenseAllocation;
                             
                             pnlRows.push({
                                 purchaseDate: purchase.date,
@@ -13011,7 +13224,8 @@ function deleteAllMasters() {
                                 quantityUsed: link.quantityUsed,
                                 deductionsAmount: deductionAllocation,
                                 adjustmentAmount: adjustmentAllocation,
-                                brokerageAmount: brokerageAllocation
+                                brokerageAmount: brokerageAllocation,
+                                otherExpensesAmount: purchaseOtherExpenseAllocation
                             });
                         }
                     });
@@ -13033,7 +13247,8 @@ function deleteAllMasters() {
                         quantityUsed: null,
                         deductionsAmount: totalDeductionForSale,
                         adjustmentAmount: totalAdjustmentForSale,
-                        brokerageAmount: standaloneSaleBrokerage
+                        brokerageAmount: standaloneSaleBrokerage,
+                        otherExpensesAmount: 0
                     });
                 }
             });
@@ -13054,6 +13269,7 @@ function deleteAllMasters() {
                     const coldStorageTotal = getPurchaseColdStorageTotal(purchase);
                     const purchaseTotal = purchaseBaseTotal + coldStorageTotal;
                     const purchaseBrokerage = getBrokerageForPurchase(purchase);
+                    const purchaseOtherExpense = getOtherExpensesForPurchase(purchase);
                     pnlRows.push({
                         purchaseDate: purchase.date,
                         purchaseInvoice: purchase.invoice,
@@ -13065,11 +13281,12 @@ function deleteAllMasters() {
                         saleInvoice: null,
                         saleCustomer: null,
                         saleTotal: 0,
-                        profitLoss: -(purchaseTotal + purchaseBrokerage),
+                        profitLoss: -(purchaseTotal + purchaseBrokerage + purchaseOtherExpense),
                         quantityUsed: null,
                         deductionsAmount: 0,
                         adjustmentAmount: 0,
-                        brokerageAmount: purchaseBrokerage
+                        brokerageAmount: purchaseBrokerage,
+                        otherExpensesAmount: purchaseOtherExpense
                     });
                 }
             });
@@ -13095,7 +13312,33 @@ function deleteAllMasters() {
                     quantityUsed: null,
                     deductionsAmount: 0,
                     adjustmentAmount: 0,
-                    brokerageAmount: brokerageRemainder
+                    brokerageAmount: brokerageRemainder,
+                    otherExpensesAmount: 0
+                });
+            }
+
+            var representedOtherExpenses = pnlRows.reduce(function(sum, row) {
+                return sum + (parseFloat(row.otherExpensesAmount) || 0);
+            }, 0);
+            var otherExpensesRemainder = totalOtherExpenses - representedOtherExpenses;
+            if (Math.abs(otherExpensesRemainder) > 0.05) {
+                pnlRows.push({
+                    purchaseDate: null,
+                    purchaseInvoice: null,
+                    purchaseSupplier: null,
+                    purchaseTotal: 0,
+                    purchaseBaseAmount: 0,
+                    coldStorageAmount: 0,
+                    saleDate: null,
+                    saleInvoice: null,
+                    saleCustomer: null,
+                    saleTotal: 0,
+                    profitLoss: -otherExpensesRemainder,
+                    quantityUsed: null,
+                    deductionsAmount: 0,
+                    adjustmentAmount: 0,
+                    brokerageAmount: 0,
+                    otherExpensesAmount: otherExpensesRemainder
                 });
             }
             
@@ -14345,8 +14588,10 @@ function onPnLFilterChange() {
                     const totalPurchaseValue = appData.purchases.reduce((sum, p) => sum + (p.grandTotal || p.total || 0), 0);
                     const totalSalesValue = appData.sales.reduce((sum, s) => sum + (s.grandTotal || s.total || 0), 0);
                     const totalBrokerageValue = appData.brokerage.reduce((sum, b) => sum + (b.amount || 0), 0);
+                    const totalOtherExpensesValue = (appData.otherExpenses || []).reduce((sum, e) => sum + (e.amount || 0), 0);
                     const totalDeductionsValue = appData.deductions.reduce((sum, d) => sum + (d.amount || 0), 0);
                     const totalInventoryValue = Object.values(appData.inventory).reduce((sum, inv) => sum + (inv.totalCost || 0), 0);
+                    const summaryNet = totalSalesValue - totalPurchaseValue - totalBrokerageValue - totalOtherExpensesValue - totalDeductionsValue;
                     
                     tableBody.innerHTML = `
                         <tr class="border-b border-slate-200">
@@ -14362,6 +14607,10 @@ function onPnLFilterChange() {
                             <td class="px-4 py-3">${RU}${totalBrokerageValue.toFixed(2)}</td>
                         </tr>
                         <tr class="border-b border-slate-200">
+                            <td class="px-4 py-3 font-medium">Total Other Expenses</td>
+                            <td class="px-4 py-3">${RU}${totalOtherExpensesValue.toFixed(2)}</td>
+                        </tr>
+                        <tr class="border-b border-slate-200">
                             <td class="px-4 py-3 font-medium">Total Deductions</td>
                             <td class="px-4 py-3">${RU}${totalDeductionsValue.toFixed(2)}</td>
                         </tr>
@@ -14371,7 +14620,7 @@ function onPnLFilterChange() {
                         </tr>
                         <tr class="border-b border-slate-200">
                             <td class="px-4 py-3 font-medium">Net Profit/Loss</td>
-                            <td class="px-4 py-3 ${(totalSalesValue - totalPurchaseValue - totalBrokerageValue - totalDeductionsValue) >= 0 ? 'text-green-600' : 'text-red-600'}">${RU}${(totalSalesValue - totalPurchaseValue - totalBrokerageValue - totalDeductionsValue).toFixed(2)}</td>
+                            <td class="px-4 py-3 ${summaryNet >= 0 ? 'text-green-600' : 'text-red-600'}">${RU}${summaryNet.toFixed(2)}</td>
                         </tr>
                     `;
                     break;
@@ -15251,6 +15500,12 @@ function onPnLFilterChange() {
             }
             setPurchaseBrokerageRows(purchase.inlineBrokerageEntries || []);
             togglePurchaseBrokerageSection();
+            const purchaseOtherExpensesToggle = document.getElementById('purchaseOtherExpensesToggle');
+            if (purchaseOtherExpensesToggle) {
+                purchaseOtherExpensesToggle.checked = !!purchase.inlineOtherExpensesEnabled;
+            }
+            setPurchaseOtherExpenseRows(purchase.inlineOtherExpenses || []);
+            togglePurchaseOtherExpensesSection();
             document.getElementById('purchaseHammali').value = purchase.hammali || 0;
             document.getElementById('purchaseAdvance').value = purchase.advance || 0;
             const totalModeRadio = document.getElementById('purchaseChargeModeTotal');
@@ -15298,6 +15553,10 @@ function onPnLFilterChange() {
             if (purchaseBrokerageToggle) purchaseBrokerageToggle.checked = false;
             setPurchaseBrokerageRows([]);
             togglePurchaseBrokerageSection();
+            const purchaseOtherExpensesToggle = document.getElementById('purchaseOtherExpensesToggle');
+            if (purchaseOtherExpensesToggle) purchaseOtherExpensesToggle.checked = false;
+            setPurchaseOtherExpenseRows([]);
+            togglePurchaseOtherExpensesSection();
             document.getElementById('purchaseHammali').value = '';
             document.getElementById('purchaseAdvance').value = '';
             var pdEl = document.getElementById('purchaseDiscount');
@@ -15917,6 +16176,11 @@ function onPnLFilterChange() {
                 appData.brokerage = appData.brokerage.filter(entry => 
                     entry.reference !== purchase.invoice
                 );
+                // Remove related other expenses
+                removeInlineOtherExpensesBySource('inline_purchase', purchaseId);
+                appData.otherExpenses = (appData.otherExpenses || []).filter(function(entry) {
+                    return String(entry.reference || '') !== String(purchase.invoice || '');
+                });
                 
                 // Remove the purchase
                 appData.purchases = appData.purchases.filter(p => p.id !== purchaseId);
